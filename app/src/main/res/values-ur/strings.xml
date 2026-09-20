@@ -1,0 +1,234 @@
+<resources>
+    <!-- Application Name -->
+    <string name="app_name">Sonara</string>
+
+    <!-- Navigation -->
+    <string name="nav_home">ہوم</string>
+    <string name="nav_search">تلاش</string>
+    <string name="nav_library">لائبریری</string>
+    <string name="nav_playlists">پلے لسٹس</string>
+    <string name="nav_settings">ترتیبات</string>
+
+    <!-- Settings Header -->
+    <string name="settings_title">نظام اور ترجیحات</string>
+    <string name="settings_subtitle">پلے بیک، زبان، آف لائن ڈاؤن لوڈز اور اسٹوریج ترتیب دیں</string>
+
+    <!-- Settings Categories -->
+    <string name="category_personalisation">شخصی ترتیبات</string>
+    <string name="category_music_playback">موسیقی اور پلے بیک</string>
+    <string name="category_downloads">ڈاؤن لوڈز</string>
+    <string name="category_lyrics">بول (Lyrics)</string>
+    <string name="category_data_storage">ڈیٹا اور اسٹوریج</string>
+    <string name="category_about">سونارا کے بارے میں</string>
+
+    <!-- Settings Rows & Descriptions -->
+    <string name="setting_theme_mode">تھیم موڈ</string>
+    <string name="setting_theme_mode_desc">منرل پیٹرول یا بون کینوس</string>
+    <string name="theme_system">سسٹم ڈیفالٹ</string>
+    <string name="theme_dark">ڈارک (منرل پیٹرول)</string>
+    <string name="theme_light">لائٹ (بون کینوس)</string>
+    <string name="language_system_default">سسٹم ڈیفالٹ</string>
+
+    <string name="setting_app_language">ایپ کی زبان</string>
+    <string name="setting_app_language_desc">یوزر انٹرفیس کی زبان اور BCP-47 ترجیح</string>
+
+    <string name="setting_reduce_motion">تھیم اینیمیشن کم کریں</string>
+    <string name="setting_reduce_motion_desc">اینیمیٹڈ تھیم کی تبدیلی کو کم کریں</string>
+
+    <string name="setting_streaming_quality">اسٹریمنگ کوالٹی</string>
+
+    <string name="setting_equalizer">ایکویلائزر</string>
+    <string name="setting_equalizer_desc">5 بینڈ ہارڈ ویئر ڈی ایس پی آڈیو پروسیسر</string>
+    <string name="equalizer_enabled_label">فعال (5 بینڈز)</string>
+    <string name="equalizer_disabled_label">بند</string>
+    <string name="equalizer_unsupported">دستیاب نہیں</string>
+    <string name="equalizer_unsupported_desc">آپ کا آلہ آڈیو ایکویلائزر کو سپورٹ نہیں کرتا۔</string>
+    <string name="equalizer_dsp_active_desc">ExoPlayer پلے بیک سے منسلک ہارڈ ویئر آڈیو فلٹرنگ</string>
+    <string name="equalizer_dsp_disabled_desc">ایکویلائزر غیر فعال ہے۔ آڈیو فلٹرنگ فعال کرنے کے لیے ٹوگل آن کریں۔</string>
+    <string name="equalizer_reset_flat">فلیٹ کریں</string>
+
+    <string name="setting_stop_on_task_clear">ایپ بند ہونے پر پلے بیک روکیں</string>
+    <string name="setting_stop_on_task_clear_desc">ریسنٹ ایپس سے سونارا بند کرنے پر موسیقی بند ہو جائے گی</string>
+
+    <string name="setting_battery_optimization">بیٹری آپٹیمائزیشن</string>
+    <string name="setting_battery_optimization_desc">Android سیٹنگز میں پس منظر میں بلاتعطل پلے بیک کی اجازت دیں</string>
+    <string name="battery_unrestricted">غیر محدود (Unrestricted)</string>
+    <string name="battery_optimized">آپٹیمائزڈ</string>
+    <string name="battery_check">سیٹنگز میں چیک کریں</string>
+
+    <string name="setting_restore_session">پلے بیک سیشن بحال کریں</string>
+    <string name="setting_restore_session_desc">ایپ کھلنے پر آخری فعال ٹریک اور قطار بحال کریں</string>
+
+    <string name="setting_default_search_mode">طے شدہ تلاش کا موڈ</string>
+    <string name="setting_default_search_mode_desc">تلاش کرتے وقت ابتدائی ٹیب کا انتخاب</string>
+
+    <string name="setting_download_quality">ڈاؤن لوڈ کوالٹی</string>
+
+    <string name="setting_download_format">ڈاؤن لوڈ فائل فارمیٹ</string>
+    <string name="setting_download_format_desc">آڈیو اسٹریم کنٹینر فارمیٹ</string>
+
+    <string name="setting_download_wifi_only">صرف وائی فائی پر ڈاؤن لوڈ کریں</string>
+    <string name="setting_download_wifi_only_desc">موبائل ڈیٹا پر ڈاؤن لوڈ روکیں</string>
+
+    <string name="setting_clear_downloads">تمام ڈاؤن لوڈز صاف کریں</string>
+    <string name="setting_clear_downloads_desc">ڈیوائس سے تمام آف لائن محفوظ گانے حذف کریں</string>
+
+    <string name="setting_show_romanized">ڈیفالٹ رومنائزیشن دکھائیں</string>
+    <string name="setting_show_romanized_desc">غیر لاطینی رسم الخط کو لاطینی صوتیات میں تبدیل کریں</string>
+
+    <string name="setting_clear_image_cache">تصویری کیشے صاف کریں</string>
+    <string name="setting_clear_image_cache_desc">میموری اور ڈسک سے البم آرٹ کیشے صاف کریں</string>
+
+    <string name="setting_clear_history">پلے بیک ہسٹری صاف کریں</string>
+    <string name="setting_clear_history_desc">ہسٹری سے حال ہی میں بجائے گئے تمام ٹریکس ہٹائیں</string>
+
+    <string name="setting_reset_settings">سیٹنگز ری سیٹ کریں</string>
+    <string name="setting_reset_settings_desc">ایپ کی ترجیحات کو فیکٹری ڈیفالٹ پر بحال کریں</string>
+
+    <string name="setting_about_arch">سونارا کے بارے میں</string>
+    <string name="setting_about_arch_version">v1.0.0 (Media3 نیٹو)</string>
+    <string name="setting_about_arch_desc">آپ کی موسیقی کے لیے تیز اور ہلکا پھلکا آڈیو پلیئر</string>
+
+    <!-- Dialogs -->
+    <string name="dialog_language_title">ایپ کی زبان</string>
+    <string name="dialog_language_popular_national">مقبول قومی زبانیں</string>
+    <string name="dialog_language_international">بین الاقوامی زبانیں</string>
+    <string name="dialog_language_system_desc">Android سسٹم زبان کی پیروی کریں</string>
+    <string name="dialog_language_info">زبان کی ترجیحات سونارا کے تمام اسکرینوں پر فوری لاگو ہوتی ہیں۔</string>
+    <string name="dialog_language_coming_soon">ترجمہ جلد آرہا ہے</string>
+
+    <string name="dialog_clear_downloads_title">تمام ڈاؤن لوڈز صاف کریں؟</string>
+    <string name="dialog_clear_downloads_message">یہ اس ڈیوائس سے تمام ڈاؤن لوڈ کردہ گانوں کو ہٹا دے گا۔ دوبارہ چلانے کے لیے انٹرنیٹ درکار ہوگا۔</string>
+
+    <string name="dialog_clear_history_title">پلے بیک ہسٹری صاف کریں؟</string>
+    <string name="dialog_clear_history_message">یہ آپ کی تاریخ سے حال ہی میں چلائے گئے تمام گانے حذف کر دے گا۔ پلے لسٹس اور پسندیدہ گانے متاثر نہیں ہوں گے۔</string>
+
+    <string name="dialog_reset_settings_title">تمام ترتیبات ری سیٹ کریں؟</string>
+    <string name="dialog_reset_settings_message">یہ تھیم، کوالٹی اور تلاش کے ڈیفالٹس بحال کر دے گا۔ آپ کی لائبریری اور ڈاؤن لوڈز محفوظ رہیں گے۔</string>
+
+    <string name="dialog_search_history_clear_title">تلاش کی تاریخ صاف کریں؟</string>
+    <string name="dialog_search_history_clear_message">یہ تمام حالیہ تلاشوں کو ہٹا دے گا۔ محفوظ شدہ لائبریری اور پلے بیک ہسٹری محفوظ رہے گی۔</string>
+
+    <string name="dialog_app_info_title">سونارا کے بارے میں</string>
+    <string name="dialog_app_info_subtitle">سونارا Android v1.0.0</string>
+    <string name="dialog_app_info_message">ہائی فیڈیلیٹی اسٹریمنگ، آف لائن ڈاؤن لوڈز، ہم آہنگ بول اور ہارڈ ویئر ایکویلائزر۔</string>
+
+    <!-- Common Dialog Actions -->
+    <string name="action_close">بند کریں</string>
+    <string name="action_cancel">منسوخ</string>
+    <string name="action_ok">ٹھیک ہے</string>
+    <string name="action_done">مکمل</string>
+    <string name="action_clear">صاف کریں</string>
+    <string name="action_clear_all">تمام صاف کریں</string>
+    <string name="action_reset">ری سیٹ</string>
+    <string name="action_retry">دوبارہ کوشش کریں</string>
+    <string name="action_delete">حذف کریں</string>
+
+    <!-- Search Screen -->
+    <string name="search_placeholder">گانے، فنکار، البمز تلاش کریں…</string>
+    <string name="search_mode_songs">گانے</string>
+    <string name="search_mode_videos">ویڈیوز</string>
+    <string name="search_recent_header">حالیہ تلاشیں</string>
+    <string name="search_suggestions_header">تجاویز</string>
+    <string name="search_discover_title">موسیقی دریافت کریں</string>
+    <string name="search_discover_message">کیٹلاگ تلاش کرنے کے لیے اوپر کوئی گانا، فنکار یا ویڈیو کا نام لکھیں۔</string>
+    <string name="search_no_songs_title">کوئی گانا نہیں ملا</string>
+    <string name="search_no_songs_message">\"%1$s\" کے لیے کوئی گانا نہیں ملا۔ ویڈیوز ٹیب دیکھیں یا دیگر الفاظ آزمائیں۔</string>
+    <string name="search_no_videos_title">کوئی ویڈیو نہیں ملی</string>
+    <string name="search_no_videos_message">\"%1$s\" کے لیے کوئی YouTube ویڈیو نہیں ملی۔ گانے ٹیب دیکھیں یا دیگر الفاظ آزمائیں۔</string>
+
+    <!-- Home Screen -->
+    <string name="home_quick_picks">فوری انتخاب</string>
+    <string name="home_featured_artists">نمایاں فنکار</string>
+    <string name="home_playlist_catalog">منتخب پلے لسٹس</string>
+
+    <!-- Library & Playlists -->
+    <string name="library_title">آپ کی لائبریری</string>
+    <string name="tab_liked_songs">پسندیدہ گانے</string>
+    <string name="tab_playback_history">تاریخ</string>
+    <string name="library_liked_empty_title">ابھی تک کوئی پسندیدہ گانا نہیں</string>
+    <string name="library_liked_empty_message">اپنے مجموعے میں شامل کرنے کے لیے کسی بھی گانے پر دل کے نشان کو دبائیں۔</string>
+    <string name="library_history_empty_title">کوئی پلے بیک ہسٹری نہیں</string>
+    <string name="library_history_empty_message">آپ کے بجائے ہوئے گانے یہاں دوبارہ سننے کے لیے ظاہر ہوں گے۔</string>
+    <string name="playlists_title">آپ کی پلے لسٹس</string>
+    <string name="playlists_create_new">نئی پلے لسٹ بنائیں</string>
+    <string name="playlist_empty">خالی پلے لسٹ</string>
+    <string name="playlist_tracks_count">%1$d گانے</string>
+
+    <!-- Player & Queue -->
+    <string name="player_now_playing">اب چل رہا ہے</string>
+    <string name="player_queue">اگلا گانا</string>
+    <string name="player_lyrics">بول</string>
+    <string name="player_no_lyrics">اس گانے کے لیے ہم آہنگ بول دستیاب نہیں ہیں۔</string>
+    <string name="player_downloaded">آف لائن ڈاؤن لوڈ شدہ</string>
+    <string name="player_downloading">ڈاؤن لوڈ ہو رہا ہے…</string>
+
+    <!-- Audio Output Routing -->
+    <string name="audio_output_title">آڈیو آؤٹ پٹ</string>
+    <string name="audio_output_current_output">موجودہ آؤٹ پٹ: %1$s</string>
+    <string name="audio_output_speakers">اسپیکرز</string>
+    <string name="audio_output_phone_speaker">فون سپیکر</string>
+    <string name="audio_output_bluetooth">بلوٹوتھ</string>
+    <string name="audio_output_bluetooth_headphones">بلوٹوتھ ہیڈ فون</string>
+    <string name="audio_output_bluetooth_earbuds">بلوٹوتھ ایئربڈز</string>
+    <string name="audio_output_bluetooth_speaker">بلوٹوتھ سپیکر</string>
+    <string name="audio_output_wired_headphones">وائرڈ ہیڈ فون</string>
+    <string name="audio_output_usb_audio">USB آڈیو</string>
+    <string name="audio_output_tap_to_change">آؤٹ پٹ تبدیل کرنے کے لیے تھپتھپائیں</string>
+    <string name="audio_output_switch_failed">آڈیو آؤٹ پٹ تبدیل کرنے میں ناکام</string>
+
+    <!-- Notifications -->
+    <string name="notification_channel_playback_name">پلے بیک</string>
+    <string name="notification_channel_playback_desc">موجودہ ٹریک کے لیے میڈیا کنٹرولز</string>
+    <string name="notification_channel_downloads_name">ڈاؤن لوڈز</string>
+    <string name="notification_channel_downloads_desc">آف لائن ڈاؤن لوڈز کی پیش رفت</string>
+    <string name="notification_channel_alerts_name">انتباہات</string>
+    <string name="notification_channel_alerts_desc">ڈاؤن لوڈ کے مسائل جن پر توجہ درکار ہے</string>
+
+    <string name="notification_downloading">ڈاؤن لوڈ ہو رہا ہے</string>
+    <string name="notification_downloads_in_progress">%1$d ڈاؤن لوڈ جاری ہیں</string>
+    <string name="notification_progress_bytes">%1$s / %2$s · %3$d%%</string>
+
+    <string name="notification_download_complete_title">ڈاؤن لوڈ مکمل ہو گیا</string>
+    <string name="notification_downloads_complete_title">تمام ڈاؤن لوڈز مکمل ہو گئے</string>
+    <string name="notification_downloads_complete_count">%1$d گانے ڈاؤن لوڈ ہو گئے</string>
+
+    <string name="notification_download_failed_title">ڈاؤن لوڈ ناکام رہا</string>
+    <string name="notification_action_dismiss">رد کریں</string>
+
+    <!-- Playback Controls -->
+    <string name="control_previous">پچھلا</string>
+    <string name="control_play_pause">چلائیں/روکیں</string>
+    <string name="control_next">اگلا</string>
+    <string name="control_favorite">پسندیدہ بنائیں</string>
+    <string name="control_unfavorite">پسندیدہ میں شامل</string>
+
+    <!-- Spotify Playlist Import -->
+    <string name="import_title">پلے لسٹ امپورٹ کریں</string>
+    <string name="import_button">امپورٹ</string>
+    <string name="import_select_file">اسپاٹیفائی ایکسپورٹ فائل منتخب کریں</string>
+    <string name="import_select_file_desc">سونارا میں اپنی پلے لسٹ امپورٹ کرنے کے لیے Exportify CSV فائل کا انتخاب کریں۔</string>
+    <string name="import_parsing">فائل پڑھی جا رہی ہے…</string>
+    <string name="import_matching">گانے ملائے جا رہے ہیں (%1$d/%2$d)…</string>
+    <string name="import_review_title">امپورٹ کا جائزہ لیں</string>
+    <string name="import_ready_count">%1$d تیار · %2$d جائزے کے لیے · %3$d چھوڑ دیے گئے</string>
+    <string name="import_confident_header">یقینی میچ (%1$d)</string>
+    <string name="import_review_header">جائزہ درکار ہے (%1$d)</string>
+    <string name="import_skipped_header">شامل نہیں کیے جائیں گے (%1$d)</string>
+    <string name="import_confirm_button">پلے لسٹ امپورٹ کریں</string>
+    <string name="import_cancel">منسوخ</string>
+    <string name="import_retry">دوبارہ کوشش کریں</string>
+    <string name="import_done_title">امپورٹ مکمل</string>
+    <string name="import_done_msg">\"%2$s\" میں %1$d گانے شامل کر دیے گئے</string>
+    <string name="import_duplicates_merged">%1$d ڈپلیکیٹ گانے ضم کر دیے گئے</string>
+    <string name="import_persisting">پلے لسٹ بنائی جا رہی ہے…</string>
+    <string name="import_playlist_name_label">پلے لسٹ کا نام</string>
+    <string name="import_reason_no_candidates">یوٹیوب میوزک پر کوئی گانا نہیں ملا</string>
+    <string name="import_reason_below_threshold">کم اعتماد کا میچ</string>
+    <string name="import_reason_local_file">لوکل فائل (آن لائن دستیاب نہیں)</string>
+    <string name="import_reason_episode">پوڈکاسٹ قسط</string>
+    <string name="import_reason_empty_query">عنوان یا فنکار کا نام غائب ہے</string>
+    <string name="import_alternatives_label">متبادل گانے دستیاب ہیں</string>
+    <string name="import_change_selection">متبادل منتخب کریں</string>
+    <string name="import_view_playlist">پلے لسٹ دیکھیں</string>
+</resources>

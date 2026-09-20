@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Sonara Brand Palette (sonara_android_branding_asset_pack) -->
+    <color name="sonara_petrol">#20383A</color>
+    <color name="sonara_bone">#E8E1D4</color>
+    <color name="sonara_oxide">#9A5B46</color>
+    <color name="petrol_canvas">#20383A</color>
+    <color name="bone_canvas">#E8E1D4</color>
+    <color name="oxide_accent">#9A5B46</color>
+    <color name="petrol_surface">#0F2426</color>
+    <color name="bone_surface">#ECE6DA</color>
+
+    <!--
+        Notification accent — aligned to the authoritative frozen design-system Oxide
+        (SonaraPalette.OxideAccent = #A25A3A in Color.kt / DESIGN_SYSTEM_ANDROID.md §2.1),
+        NOT the older branding-pack #9A5B46 above. Used as a restrained accent on the
+        actionable download-failure alert. Identical in light and dark per the frozen board.
+    -->
+    <color name="sonara_notification_accent">#A25A3A</color>
+</resources>

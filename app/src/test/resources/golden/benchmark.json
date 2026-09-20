@@ -1,0 +1,532 @@
+[
+  {
+    "language": "hindi",
+    "original": "दिल मेरा धड़कता है",
+    "expected": "dil meraa dhadkataa hai"
+  },
+  {
+    "language": "hindi",
+    "original": "भूलने वाले",
+    "expected": "bhoolne vaale"
+  },
+  {
+    "language": "hindi",
+    "original": "मैं हूँ यहाँ",
+    "expected": "main hoon yahaa"
+  },
+  {
+    "language": "hindi",
+    "original": "कभी कभी मेरे दिल में",
+    "expected": "kabhee kabhee mere dil mein"
+  },
+  {
+    "language": "hindi",
+    "original": "तेरी आँखों के सिवा",
+    "expected": "teree aakhon ke sivaa"
+  },
+  {
+    "language": "hindi",
+    "original": "तुझे देखा तो ये जाना सनम",
+    "expected": "tujhe dekhaa to ye jaanaa sanam"
+  },
+  {
+    "language": "hindi",
+    "original": "तुम ही हो",
+    "expected": "tum hee ho"
+  },
+  {
+    "language": "hindi",
+    "original": "अजीब दास्ताँ है ये",
+    "expected": "ajeeb daastaa hai ye"
+  },
+  {
+    "language": "hindi",
+    "original": "लग जा गले",
+    "expected": "lag jaa gale"
+  },
+  {
+    "language": "hindi",
+    "original": "चूरा लिया है तुमने जो दिल को",
+    "expected": "chooraa liyaa hai tumne jo dil ko"
+  },
+  {
+    "language": "hindi",
+    "original": "प्यार दीवाना होता है",
+    "expected": "pyaar deevaanaa hotaa hai"
+  },
+  {
+    "language": "hindi",
+    "original": "रुक जा ओ दिल दीवाने",
+    "expected": "ruk jaa o dil deevaane"
+  },
+  {
+    "language": "hindi",
+    "original": "ये कहाँ आ गए हम",
+    "expected": "ye kahaa aa gaye hum"
+  },
+  {
+    "language": "hindi",
+    "original": "पल पल दिल के पास",
+    "expected": "pal pal dil ke paas"
+  },
+  {
+    "language": "hindi",
+    "original": "तेरे बिना ज़िन्दगी से",
+    "expected": "tere binaa jhindagee se"
+  },
+  {
+    "language": "punjabi",
+    "original": "ਕੁੱਤਾ",
+    "expected": "kuttaa"
+  },
+  {
+    "language": "punjabi",
+    "original": "ਮਿੱਤਰਾਂ ਦਾ ਨਾਂ ਚੱਲਦਾ",
+    "expected": "mittraan daa naan chaldaa"
+  },
+  {
+    "language": "punjabi",
+    "original": "ਅੱਖੀਆਂ ਉਡੀਕਦੀਆਂ",
+    "expected": "akkheeyaan udeekdeeyaan"
+  },
+  {
+    "language": "punjabi",
+    "original": "ਤੈਨੂੰ ਕਾਲਾ ਚਸ਼ਮਾ ਜਚਦਾ ਐ",
+    "expected": "tainoo kaalaa chashmaa jachdaa ai"
+  },
+  {
+    "language": "punjabi",
+    "original": "ਲਹੌਰੀਏ",
+    "expected": "lahauriyee"
+  },
+  {
+    "language": "punjabi",
+    "original": "ਬੱਲੇ ਬੱਲੇ",
+    "expected": "balle balle"
+  },
+  {
+    "language": "punjabi",
+    "original": "ਮੁੰਡਿਆਂ ਤੋਂ ਬੱਚਕੇ ਰਹੀਂ",
+    "expected": "mundeyaan ton bachke raheem"
+  },
+  {
+    "language": "punjabi",
+    "original": "ਗੱਭਰੂ",
+    "expected": "gabhroo"
+  },
+  {
+    "language": "punjabi",
+    "original": "ਸੂਰਮਾ",
+    "expected": "soormaa"
+  },
+  {
+    "language": "punjabi",
+    "original": "ਜੱਟ ਦਾ ਮੁਕਾਬਲਾ",
+    "expected": "jatt daa mukaablaa"
+  },
+  {
+    "language": "punjabi",
+    "original": "ਪਿਆਰ ਤੇਰਾ",
+    "expected": "pyaar teraa"
+  },
+  {
+    "language": "punjabi",
+    "original": "ਦਿਲ ਦੀਆਂ ਗੱਲਾਂ",
+    "expected": "dil deeyaan gallaan"
+  },
+  {
+    "language": "punjabi",
+    "original": "ਮੇਰਾ ਯਾਰ ਮਜ਼ਾਕ ਕਰਦਾ ਐ",
+    "expected": "meraa yaar mazaak kardaa ai"
+  },
+  {
+    "language": "bengali",
+    "original": "আমি তোমায় ভালোবাসি",
+    "expected": "aami tomaay bhaalobaashi"
+  },
+  {
+    "language": "bengali",
+    "original": "বলো দুর্গা মাঈকি জয়",
+    "expected": "bolo durgaa maaeeki jay"
+  },
+  {
+    "language": "bengali",
+    "original": "চলো যাই",
+    "expected": "chalo jaai"
+  },
+  {
+    "language": "bengali",
+    "original": "কী আশায় বাঁধি খেলাঘর",
+    "expected": "kee aashaay baandhi khelaaghar"
+  },
+  {
+    "language": "bengali",
+    "original": "একলা চলো রে",
+    "expected": "ekalaa chalo re"
+  },
+  {
+    "language": "bengali",
+    "original": "তুমি আসবে বলে",
+    "expected": "tumi aashbe bale"
+  },
+  {
+    "language": "bengali",
+    "original": "মম চিত্তে",
+    "expected": "mamo chitte"
+  },
+  {
+    "language": "bengali",
+    "original": "যদি তোর ডাক শুনে",
+    "expected": "jadi tor daak shune"
+  },
+  {
+    "language": "bengali",
+    "original": "আজিকার এই আনন্দ",
+    "expected": "aajikaar ei aananda"
+  },
+  {
+    "language": "bengali",
+    "original": "মাধবী লতা",
+    "expected": "maadhabee lataa"
+  },
+  {
+    "language": "bengali",
+    "original": "পাগলা হাওয়া",
+    "expected": "paagalaa haawaa"
+  },
+  {
+    "language": "bengali",
+    "original": "আনন্দলোকে মঙ্গলালোকে",
+    "expected": "aanandaloke mangalaaloke"
+  },
+  {
+    "language": "bengali",
+    "original": "আকাশ ভরা সূর্য তারা",
+    "expected": "aakaash bharaa surjo taaraa"
+  },
+  {
+    "language": "tamil",
+    "original": "கண்ணே",
+    "expected": "kanne"
+  },
+  {
+    "language": "tamil",
+    "original": "என் காதல்",
+    "expected": "en kaathal"
+  },
+  {
+    "language": "tamil",
+    "original": "முன்பே வா",
+    "expected": "munpe vaa"
+  },
+  {
+    "language": "tamil",
+    "original": "காதல் ரோஜாவே",
+    "expected": "kaathal rojaave"
+  },
+  {
+    "language": "tamil",
+    "original": "நீ பாதா",
+    "expected": "nee paathaa"
+  },
+  {
+    "language": "tamil",
+    "original": "ஒன்றா ரெண்டா",
+    "expected": "onraa rendaa"
+  },
+  {
+    "language": "tamil",
+    "original": "மச்சான் மச்சான்",
+    "expected": "machchaan machchaan"
+  },
+  {
+    "language": "tamil",
+    "original": "பூவே இளைய பூவே",
+    "expected": "poove ilaiya poove"
+  },
+  {
+    "language": "tamil",
+    "original": "தங்க மீன்கள்",
+    "expected": "thanga meenkal"
+  },
+  {
+    "language": "tamil",
+    "original": "சின்ன சின்ன ஆசை",
+    "expected": "chinna chinna aasai"
+  },
+  {
+    "language": "tamil",
+    "original": "உன் பார்வையிலே",
+    "expected": "un paarvaiyile"
+  },
+  {
+    "language": "tamil",
+    "original": "ஆராரிராரோ",
+    "expected": "aaraariraaro"
+  },
+  {
+    "language": "tamil",
+    "original": "நெஞ்சே நெஞ்சே",
+    "expected": "nenje nenje"
+  },
+  {
+    "language": "telugu",
+    "original": "నాలో నిన్ను",
+    "expected": "naalo ninnu"
+  },
+  {
+    "language": "telugu",
+    "original": "ప్రేమ ఖైదీ",
+    "expected": "prema khaidee"
+  },
+  {
+    "language": "telugu",
+    "original": "నీ స్నేహం",
+    "expected": "nee sneham"
+  },
+  {
+    "language": "telugu",
+    "original": "మల్లి మల్లి",
+    "expected": "malli malli"
+  },
+  {
+    "language": "telugu",
+    "original": "బొమ్మరిల్లు",
+    "expected": "bommarillu"
+  },
+  {
+    "language": "telugu",
+    "original": "ఆకాశం",
+    "expected": "aakaasham"
+  },
+  {
+    "language": "telugu",
+    "original": "సమజవరగమన",
+    "expected": "samajavaragamana"
+  },
+  {
+    "language": "telugu",
+    "original": "రాములో రాములా",
+    "expected": "raamulo raamulaa"
+  },
+  {
+    "language": "telugu",
+    "original": "ఉప్పెన",
+    "expected": "uppena"
+  },
+  {
+    "language": "telugu",
+    "original": "బుట్ట బొమ్మ",
+    "expected": "butta bomma"
+  },
+  {
+    "language": "telugu",
+    "original": "నీ కళ్ళు",
+    "expected": "nee kallu"
+  },
+  {
+    "language": "telugu",
+    "original": "అరవింద సమేత",
+    "expected": "aravinda samethaa"
+  },
+  {
+    "language": "telugu",
+    "original": "మగధీర",
+    "expected": "magadheera"
+  },
+  {
+    "language": "malayalam",
+    "original": "ഞാൻ നിന്നെ സ്നേഹിക്കുന്നു",
+    "expected": "njan ninne snehikkunnu"
+  },
+  {
+    "language": "malayalam",
+    "original": "കാതൽ",
+    "expected": "kaathal"
+  },
+  {
+    "language": "malayalam",
+    "original": "പൊന്നേ",
+    "expected": "ponne"
+  },
+  {
+    "language": "malayalam",
+    "original": "കുഞ്ഞേ",
+    "expected": "kunje"
+  },
+  {
+    "language": "malayalam",
+    "original": "മഴയത്ത്",
+    "expected": "mazhayathu"
+  },
+  {
+    "language": "malayalam",
+    "original": "മനോഹരം",
+    "expected": "manoharam"
+  },
+  {
+    "language": "malayalam",
+    "original": "അനുരാഗം",
+    "expected": "anuraagam"
+  },
+  {
+    "language": "malayalam",
+    "original": "രാത്രി",
+    "expected": "raathri"
+  },
+  {
+    "language": "malayalam",
+    "original": "സുന്ദരി",
+    "expected": "sundari"
+  },
+  {
+    "language": "malayalam",
+    "original": "കണ്ണുകൾ",
+    "expected": "kannukal"
+  },
+  {
+    "language": "malayalam",
+    "original": "ഹൃദയം",
+    "expected": "hridayam"
+  },
+  {
+    "language": "malayalam",
+    "original": "ജീവിതം",
+    "expected": "jeevitham"
+  },
+  {
+    "language": "malayalam",
+    "original": "അമ്മ",
+    "expected": "amma"
+  },
+  {
+    "language": "kannada",
+    "original": "ನಾನು ನಿನ್ನ ಪ್ರೀತಿಸುತ್ತೇನೆ",
+    "expected": "naanu ninna preetisuttene"
+  },
+  {
+    "language": "kannada",
+    "original": "ಒಲವೇ",
+    "expected": "olave"
+  },
+  {
+    "language": "kannada",
+    "original": "ಮುಂಗಾರು ಮಳೆ",
+    "expected": "mungaaru male"
+  },
+  {
+    "language": "kannada",
+    "original": "ಪರಮಾತ್ಮ",
+    "expected": "paramaatmaa"
+  },
+  {
+    "language": "kannada",
+    "original": "ಗಾಳಿಪಟ",
+    "expected": "gaalipataa"
+  },
+  {
+    "language": "kannada",
+    "original": "ಮಿಲನ",
+    "expected": "milanaa"
+  },
+  {
+    "language": "kannada",
+    "original": "ಸಂಜು ವೆಡ್ಸ್ ಗೀತಾ",
+    "expected": "sanju veds geetaa"
+  },
+  {
+    "language": "kannada",
+    "original": "ಹುಡುಗರು",
+    "expected": "hudugaru"
+  },
+  {
+    "language": "kannada",
+    "original": "ಮಳೆಯಲಿ ಜೊತೆಯಲಿ",
+    "expected": "maleyali joteyali"
+  },
+  {
+    "language": "kannada",
+    "original": "ಚೆಲುವಿನ ಚಿತ್ತಾರ",
+    "expected": "cheluvina chittaara"
+  },
+  {
+    "language": "kannada",
+    "original": "ಮನಸಾರೆ",
+    "expected": "manasaare"
+  },
+  {
+    "language": "kannada",
+    "original": "ಜಾಕಿ",
+    "expected": "jaaki"
+  },
+  {
+    "language": "kannada",
+    "original": "ಕಿರಿಕ್ ಪಾರ್ಟಿ",
+    "expected": "kirik paarti"
+  },
+  {
+    "language": "gujarati",
+    "original": "હું તને પ્રેમ કરું છું",
+    "expected": "hun tane prem karun chhun"
+  },
+  {
+    "language": "gujarati",
+    "original": "ગરબા",
+    "expected": "garbaa"
+  },
+  {
+    "language": "gujarati",
+    "original": "કસુંબીનો રંગ",
+    "expected": "kasumbeeno rang"
+  },
+  {
+    "language": "gujarati",
+    "original": "રાસ",
+    "expected": "raas"
+  },
+  {
+    "language": "gujarati",
+    "original": "કેમ છો",
+    "expected": "kem chho"
+  },
+  {
+    "language": "gujarati",
+    "original": "મારા દિલમાં",
+    "expected": "maaraa dilmaan"
+  },
+  {
+    "language": "gujarati",
+    "original": "ચાંદલો",
+    "expected": "chaandlo"
+  },
+  {
+    "language": "gujarati",
+    "original": "તારી આંખનો અફીણી",
+    "expected": "taaree aankhno afeenee"
+  },
+  {
+    "language": "gujarati",
+    "original": "પ્રેમની ભવાઈ",
+    "expected": "premnee bhavaaee"
+  },
+  {
+    "language": "gujarati",
+    "original": "દિલ દીવાણું",
+    "expected": "dil deevaanun"
+  },
+  {
+    "language": "gujarati",
+    "original": "સાંવરિયો",
+    "expected": "saanvariyo"
+  },
+  {
+    "language": "gujarati",
+    "original": "ઢોલીડા",
+    "expected": "dholeedaa"
+  },
+  {
+    "language": "gujarati",
+    "original": "પતંગ",
+    "expected": "patang"
+  }
+]

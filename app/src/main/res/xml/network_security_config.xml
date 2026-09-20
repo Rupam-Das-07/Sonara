@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Network Security Configuration for Sonara Android (Main / Production).
+
+    Strictly enforces HTTPS across the application.
+    Zero cleartext domain exceptions are permitted in production/release builds.
+    Local development cleartext exceptions are isolated to src/debug/res/xml/.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+</network-security-config>

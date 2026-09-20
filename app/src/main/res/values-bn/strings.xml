@@ -1,0 +1,234 @@
+<resources>
+    <!-- Application Name -->
+    <string name="app_name">Sonara</string>
+
+    <!-- Navigation -->
+    <string name="nav_home">হোম</string>
+    <string name="nav_search">অনুসন্ধান</string>
+    <string name="nav_library">লাইব্রেরি</string>
+    <string name="nav_playlists">প্লেলিস্ট</string>
+    <string name="nav_settings">সেটিংস</string>
+
+    <!-- Settings Header -->
+    <string name="settings_title">সিস্টেম ও পছন্দসমূহ</string>
+    <string name="settings_subtitle">প্লেব্যাক, ভাষা, অফলাইন ডাউনলোড ও স্টোরেজ কনফিগার করুন</string>
+
+    <!-- Settings Categories -->
+    <string name="category_personalisation">ব্যক্তিগতকরণ</string>
+    <string name="category_music_playback">সঙ্গীত ও প্লেব্যাক</string>
+    <string name="category_downloads">ডাউনলোড</string>
+    <string name="category_lyrics">গানের কথা (Lyrics)</string>
+    <string name="category_data_storage">ডেটা ও স্টোরেজ</string>
+    <string name="category_about">সোনারা সম্পর্কে</string>
+
+    <!-- Settings Rows & Descriptions -->
+    <string name="setting_theme_mode">থিম মোড</string>
+    <string name="setting_theme_mode_desc">মিনারেল পেট্রল বা বোন ক্যানভাস</string>
+    <string name="theme_system">সিস্টেম ডিফল্ট</string>
+    <string name="theme_dark">ডার্ক (মিনারেল পেট্রল)</string>
+    <string name="theme_light">লাইট (বোন ক্যানভাস)</string>
+    <string name="language_system_default">সিস্টেম ডিফল্ট</string>
+
+    <string name="setting_app_language">অ্যাপের ভাষা</string>
+    <string name="setting_app_language_desc">ইউজার ইন্টারফেস ভাষা ও BCP-47 পছন্দ</string>
+
+    <string name="setting_reduce_motion">থিম অ্যানিমেশন কমান</string>
+    <string name="setting_reduce_motion_desc">অ্যানিমেটেড থিম রূপান্তর হ্রাস করুন</string>
+
+    <string name="setting_streaming_quality">স্ট্রিমিং কোয়ালিটি</string>
+
+    <string name="setting_equalizer">ইকুয়ালাইজার</string>
+    <string name="setting_equalizer_desc">৫-ব্যান্ড হার্ডওয়্যার ডিএসপি অডিও প্রসেসর</string>
+    <string name="equalizer_enabled_label">সক্রিয় (৫টি ব্যান্ড)</string>
+    <string name="equalizer_disabled_label">বন্ধ</string>
+    <string name="equalizer_unsupported">অনুপলব্ধ</string>
+    <string name="equalizer_unsupported_desc">আপনার ডিভাইসে অডিও ইকুয়ালাইজার সমর্থিত নয়।</string>
+    <string name="equalizer_dsp_active_desc">ExoPlayer প্লেব্যাকের সাথে সংযুক্ত হার্ডওয়্যার অডিও ফিল্টারিং</string>
+    <string name="equalizer_dsp_disabled_desc">ইকুয়ালাইজার বন্ধ রয়েছে। অডিও ফিল্টারিং সক্ষম করতে টগলটি চালু করুন।</string>
+    <string name="equalizer_reset_flat">ফ্ল্যাট করুন</string>
+
+    <string name="setting_stop_on_task_clear">অ্যাপ বন্ধ করলে প্লেব্যাক বন্ধ করুন</string>
+    <string name="setting_stop_on_task_clear_desc">রিসেন্টস থেকে সোনারা বন্ধ করলে গান বন্ধ হবে</string>
+
+    <string name="setting_battery_optimization">ব্যাটারি অপটিমাইজেশন</string>
+    <string name="setting_battery_optimization_desc">Android সেটিংসে ব্যাকগ্রাউন্ড প্লেব্যাকের সম্পূর্ণ অনুমতি দিন</string>
+    <string name="battery_unrestricted">সীমাহীন (Unrestricted)</string>
+    <string name="battery_optimized">অপটিমাইজড</string>
+    <string name="battery_check">সেটিংসে পরীক্ষা করুন</string>
+
+    <string name="setting_restore_session">প্লেব্যাক সেশন পুনরুদ্ধার করুন</string>
+    <string name="setting_restore_session_desc">অ্যাপ চালু হলে সর্বশেষ সক্রিয় গান ও কিউ পুনরুদ্ধার করুন</string>
+
+    <string name="setting_default_search_mode">ডিফল্ট অনুসন্ধান মোড</string>
+    <string name="setting_default_search_mode_desc">অনুসন্ধানের সময় প্রাথমিক ট্যাব নির্বাচন</string>
+
+    <string name="setting_download_quality">ডাউনলোড কোয়ালিটি</string>
+
+    <string name="setting_download_format">ডাউনলোড ফাইল ফরম্যাট</string>
+    <string name="setting_download_format_desc">অডিও স্ট্রিম কন্টেইনার ফরম্যাট</string>
+
+    <string name="setting_download_wifi_only">কেবলমাত্র ওয়াই-ফাইতে ডাউনলোড</string>
+    <string name="setting_download_wifi_only_desc">মোবাইল ডেটায় ডাউনলোড প্রতিরোধ করুন</string>
+
+    <string name="setting_clear_downloads">সমস্ত ডাউনলোড মুছে ফেলুন</string>
+    <string name="setting_clear_downloads_desc">ডিভাইস থেকে সংরক্ষিত সমস্ত অফলাইন গান মুছে দিন</string>
+
+    <string name="setting_show_romanized">ডিফল্টভাবে রোমানাইজেশন দেখান</string>
+    <string name="setting_show_romanized_desc">অ-ল্যাটিন লিপিকে ল্যাটিন ধ্বনিতত্ত্বে রূপান্তর করুন</string>
+
+    <string name="setting_clear_image_cache">ইমেজ ক্যাশ সাফ করুন</string>
+    <string name="setting_clear_image_cache_desc">মেমরি ও ডিস্ক থেকে অ্যালবাম আর্ট ক্যাশ সাফ করুন</string>
+
+    <string name="setting_clear_history">প্লেব্যাক ইতিহাস সাফ করুন</string>
+    <string name="setting_clear_history_desc">ইতিহাস থেকে সম্প্রতি বাজানো সমস্ত গান সরিয়ে ফেলুন</string>
+
+    <string name="setting_reset_settings">সেটিংস রিসেট করুন</string>
+    <string name="setting_reset_settings_desc">অ্যাপের পছন্দসমূহ ফ্যাক্টরি ডিফল্টে ফিরিয়ে নিন</string>
+
+    <string name="setting_about_arch">সোনারা পরিচিতি</string>
+    <string name="setting_about_arch_version">v1.0.0 (Media3 নেটিভ)</string>
+    <string name="setting_about_arch_desc">আপনার প্রিয় গানের জন্য দ্রুত ও হালকা অডিও প্লেয়ার</string>
+
+    <!-- Dialogs -->
+    <string name="dialog_language_title">অ্যাপের ভাষা</string>
+    <string name="dialog_language_popular_national">জনপ্রিয় জাতীয় ভাষাসমূহ</string>
+    <string name="dialog_language_international">আন্তর্জাতিক ভাষাসমূহ</string>
+    <string name="dialog_language_system_desc">Android সিস্টেম ভাষা অনুসরণ করুন</string>
+    <string name="dialog_language_info">ভাষার পছন্দ অবিলম্বে সোনারার সমস্ত ইউআই স্ক্রিনে প্রয়োগ হয়।</string>
+    <string name="dialog_language_coming_soon">অনুবাদ শীঘ্রই আসছে</string>
+
+    <string name="dialog_clear_downloads_title">সমস্ত ডাউনলোড মুছে ফেলবেন?</string>
+    <string name="dialog_clear_downloads_message">এটি এই ডিভাইস থেকে সমস্ত ডাউনলোড করা গান মুছে ফেলবে। পুনরায় শুনতে সংযোগের প্রয়োজন হবে।</string>
+
+    <string name="dialog_clear_history_title">প্লেব্যাক ইতিহাস সাফ করবেন?</string>
+    <string name="dialog_clear_history_message">এটি আপনার ইতিহাস থেকে সম্প্রতি বাজানো সমস্ত গান মুছে দেবে। আপনার প্লেলিস্ট ও পছন্দের গান প্রভাবিত হবে না।</string>
+
+    <string name="dialog_reset_settings_title">সমস্ত সেটিংস রিসেট করবেন?</string>
+    <string name="dialog_reset_settings_message">এটি থিম, গুণমান ও অনুসন্ধানের ডিফল্ট পুনরুদ্ধার করবে। আপনার লাইব্রেরি ও ডাউনলোড প্রভাবিত হবে না।</string>
+
+    <string name="dialog_search_history_clear_title">অনুসন্ধান ইতিহাস সাফ করবেন?</string>
+    <string name="dialog_search_history_clear_message">এটি সমস্ত সাম্প্রতিক অনুসন্ধান মুছে ফেলবে। আপনার লাইব্রেরি ও প্লেব্যাক ইতিহাস অক্ষুণ্ণ থাকবে।</string>
+
+    <string name="dialog_app_info_title">সোনারা পরিচিতি</string>
+    <string name="dialog_app_info_subtitle">সোনারা Android v1.0.0</string>
+    <string name="dialog_app_info_message">হাই-ফিডেলিটি স্ট্রিমিং, অফলাইন ডাউনলোড, সিঙ্ক করা লিরিক্স এবং হার্ডওয়্যার ইকুয়ালাইজার।</string>
+
+    <!-- Common Dialog Actions -->
+    <string name="action_close">বন্ধ করুন</string>
+    <string name="action_cancel">বাতিল</string>
+    <string name="action_ok">ঠিক আছে</string>
+    <string name="action_done">সম্পন্ন</string>
+    <string name="action_clear">সাফ করুন</string>
+    <string name="action_clear_all">সমস্ত সাফ করুন</string>
+    <string name="action_reset">রিসেট</string>
+    <string name="action_retry">পুনরায় চেষ্টা করুন</string>
+    <string name="action_delete">মুছুন</string>
+
+    <!-- Search Screen -->
+    <string name="search_placeholder">গান, শিল্পী, অ্যালবাম খুঁজুন…</string>
+    <string name="search_mode_songs">গান</string>
+    <string name="search_mode_videos">ভিডিও</string>
+    <string name="search_recent_header">সাম্প্রতিক অনুসন্ধান</string>
+    <string name="search_suggestions_header">পরামর্শ</string>
+    <string name="search_discover_title">সঙ্গীত আবিষ্কার করুন</string>
+    <string name="search_discover_message">ক্যাটালগ খুঁজতে উপরে কোনো গান, শিল্পী বা ভিডিওর নাম লিখুন।</string>
+    <string name="search_no_songs_title">কোনো গান পাওয়া যায়নি</string>
+    <string name="search_no_songs_message">\"%1$s\" এর জন্য কোনো অফিসিয়াল গান মেলেনি। ভিডিও ট্যাব দেখুন বা অন্য নাম লিখুন।</string>
+    <string name="search_no_videos_title">কোনো ভিডিও পাওয়া যায়নি</string>
+    <string name="search_no_videos_message">\"%1$s\" এর জন্য কোনো YouTube ভিডিও মেলেনি। গান ট্যাব দেখুন বা অন্য নাম লিখুন।</string>
+
+    <!-- Home Screen -->
+    <string name="home_quick_picks">কুইক পিকস</string>
+    <string name="home_featured_artists">বিশিষ্ট শিল্পীগণ</string>
+    <string name="home_playlist_catalog">কিউরেটেড প্লেলিস্ট</string>
+
+    <!-- Library & Playlists -->
+    <string name="library_title">আপনার লাইব্রেরি</string>
+    <string name="tab_liked_songs">পছন্দের গান</string>
+    <string name="tab_playback_history">ইতিহাস</string>
+    <string name="library_liked_empty_title">এখনো কোনো পছন্দের গান নেই</string>
+    <string name="library_liked_empty_message">আপনার ব্যক্তিগত সংগ্রহে যোগ করতে যেকোনো গানের হার্ট আইকনে ট্যাপ করুন।</string>
+    <string name="library_history_empty_title">কোনো প্লেব্যাক ইতিহাস নেই</string>
+    <string name="library_history_empty_message">আপনার বাজানো গানগুলি সহজেই পুনরায় শোনার জন্য এখানে প্রদর্শিত হবে।</string>
+    <string name="playlists_title">আপনার প্লেলিস্ট</string>
+    <string name="playlists_create_new">নতুন প্লেলিস্ট তৈরি করুন</string>
+    <string name="playlist_empty">খালি প্লেলিস্ট</string>
+    <string name="playlist_tracks_count">%1$dটি গান</string>
+
+    <!-- Player & Queue -->
+    <string name="player_now_playing">এখন বাজছে</string>
+    <string name="player_queue">পরবর্তী গান</string>
+    <string name="player_lyrics">গানের কথা</string>
+    <string name="player_no_lyrics">এই গানের জন্য কোনো লিরিক্স উপলব্ধ নেই।</string>
+    <string name="player_downloaded">অফলাইনে ডাউনলোড করা হয়েছে</string>
+    <string name="player_downloading">ডাউনলোড হচ্ছে…</string>
+
+    <!-- Audio Output Routing -->
+    <string name="audio_output_title">অডিও আউটপুট</string>
+    <string name="audio_output_current_output">বর্তমান আউটপুট: %1$s</string>
+    <string name="audio_output_speakers">স্পিকার</string>
+    <string name="audio_output_phone_speaker">ফোন স্পিকার</string>
+    <string name="audio_output_bluetooth">ব্লুটুথ</string>
+    <string name="audio_output_bluetooth_headphones">ব্লুটুথ হেডফোন</string>
+    <string name="audio_output_bluetooth_earbuds">ব্লুটুথ ইয়ারবাড</string>
+    <string name="audio_output_bluetooth_speaker">ব্লুটুথ স্পিকার</string>
+    <string name="audio_output_wired_headphones">তারযুক্ত হেডফোন</string>
+    <string name="audio_output_usb_audio">USB অডিও</string>
+    <string name="audio_output_tap_to_change">আউটপুট পরিবর্তন করতে ট্যাপ করুন</string>
+    <string name="audio_output_switch_failed">অডিও আউটপুট পরিবর্তন করতে ব্যর্থ হয়েছে</string>
+
+    <!-- Notifications -->
+    <string name="notification_channel_playback_name">প্লেব্যাক</string>
+    <string name="notification_channel_playback_desc">বর্তমান গানের মিডিয়া নিয়ন্ত্রণ</string>
+    <string name="notification_channel_downloads_name">ডাউনলোড</string>
+    <string name="notification_channel_downloads_desc">অফলাইন ডাউনলোডের অগ্রগতি</string>
+    <string name="notification_channel_alerts_name">সতর্কতা</string>
+    <string name="notification_channel_alerts_desc">ডাউনলোড সংক্রান্ত সমস্যা যার প্রতি মনোযোগ প্রয়োজন</string>
+
+    <string name="notification_downloading">ডাউনলোড হচ্ছে</string>
+    <string name="notification_downloads_in_progress">%1$dটি ডাউনলোড চলছে</string>
+    <string name="notification_progress_bytes">%1$s / %2$s · %3$d%%</string>
+
+    <string name="notification_download_complete_title">ডাউনলোড সম্পন্ন হয়েছে</string>
+    <string name="notification_downloads_complete_title">সব ডাউনলোড সম্পন্ন হয়েছে</string>
+    <string name="notification_downloads_complete_count">%1$dটি গান ডাউনলোড হয়েছে</string>
+
+    <string name="notification_download_failed_title">ডাউনলোড ব্যর্থ হয়েছে</string>
+    <string name="notification_action_dismiss">খারিজ করুন</string>
+
+    <!-- Playback Controls -->
+    <string name="control_previous">পূর্ববর্তী</string>
+    <string name="control_play_pause">প্লে/পজ</string>
+    <string name="control_next">পরবর্তী</string>
+    <string name="control_favorite">পছন্দ করুন</string>
+    <string name="control_unfavorite">পছন্দ তালিকায় যুক্ত</string>
+
+    <!-- Spotify Playlist Import -->
+    <string name="import_title">প্লেলিস্ট ইমপোর্ট</string>
+    <string name="import_button">ইমপোর্ট</string>
+    <string name="import_select_file">স্পটিফাই এক্সপোর্ট ফাইল বেছে নিন</string>
+    <string name="import_select_file_desc">সোনারায় আপনার প্লেলিস্ট ইমপোর্ট করতে একটি Exportify CSV ফাইল নির্বাচন করুন।</string>
+    <string name="import_parsing">ফাইল পড়া হচ্ছে…</string>
+    <string name="import_matching">গান মেলানো হচ্ছে (%1$d/%2$d)…</string>
+    <string name="import_review_title">ইমপোর্ট পর্যালোচনা</string>
+    <string name="import_ready_count">%1$d প্রস্তুত · %2$d পর্যালোচনা বাকি · %3$d বাদ দেওয়া হয়েছে</string>
+    <string name="import_confident_header">নিশ্চিত মিল (%1$d)</string>
+    <string name="import_review_header">পর্যালোচনা প্রয়োজন (%1$d)</string>
+    <string name="import_skipped_header">যুক্ত করা হবে না (%1$d)</string>
+    <string name="import_confirm_button">প্লেলিস্ট ইমপোর্ট করুন</string>
+    <string name="import_cancel">বাতিল</string>
+    <string name="import_retry">পুনরায় চেষ্টা করুন</string>
+    <string name="import_done_title">ইমপোর্ট সম্পন্ন</string>
+    <string name="import_done_msg">\"%2$s\" প্লেলিস্টে %1$dটি গান যুক্ত করা হয়েছে</string>
+    <string name="import_duplicates_merged">%1$dটি ডুপ্লিকেট গান একত্রিত করা হয়েছে</string>
+    <string name="import_persisting">প্লেলিস্ট তৈরি করা হচ্ছে…</string>
+    <string name="import_playlist_name_label">প্লেলিস্টের নাম</string>
+    <string name="import_reason_no_candidates">YouTube Music-এ কোনো মিল পাওয়া যায়নি</string>
+    <string name="import_reason_below_threshold">কম সামঞ্জস্যপূর্ণ মিল</string>
+    <string name="import_reason_local_file">স্থানীয় ফাইল (অনলাইনে অনুপলব্ধ)</string>
+    <string name="import_reason_episode">পডকাস্ট পর্ব</string>
+    <string name="import_reason_empty_query">গানের নাম বা শিল্পীর নাম অনুপস্থিত</string>
+    <string name="import_alternatives_label">বিকল্প গান উপলব্ধ</string>
+    <string name="import_change_selection">বিকল্প বেছে নিন</string>
+    <string name="import_view_playlist">প্লেলিস্ট দেখুন</string>
+</resources>

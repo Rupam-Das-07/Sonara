@@ -1,0 +1,57 @@
+[
+  {"language": "Hindi", "original": "ज़िन्दगी", "expected": "zindagi"},
+  {"language": "Hindi", "original": "धड़कता", "expected": "dhadakta"},
+  {"language": "Hindi", "original": "मोहब्बत", "expected": "mohabbat"},
+  {"language": "Hindi", "original": "मैं हूँ", "expected": "main hoon"},
+  {"language": "Hindi", "original": "में", "expected": "mein"},
+  {"language": "Hindi", "original": "तुम्हें", "expected": "tumhein"},
+  {"language": "Hindi", "original": "प्यार", "expected": "pyaar"},
+  {"language": "Hindi", "original": "कभी", "expected": "kabhi"},
+  {"language": "Hindi", "original": "ज़रूरत", "expected": "zaroorat"},
+  {"language": "Hindi", "original": "फ़ैसला", "expected": "faisla"},
+
+  {"language": "Punjabi", "original": "ਮਿੱਤਰਾਂ", "expected": "mittraan"},
+  {"language": "Punjabi", "original": "ਕੁੱਤਾ", "expected": "kutta"},
+  {"language": "Punjabi", "original": "ਪਿਆਰ", "expected": "pyaar"},
+  {"language": "Punjabi", "original": "ਦਿਲ", "expected": "dil"},
+  {"language": "Punjabi", "original": "ਮੁੰਡਿਆਂ", "expected": "mundeyaan"},
+  {"language": "Punjabi", "original": "ਤੈਨੂੰ", "expected": "tainu"},
+  {"language": "Punjabi", "original": "ਗੱਭਰੂ", "expected": "gabhroo"},
+  {"language": "Punjabi", "original": "ਚਸ਼ਮਾ", "expected": "chashma"},
+
+  {"language": "Bengali", "original": "আমি", "expected": "ami"},
+  {"language": "Bengali", "original": "তোমায়", "expected": "tomay"},
+  {"language": "Bengali", "original": "ভালোবাসি", "expected": "bhalobashi"},
+  {"language": "Bengali", "original": "আশায়", "expected": "ashay"},
+  {"language": "Bengali", "original": "চলো", "expected": "cholo"},
+  {"language": "Bengali", "original": "খেলাঘর", "expected": "khelaghor"},
+  {"language": "Bengali", "original": "তুমি", "expected": "tumi"},
+  {"language": "Bengali", "original": "আসবে", "expected": "ashobe"},
+
+  {"language": "Tamil", "original": "காதல்", "expected": "kaadhal"},
+  {"language": "Tamil", "original": "சின்ன சின்ன ஆசை", "expected": "sinna sinna aasai"},
+  {"language": "Tamil", "original": "நெஞ்சே", "expected": "nenje"},
+  {"language": "Tamil", "original": "நீ பாதா", "expected": "nee paadhaa"},
+  {"language": "Tamil", "original": "ஒன்றா ரெண்டா", "expected": "ondraa rendhaa"},
+  {"language": "Tamil", "original": "தங்க மீன்கள்", "expected": "thanga meenkal"},
+
+  {"language": "Telugu", "original": "నీవే", "expected": "neeve"},
+  {"language": "Telugu", "original": "ప్రాణము", "expected": "praanamu"},
+  {"language": "Telugu", "original": "ఆకాశం", "expected": "aakaasham"},
+  {"language": "Telugu", "original": "స్నేహం", "expected": "sneham"},
+  {"language": "Telugu", "original": "అరవింద", "expected": "aravinda"},
+
+  {"language": "Malayalam", "original": "കുഞ്ഞേ", "expected": "kunje"},
+  {"language": "Malayalam", "original": "സ്നേഹം", "expected": "sneham"},
+  {"language": "Malayalam", "original": "കാതൽ", "expected": "kaathal"},
+  {"language": "Malayalam", "original": "മഴയത്ത്", "expected": "mazhayatth"},
+  {"language": "Malayalam", "original": "ഞാൻ", "expected": "njaan"},
+  
+  {"language": "Kannada", "original": "ಪರಮಾತ್ಮ", "expected": "paramaatma"},
+  {"language": "Kannada", "original": "ಗಾಳಿಪಟ", "expected": "gaalipata"},
+  {"language": "Kannada", "original": "ಚೆಲುವಿನ", "expected": "cheluvina"},
+
+  {"language": "Gujarati", "original": "કસુંબીનો", "expected": "kasumbeeno"},
+  {"language": "Gujarati", "original": "સાંવરિયો", "expected": "saanvariyo"},
+  {"language": "Gujarati", "original": "અફીણી", "expected": "apheeni"}
+]

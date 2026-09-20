@@ -1,0 +1,3663 @@
+{
+  "4NRXx6U8ABQ": {
+    "videoId": "4NRXx6U8ABQ",
+    "mbid": "1a67e215-a19e-40c9-9b12-732de134bf5f",
+    "confidence": 0.9,
+    "resolved": true,
+    "resolvedAt": "2026-06-29T07:31:41.861Z",
+    "matchedFields": {
+      "title": {
+        "input": "Blinding Lights",
+        "matched": "Blinding Lights",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "The Weeknd",
+        "matched": "The Weeknd",
+        "exact": true,
+        "score": 0.35
+      },
+      "duration": {
+        "inputSeconds": 200,
+        "matchedSeconds": 200,
+        "deltaSecs": 0,
+        "score": 0.1
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "x5Oag4hISgU": {
+    "videoId": "x5Oag4hISgU",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-06-29T08:25:45.250Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "pRzS9QLvgZk": {
+    "videoId": "pRzS9QLvgZk",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-06-29T08:27:04.417Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "plqIksy6HEg": {
+    "videoId": "plqIksy6HEg",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-06-29T08:28:58.665Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "HmW1wIhyCng": {
+    "videoId": "HmW1wIhyCng",
+    "mbid": "4738f797-59ba-4483-834a-58066ecc8dac",
+    "confidence": 0.9,
+    "resolved": true,
+    "resolvedAt": "2026-07-01T14:44:17.403Z",
+    "matchedFields": {
+      "title": {
+        "input": "3:59 AM",
+        "matched": "3:59 AM",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "DIVINE",
+        "matched": "DIVINE",
+        "exact": true,
+        "score": 0.35
+      },
+      "duration": {
+        "inputSeconds": 273,
+        "matchedSeconds": 272,
+        "deltaSecs": 1,
+        "score": 0.1
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "Kr4EQDVETuA": {
+    "videoId": "Kr4EQDVETuA",
+    "mbid": "13c603e1-fcf0-426f-8b89-3a1d02e396de",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-07-01T14:51:39.583Z",
+    "matchedFields": {
+      "title": {
+        "input": "Billie Jean",
+        "matched": "Billie Jean",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Michael Jackson",
+        "matched": "Michael Jackson",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "kOn-HdEg6AQ": {
+    "videoId": "kOn-HdEg6AQ",
+    "mbid": "84e0e8ac-4fa1-4978-9987-23edfa0f39c4",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-07-01T14:51:40.999Z",
+    "matchedFields": {
+      "title": {
+        "input": "Beat It",
+        "matched": "Beat It",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Michael Jackson",
+        "matched": "Michael Jackson",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "wAoq__SQpwk": {
+    "videoId": "wAoq__SQpwk",
+    "mbid": "42fe662f-e0b3-4a2b-ae17-77fa40b47882",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-07-01T14:51:42.488Z",
+    "matchedFields": {
+      "title": {
+        "input": "Chicago",
+        "matched": "Chicago",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Michael Jackson",
+        "matched": "Michael Jackson",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "ddEDXz9hRP4": {
+    "videoId": "ddEDXz9hRP4",
+    "mbid": "a50eb062-ad7d-4861-8096-ea2dc8e26278",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-07-01T15:29:22.608Z",
+    "matchedFields": {
+      "title": {
+        "input": "If This Was a Movie",
+        "matched": "If This Was A Movie",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Taylor Swift",
+        "matched": "Taylor Swift",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "VOk5_r3Fm0g": {
+    "videoId": "VOk5_r3Fm0g",
+    "mbid": "110cca71-8e9f-4f4c-8160-433927cd5384",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-07-01T15:29:24.123Z",
+    "matchedFields": {
+      "title": {
+        "input": "Crazier",
+        "matched": "Crazier",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Taylor Swift",
+        "matched": "Taylor Swift",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "zEonx7qV3A0": {
+    "videoId": "zEonx7qV3A0",
+    "mbid": "01cb8931-bbb6-473a-811d-8e4794ec4d02",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-07-01T15:29:24.709Z",
+    "matchedFields": {
+      "title": {
+        "input": "Congratulations",
+        "matched": "Congratulations",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Drake",
+        "matched": "Drake",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "fpgSYmjs2YY": {
+    "videoId": "fpgSYmjs2YY",
+    "mbid": "d9630f72-27df-4369-973d-537cf2eb2954",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-07-01T15:29:25.585Z",
+    "matchedFields": {
+      "title": {
+        "input": "Who’s Afraid of Little Old Me?",
+        "matched": "Who’s Afraid of Little Old Me?",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Taylor Swift",
+        "matched": "Taylor Swift",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "iICM37_na2U": {
+    "videoId": "iICM37_na2U",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-01T15:33:56.047Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "DbrnTlzo3rE": {
+    "videoId": "DbrnTlzo3rE",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-01T15:35:55.758Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "s6oQTPs0rZI": {
+    "videoId": "s6oQTPs0rZI",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-01T15:36:03.173Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "iQEpTa3VqLU": {
+    "videoId": "iQEpTa3VqLU",
+    "mbid": "ef19b441-d0ee-4a60-ae80-14c5e943a14b",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-07-02T07:21:46.163Z",
+    "matchedFields": {
+      "title": {
+        "input": "Daddy Cool",
+        "matched": "Daddy Cool",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Boney M.",
+        "matched": "Boney M.",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "c1ZCYY-4lAM": {
+    "videoId": "c1ZCYY-4lAM",
+    "mbid": "121b22aa-ccac-4f63-b277-47497722c187",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-07-02T07:21:49.889Z",
+    "matchedFields": {
+      "title": {
+        "input": "Cheri Cheri Lady",
+        "matched": "Cheri Cheri Lady",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Modern Talking",
+        "matched": "Modern Talking",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "pa2j0Bh83ms": {
+    "videoId": "pa2j0Bh83ms",
+    "mbid": "c5b325c1-552d-4e58-8ce2-bfa19d634e47",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-07-02T07:21:53.659Z",
+    "matchedFields": {
+      "title": {
+        "input": "Gimme! Gimme! Gimme! (A Man After Midnight)",
+        "matched": "Gimme! Gimme! Gimme! (A Man After Midnight)",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "ABBA",
+        "matched": "ABBA",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "z2qoihbzc3E": {
+    "videoId": "z2qoihbzc3E",
+    "mbid": "504aada4-a9a5-451b-a025-35ae81d11fc9",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-07-02T07:21:57.167Z",
+    "matchedFields": {
+      "title": {
+        "input": "Stayin Alive",
+        "matched": "Stayin’ Alive",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Bee Gees",
+        "matched": "Bee Gees",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "x-1zY4cPOpk": {
+    "videoId": "x-1zY4cPOpk",
+    "mbid": "d7589f3f-9143-466c-aa74-96b15ddf5df7",
+    "confidence": 0.9,
+    "resolved": true,
+    "resolvedAt": "2026-07-03T15:27:30.636Z",
+    "matchedFields": {
+      "title": {
+        "input": "The Official FIFA World Cup 26™ Theme",
+        "matched": "The Official FIFA World Cup 26™ Theme",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "FIFA Sound",
+        "matched": "FIFA Sound",
+        "exact": true,
+        "score": 0.35
+      },
+      "duration": {
+        "inputSeconds": 123,
+        "matchedSeconds": 122,
+        "deltaSecs": 1,
+        "score": 0.1
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "CIzNqg1rdO8": {
+    "videoId": "CIzNqg1rdO8",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-03T15:29:35.622Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "BhQnJ3SUtUY": {
+    "videoId": "BhQnJ3SUtUY",
+    "mbid": "39284592-7337-4c72-91d3-ecc491a22add",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-07-03T15:29:38.971Z",
+    "matchedFields": {
+      "title": {
+        "input": "The Official FIFA World Cup Qatar 2022™ Theme",
+        "matched": "The Official FIFA World Cup Qatar 2022™ Theme",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "FIFA Sound",
+        "matched": "FIFA Sound",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "ekesyTGKZus": {
+    "videoId": "ekesyTGKZus",
+    "mbid": "aa90350f-7f32-41a5-b7c0-f1aa2df25d94",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-07-03T15:29:47.654Z",
+    "matchedFields": {
+      "title": {
+        "input": "I Believe",
+        "matched": "I Believe",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Dan Romer",
+        "matched": "Dan Romer",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "i0ZamlcrQaE": {
+    "videoId": "i0ZamlcrQaE",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-03T15:29:50.173Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "qJpCmWuvwgk": {
+    "videoId": "qJpCmWuvwgk",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-03T15:29:56.070Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "TVKcgzCM9Z0": {
+    "videoId": "TVKcgzCM9Z0",
+    "mbid": "95f6b3d3-291a-4f17-9deb-a73e6ec6fd99",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-07-03T15:30:01.161Z",
+    "matchedFields": {
+      "title": {
+        "input": "Champions (WC 26)",
+        "matched": "Champions (WC 26)",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "iShowSpeed",
+        "matched": "IShowSpeed",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "qai2Qx_vduA": {
+    "videoId": "qai2Qx_vduA",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-03T15:32:53.162Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "lFQdcPTTzSg": {
+    "videoId": "lFQdcPTTzSg",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-08T08:07:52.543Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "U9twJCpM-t0": {
+    "videoId": "U9twJCpM-t0",
+    "mbid": "c9d7109d-e97c-464d-975e-3543f6bfc262",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-07-08T08:14:20.568Z",
+    "matchedFields": {
+      "title": {
+        "input": "Starlight",
+        "matched": "Starlight",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Taylor Swift",
+        "matched": "Taylor Swift",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "f9WNVoA_KG8": {
+    "videoId": "f9WNVoA_KG8",
+    "mbid": "da7dae72-49e1-4365-ae8d-e28a94e51bc2",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-07-08T08:14:21.352Z",
+    "matchedFields": {
+      "title": {
+        "input": "BREAK MY SOUL (THE QUEENS REMIX)",
+        "matched": "BREAK MY SOUL (THE QUEENS REMIX)",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Beyoncé & Madonna",
+        "matched": "Beyoncé, Madonna",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "Zbw5ZrSMM8c": {
+    "videoId": "Zbw5ZrSMM8c",
+    "mbid": "7ec59632-12a2-44e3-a6d7-68a022a67854",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-07-08T08:14:21.911Z",
+    "matchedFields": {
+      "title": {
+        "input": "Guay",
+        "matched": "Guay",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Ozuna & Bad Gyal",
+        "matched": "Ozuna, Bad Gyal",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "3p2ogyQV_dU": {
+    "videoId": "3p2ogyQV_dU",
+    "mbid": "91a2d4a6-f115-41ea-acee-29c9be2116c9",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-07-08T08:14:22.518Z",
+    "matchedFields": {
+      "title": {
+        "input": "Coméntale",
+        "matched": "Coméntale (feat. Akon)",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Ozuna ft. Akon",
+        "matched": "Ozuna",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "EezUPJ3VHuE": {
+    "videoId": "EezUPJ3VHuE",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-08T08:18:34.454Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "xT-5e1F1p8Y": {
+    "videoId": "xT-5e1F1p8Y",
+    "mbid": "43ed4ca6-fb88-4dc1-890c-efaa9e796fd9",
+    "confidence": 0.9,
+    "resolved": true,
+    "resolvedAt": "2026-07-08T08:19:12.061Z",
+    "matchedFields": {
+      "title": {
+        "input": "Sapphire",
+        "matched": "Sapphire",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Ed Sheeran",
+        "matched": "Ed Sheeran",
+        "exact": true,
+        "score": 0.35
+      },
+      "duration": {
+        "inputSeconds": 180,
+        "matchedSeconds": 179,
+        "deltaSecs": 1,
+        "score": 0.1
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "b2fJB9oz5-o": {
+    "videoId": "b2fJB9oz5-o",
+    "mbid": "813d29d5-b78a-4e5e-8c59-bdc67e85de21",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-07-08T08:27:32.769Z",
+    "matchedFields": {
+      "title": {
+        "input": "SMOKE HOUR ★ WILLIE NELSON",
+        "matched": "SMOKE HOUR ★ WILLIE NELSON",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Beyoncé & Willie Nelson",
+        "matched": "Beyoncé, Willie Nelson",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "Fnl93k8cxUc": {
+    "videoId": "Fnl93k8cxUc",
+    "mbid": "fc21d10f-91d5-4866-9941-bbe34c5fd612",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-07-08T08:27:33.328Z",
+    "matchedFields": {
+      "title": {
+        "input": "La Danse des magiciens",
+        "matched": "La Danse des magiciens",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Magic System",
+        "matched": "Magic System",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "z3CUgZK5qq8": {
+    "videoId": "z3CUgZK5qq8",
+    "mbid": "40629c79-45e9-4e3f-a369-478f9ff79b87",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-07-08T08:27:34.573Z",
+    "matchedFields": {
+      "title": {
+        "input": "Best Life",
+        "matched": "Best life (feat. Gims)",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Naps feat. Gims",
+        "matched": "Naps",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "xTvyyoF_LZY": {
+    "videoId": "xTvyyoF_LZY",
+    "mbid": "87feb8b6-d5a9-4e0a-89bf-0e5e28591203",
+    "confidence": 0.9,
+    "resolved": true,
+    "resolvedAt": "2026-07-08T08:28:17.226Z",
+    "matchedFields": {
+      "title": {
+        "input": "Shape of You",
+        "matched": "Shape of You",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Ed Sheeran",
+        "matched": "Ed Sheeran",
+        "exact": true,
+        "score": 0.35
+      },
+      "duration": {
+        "inputSeconds": 234,
+        "matchedSeconds": 234,
+        "deltaSecs": 0,
+        "score": 0.1
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "UDMfW-sYKvo": {
+    "videoId": "UDMfW-sYKvo",
+    "mbid": "59e48969-28f6-402b-8c59-5f48a7ddf994",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-07-08T08:45:46.814Z",
+    "matchedFields": {
+      "title": {
+        "input": "Fortune Teller",
+        "matched": "Fortune Teller",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Maroon 5",
+        "matched": "Maroon 5",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "h1SnQBUqjFU": {
+    "videoId": "h1SnQBUqjFU",
+    "mbid": "b1f72137-14ac-4cde-83d3-0438b9008afe",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-07-08T08:45:48.181Z",
+    "matchedFields": {
+      "title": {
+        "input": "Drive",
+        "matched": "Drive",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Imagine Dragons",
+        "matched": "Imagine Dragons",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "9xD2jKl5V6c": {
+    "videoId": "9xD2jKl5V6c",
+    "mbid": "6fc6438b-d9c1-43c2-87a0-64f8bcae5853",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-07-08T08:45:48.854Z",
+    "matchedFields": {
+      "title": {
+        "input": "Umbrella (The Lindbergh Palace remix)",
+        "matched": "Umbrella (The Lindbergh Palace Remix) (feat. JAŸ-Z)",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Rihanna feat. Jay‐Z",
+        "matched": "Rihanna",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "3ejnmZHmGz8": {
+    "videoId": "3ejnmZHmGz8",
+    "mbid": "cb99964c-23f8-46c2-adac-b1f35512d891",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-07-08T08:45:49.579Z",
+    "matchedFields": {
+      "title": {
+        "input": "She Will Be Loved (Pharrell Williams remix)",
+        "matched": "She Will Be Loved (Pharrell Williams Remix)",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Maroon 5",
+        "matched": "Maroon 5",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "Jo22rrVi7yg": {
+    "videoId": "Jo22rrVi7yg",
+    "mbid": "957e14d5-6f2f-437a-9505-6af36a9c0078",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-07-08T08:45:50.269Z",
+    "matchedFields": {
+      "title": {
+        "input": "New Love",
+        "matched": "New Love",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Maroon 5",
+        "matched": "Maroon 5",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "KUnX7sgZ_P8": {
+    "videoId": "KUnX7sgZ_P8",
+    "mbid": "8cd37514-9cc4-4cba-b287-6617ebf02902",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-07-08T08:54:31.943Z",
+    "matchedFields": {
+      "title": {
+        "input": "Innocent",
+        "matched": "Innocent",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Taylor Swift",
+        "matched": "Taylor Swift",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "0o0WbQV6OZQ": {
+    "videoId": "0o0WbQV6OZQ",
+    "mbid": "63255488-f91c-4db7-b5a3-cb1a0488f430",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-07-08T08:54:32.638Z",
+    "matchedFields": {
+      "title": {
+        "input": "London Boy",
+        "matched": "London Boy",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Taylor Swift",
+        "matched": "Taylor Swift",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "OE2RVmaioAo": {
+    "videoId": "OE2RVmaioAo",
+    "mbid": "9067bc09-25dd-41d6-b2be-de004c367590",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-07-08T08:54:33.257Z",
+    "matchedFields": {
+      "title": {
+        "input": "Treacherous (Taylor’s version)",
+        "matched": "Treacherous (Taylor's Version)",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Taylor Swift",
+        "matched": "Taylor Swift",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "Z_slTWayFK0": {
+    "videoId": "Z_slTWayFK0",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-08T12:16:41.497Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "5cLG3y1WtGI": {
+    "videoId": "5cLG3y1WtGI",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-08T12:18:25.459Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "_wwUs-KR9OU": {
+    "videoId": "_wwUs-KR9OU",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-08T12:18:27.170Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "QX1KRphxnQc": {
+    "videoId": "QX1KRphxnQc",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-08T12:18:30.435Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "MhzjE9hZhrE": {
+    "videoId": "MhzjE9hZhrE",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-08T12:18:47.859Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "EVwh5pJj5KY": {
+    "videoId": "EVwh5pJj5KY",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-08T12:18:49.185Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "6qI-va1F5ck": {
+    "videoId": "6qI-va1F5ck",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-08T12:18:50.520Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "-sI8KljsMyY": {
+    "videoId": "-sI8KljsMyY",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-08T12:18:51.836Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "uFuAHzHOGYQ": {
+    "videoId": "uFuAHzHOGYQ",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-08T12:22:23.524Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "tiKfF3xSSnY": {
+    "videoId": "tiKfF3xSSnY",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-08T12:22:24.911Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "OkEFHhDBK74": {
+    "videoId": "OkEFHhDBK74",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-08T12:22:27.519Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "5vOid-7uBdQ": {
+    "videoId": "5vOid-7uBdQ",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-08T12:22:30.118Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "yi4d7Ubz44o": {
+    "videoId": "yi4d7Ubz44o",
+    "mbid": "05b00a8b-71af-49d1-be6f-aa4f26732bee",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-07-08T12:22:32.665Z",
+    "matchedFields": {
+      "title": {
+        "input": "I Like It",
+        "matched": "I Like It",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Cardi B, Bad Bunny, J Balvin",
+        "matched": "Cardi B Bad Bunny J Balvin",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "zQ2gReBlHg0": {
+    "videoId": "zQ2gReBlHg0",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-08T12:22:35.229Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "FXovf5dsRTw": {
+    "videoId": "FXovf5dsRTw",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-08T12:22:36.611Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "awvG6RiENXg": {
+    "videoId": "awvG6RiENXg",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-08T12:22:41.001Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "dqqjx41NWLE": {
+    "videoId": "dqqjx41NWLE",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-08T12:22:42.330Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "aykb9pGfTR4": {
+    "videoId": "aykb9pGfTR4",
+    "mbid": "96026367-7546-4a38-88cb-7000ba0d469d",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-07-08T12:22:43.668Z",
+    "matchedFields": {
+      "title": {
+        "input": "Copines",
+        "matched": "Copines",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Aya Nakamura",
+        "matched": "Aya Nakamura",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "YDswuo2dIvY": {
+    "videoId": "YDswuo2dIvY",
+    "mbid": "aab8d44d-e851-47f6-90e4-449f6b039f05",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-07-08T12:22:54.485Z",
+    "matchedFields": {
+      "title": {
+        "input": "Échame La Culpa",
+        "matched": "Échame La Culpa",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Luis Fonsi, Demi Lovato",
+        "matched": "Luis Fonsi Demi Lovato",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "T0X4T9p6x34": {
+    "videoId": "T0X4T9p6x34",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-08T12:22:55.801Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "N8EYYvrwcDM": {
+    "videoId": "N8EYYvrwcDM",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-08T12:22:57.125Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "V3281DpqfMM": {
+    "videoId": "V3281DpqfMM",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-08T12:22:58.401Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "DRZHVrSmcWU": {
+    "videoId": "DRZHVrSmcWU",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-16T15:01:12.476Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "N7jDUBRVQVA": {
+    "videoId": "N7jDUBRVQVA",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-16T15:07:12.174Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "TPq1BKSXUF0": {
+    "videoId": "TPq1BKSXUF0",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-16T15:07:20.449Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "kMyTKHEJ-6c": {
+    "videoId": "kMyTKHEJ-6c",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-16T15:07:23.189Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "i1o1p_DD6TU": {
+    "videoId": "i1o1p_DD6TU",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-16T15:11:08.586Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "9cHq63r1vHQ": {
+    "videoId": "9cHq63r1vHQ",
+    "mbid": "372ddf04-3851-4e1b-876f-1ef90625223a",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-07-16T15:11:11.160Z",
+    "matchedFields": {
+      "title": {
+        "input": "Pehle Bhi Main",
+        "matched": "Pehle Bhi Main",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Vishal Mishra & Raj Shekhar",
+        "matched": "Vishal Mishra Raj Shekhar",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "uT_HXrrmHX8": {
+    "videoId": "uT_HXrrmHX8",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-16T15:14:32.019Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "3cKQcs3_TSs": {
+    "videoId": "3cKQcs3_TSs",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-16T15:18:32.676Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "nNrBx1wS9NQ": {
+    "videoId": "nNrBx1wS9NQ",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-16T15:18:35.462Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "jAnWrlSuE4c": {
+    "videoId": "jAnWrlSuE4c",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-16T15:18:37.989Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "Ys6iPqfvmI0": {
+    "videoId": "Ys6iPqfvmI0",
+    "mbid": "e99d7c5e-2999-4f88-9868-9f0cfa78e3f7",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-07-16T15:18:40.970Z",
+    "matchedFields": {
+      "title": {
+        "input": "Sajni",
+        "matched": "Sajni",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Arijit Singh",
+        "matched": "Arijit Singh",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "Olr4fROLUy0": {
+    "videoId": "Olr4fROLUy0",
+    "mbid": "a22475e5-1911-4898-b5fc-093da856f96f",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-07-16T15:18:44.388Z",
+    "matchedFields": {
+      "title": {
+        "input": "Guzaara",
+        "matched": "Guzaara",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Josh Brar & Parampara Tandon",
+        "matched": "Josh Brar Parampara Tandon",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "Clu93riMpag": {
+    "videoId": "Clu93riMpag",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-16T15:18:47.547Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "0_9LJtcjyVs": {
+    "videoId": "0_9LJtcjyVs",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-16T15:18:48.854Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "wociPBDYmRE": {
+    "videoId": "wociPBDYmRE",
+    "mbid": "932a1647-af79-41d8-8efe-145a7bd5c7d8",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-07-16T15:18:50.182Z",
+    "matchedFields": {
+      "title": {
+        "input": "Nazm Nazm",
+        "matched": "Nazm Nazm",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Arko",
+        "matched": "Arko",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "AByROu-A8Mg": {
+    "videoId": "AByROu-A8Mg",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-16T15:18:54.180Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "OmIt9zNCspY": {
+    "videoId": "OmIt9zNCspY",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-16T15:18:55.838Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "DkTRLHXMw8k": {
+    "videoId": "DkTRLHXMw8k",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-16T15:18:57.599Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "GkJ_wZy0iB4": {
+    "videoId": "GkJ_wZy0iB4",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-16T15:18:58.982Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "8zkUFoXku0Y": {
+    "videoId": "8zkUFoXku0Y",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-16T15:19:00.288Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "yJfzkK80a6Q": {
+    "videoId": "yJfzkK80a6Q",
+    "mbid": "dc684050-be63-4604-8de8-d9ea633a457c",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-07-16T15:19:01.607Z",
+    "matchedFields": {
+      "title": {
+        "input": "Zindagi Tere Naam",
+        "matched": "Zindagi Tere Naam",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Vishal Mishra",
+        "matched": "Vishal Mishra",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "yEGPeNxSVh4": {
+    "videoId": "yEGPeNxSVh4",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-16T15:19:03.720Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "-azuwL2a-t4": {
+    "videoId": "-azuwL2a-t4",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-16T15:19:05.881Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "Ljz0tdAJL-4": {
+    "videoId": "Ljz0tdAJL-4",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-16T15:19:09.462Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "W-g61MUD1g0": {
+    "videoId": "W-g61MUD1g0",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-16T15:19:11.233Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "nx8hSdGt_9g": {
+    "videoId": "nx8hSdGt_9g",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-16T15:19:15.168Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "xnEULEYfSYQ": {
+    "videoId": "xnEULEYfSYQ",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-16T15:19:16.488Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "zR_d4yQws2I": {
+    "videoId": "zR_d4yQws2I",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-16T15:19:18.093Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "n3qQtSRmHxo": {
+    "videoId": "n3qQtSRmHxo",
+    "mbid": "02124e2f-d6af-4c25-8c6f-e9c07ca2404c",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-07-16T15:24:49.074Z",
+    "matchedFields": {
+      "title": {
+        "input": "Don't Stop 'Til You Get Enough",
+        "matched": "Don’t Stop ’Til You Get Enough",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Michael Jackson",
+        "matched": "Michael Jackson",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "oqLpko9Gprs": {
+    "videoId": "oqLpko9Gprs",
+    "mbid": "76689fe1-bc94-47d2-bf3e-3b8b10f95a92",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-07-16T15:24:50.398Z",
+    "matchedFields": {
+      "title": {
+        "input": "Human Nature",
+        "matched": "Human Nature",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Michael Jackson",
+        "matched": "Michael Jackson",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "WOrvX3cZj4I": {
+    "videoId": "WOrvX3cZj4I",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-16T15:25:11.145Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "Gayw5AQvWcQ": {
+    "videoId": "Gayw5AQvWcQ",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-16T15:25:12.471Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "AxN0RjNx6WM": {
+    "videoId": "AxN0RjNx6WM",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-16T15:25:13.767Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "bbroly6xXVA": {
+    "videoId": "bbroly6xXVA",
+    "mbid": "7fd4c904-3a42-4812-8e72-1c59ba861cb2",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-07-16T15:28:34.531Z",
+    "matchedFields": {
+      "title": {
+        "input": "Tu Mileya",
+        "matched": "Tu Mileya",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Darshan Raval",
+        "matched": "Darshan Raval",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "4vOKUqVOAoE": {
+    "videoId": "4vOKUqVOAoE",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-16T15:28:35.935Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "MrZQxuwDq9A": {
+    "videoId": "MrZQxuwDq9A",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-16T15:28:37.495Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "YALvuUpY_b0": {
+    "videoId": "YALvuUpY_b0",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-16T15:28:39.224Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "HUlpRz6q33g": {
+    "videoId": "HUlpRz6q33g",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-16T15:28:40.533Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "XffsuRCvg2k": {
+    "videoId": "XffsuRCvg2k",
+    "mbid": "85240a9c-5d8f-44da-bfae-c2bdd8f1e9d7",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-07-16T15:28:41.859Z",
+    "matchedFields": {
+      "title": {
+        "input": "Ishqa Ve",
+        "matched": "Ishqa Ve",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Zeeshan Ali",
+        "matched": "Zeeshan Ali",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "U13aOFC9Oic": {
+    "videoId": "U13aOFC9Oic",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-16T15:28:45.795Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "epm7tAtEvYA": {
+    "videoId": "epm7tAtEvYA",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-16T15:28:47.103Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "ge4M2dVBgTw": {
+    "videoId": "ge4M2dVBgTw",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-16T15:28:48.401Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "BU5kkhpgLz8": {
+    "videoId": "BU5kkhpgLz8",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-16T15:28:49.714Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "3M3o3Ak1qBY": {
+    "videoId": "3M3o3Ak1qBY",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-16T15:28:51.026Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "f419vqAt8PU": {
+    "videoId": "f419vqAt8PU",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-16T15:28:52.324Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "mzpUfVJY5w4": {
+    "videoId": "mzpUfVJY5w4",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-16T15:28:53.646Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "dY0b8Cj8BtM": {
+    "videoId": "dY0b8Cj8BtM",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-16T15:28:54.963Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "99CFGKKvzRs": {
+    "videoId": "99CFGKKvzRs",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-16T15:28:56.266Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "M47Bgb4kNUo": {
+    "videoId": "M47Bgb4kNUo",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-16T15:28:57.565Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "q6jqcTvdVc8": {
+    "videoId": "q6jqcTvdVc8",
+    "mbid": "3878b634-6bfb-4f01-876b-844815eeb6c2",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-07-16T15:29:00.198Z",
+    "matchedFields": {
+      "title": {
+        "input": "Dil (Shreya’S Version)",
+        "matched": "Dil (Shreya’s version)",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Shreya Ghoshal",
+        "matched": "Shreya Ghoshal",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "33afhHzZyWA": {
+    "videoId": "33afhHzZyWA",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-16T15:29:01.510Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "Ela3-q-4CCY": {
+    "videoId": "Ela3-q-4CCY",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-16T15:29:03.368Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "R4AuAycWYrM": {
+    "videoId": "R4AuAycWYrM",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-16T15:29:04.683Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "veTCWOONP3w": {
+    "videoId": "veTCWOONP3w",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-16T15:29:06.275Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "CFM3r9TEKXc": {
+    "videoId": "CFM3r9TEKXc",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-16T15:29:27.051Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "5DF9aRuiOZo": {
+    "videoId": "5DF9aRuiOZo",
+    "mbid": "554948bc-0121-4072-aa49-1e96c8510de0",
+    "confidence": 0.9,
+    "resolved": true,
+    "resolvedAt": "2026-07-23T07:11:08.354Z",
+    "matchedFields": {
+      "title": {
+        "input": "Animals",
+        "matched": "Animals",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Maroon 5",
+        "matched": "Maroon 5",
+        "exact": true,
+        "score": 0.35
+      },
+      "duration": {
+        "inputSeconds": 232,
+        "matchedSeconds": 231,
+        "deltaSecs": 1,
+        "score": 0.1
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "RmYCOm4ehKs": {
+    "videoId": "RmYCOm4ehKs",
+    "mbid": "b5fd3d68-2d7f-4f91-8e38-d385251ecdaa",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-07-30T06:03:58.821Z",
+    "matchedFields": {
+      "title": {
+        "input": "Save Your Tears",
+        "matched": "Save Your Tears",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "The Weeknd",
+        "matched": "The Weeknd",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "3_g2un5M350": {
+    "videoId": "3_g2un5M350",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-30T06:04:00.193Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "HgLfYfJtc8M": {
+    "videoId": "HgLfYfJtc8M",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-30T06:04:05.494Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "yt-x5Oag4hISgU": {
+    "videoId": "yt-x5Oag4hISgU",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-07-30T06:05:52.835Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "AaxFIY-cWH0": {
+    "videoId": "AaxFIY-cWH0",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-02T12:49:43.847Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "z9VMaLxg9Ok": {
+    "videoId": "z9VMaLxg9Ok",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-02T12:49:45.176Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "4EQkYVtE-28": {
+    "videoId": "4EQkYVtE-28",
+    "mbid": "b71b9743-0f39-48f4-9d0e-9de3aa9d90d1",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-08-02T12:49:46.687Z",
+    "matchedFields": {
+      "title": {
+        "input": "Circles",
+        "matched": "Circles",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Post Malone",
+        "matched": "Post Malone",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "fsiPzT50ZiM": {
+    "videoId": "fsiPzT50ZiM",
+    "mbid": "3e5bc764-dfa4-454d-a2a9-0ee84ae35db2",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-08-05T15:40:32.726Z",
+    "matchedFields": {
+      "title": {
+        "input": "Tum Hi Ho",
+        "matched": "Tum Hi Ho",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Arijit Singh",
+        "matched": "Arijit Singh",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "CqS9O-6ok64": {
+    "videoId": "CqS9O-6ok64",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-05T15:40:35.691Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "tHArOxUWuiM": {
+    "videoId": "tHArOxUWuiM",
+    "mbid": "547a141e-0ddd-4fc9-8140-c6eccb7a3cf2",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-08-10T04:11:44.497Z",
+    "matchedFields": {
+      "title": {
+        "input": "She Move It Like",
+        "matched": "She Move It Like",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Badshah",
+        "matched": "Badshah",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "PX8xRpqh5VA": {
+    "videoId": "PX8xRpqh5VA",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-10T04:11:45.799Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "06c99T2-n3Q": {
+    "videoId": "06c99T2-n3Q",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-10T04:11:47.124Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "k3-oFwIZnvs": {
+    "videoId": "k3-oFwIZnvs",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-10T04:11:54.986Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "a4O-abCXsfA": {
+    "videoId": "a4O-abCXsfA",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-14T08:32:31.302Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "uyLDzc0V0OU": {
+    "videoId": "uyLDzc0V0OU",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-17T14:47:46.022Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "jitmi9o3As8": {
+    "videoId": "jitmi9o3As8",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-17T14:47:47.335Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "TDF_KVcC4Qg": {
+    "videoId": "TDF_KVcC4Qg",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-17T14:47:48.653Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "6LvetBbpT7E": {
+    "videoId": "6LvetBbpT7E",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-17T14:47:49.964Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "hRcuLzjpOt4": {
+    "videoId": "hRcuLzjpOt4",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-17T15:35:11.772Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "snx5qGUtVi8": {
+    "videoId": "snx5qGUtVi8",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-17T15:38:03.150Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "WLRLcDCFre8": {
+    "videoId": "WLRLcDCFre8",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-17T15:38:04.475Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "Kcj5-jWxgKs": {
+    "videoId": "Kcj5-jWxgKs",
+    "mbid": "19c889ab-aac6-46b5-94f6-0ba910ac9379",
+    "confidence": 0.9,
+    "resolved": true,
+    "resolvedAt": "2026-08-17T15:38:06.153Z",
+    "matchedFields": {
+      "title": {
+        "input": "Let Me Down Slowly",
+        "matched": "Let Me Down Slowly",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Alec Benjamin",
+        "matched": "Alec Benjamin",
+        "exact": true,
+        "score": 0.35
+      },
+      "duration": {
+        "inputSeconds": 170,
+        "matchedSeconds": 169,
+        "deltaSecs": 1,
+        "score": 0.1
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "2qF9Uvgr1X8": {
+    "videoId": "2qF9Uvgr1X8",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-17T15:39:27.914Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "HhkyEKko868": {
+    "videoId": "HhkyEKko868",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-17T15:39:29.281Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "s_U39Sl1u0c": {
+    "videoId": "s_U39Sl1u0c",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-17T15:39:35.075Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "cK9h5PVzRpk": {
+    "videoId": "cK9h5PVzRpk",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-17T15:39:36.550Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "CybR8-W4jVg": {
+    "videoId": "CybR8-W4jVg",
+    "mbid": "bca9cc8a-ee7c-4673-96f8-4fdc12a82e6b",
+    "confidence": 0.9,
+    "resolved": true,
+    "resolvedAt": "2026-08-17T15:39:49.892Z",
+    "matchedFields": {
+      "title": {
+        "input": "Kesariya",
+        "matched": "Kesariya",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Suneeta Rao",
+        "matched": "Suneeta Rao",
+        "exact": true,
+        "score": 0.35
+      },
+      "duration": {
+        "inputSeconds": 247,
+        "matchedSeconds": 246,
+        "deltaSecs": 1,
+        "score": 0.1
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "gOSM2dEqwsE": {
+    "videoId": "gOSM2dEqwsE",
+    "mbid": "0c9874f8-7d86-43b2-a2de-1b0c6e7e5b84",
+    "confidence": 0.9,
+    "resolved": true,
+    "resolvedAt": "2026-08-17T15:40:17.921Z",
+    "matchedFields": {
+      "title": {
+        "input": "Pehli Dafa",
+        "matched": "Pehli Dafa",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Atif Aslam",
+        "matched": "Atif Aslam",
+        "exact": true,
+        "score": 0.35
+      },
+      "duration": {
+        "inputSeconds": 299,
+        "matchedSeconds": 298,
+        "deltaSecs": 1,
+        "score": 0.1
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "Tc7PhksdT_w": {
+    "videoId": "Tc7PhksdT_w",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-17T15:40:19.760Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "A2aDFtn747A": {
+    "videoId": "A2aDFtn747A",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-17T15:40:21.661Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "I94fhjQ-U30": {
+    "videoId": "I94fhjQ-U30",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-17T15:40:23.068Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "N69ZEImqQ60": {
+    "videoId": "N69ZEImqQ60",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-17T15:40:45.424Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "qI4rijn4_Mo": {
+    "videoId": "qI4rijn4_Mo",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-17T15:40:48.025Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "ts8iAlVJ5NY": {
+    "videoId": "ts8iAlVJ5NY",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-17T15:40:49.350Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "FWv5NAcomng": {
+    "videoId": "FWv5NAcomng",
+    "mbid": "9755c138-8975-4436-854e-6217a8d89efe",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-08-18T13:07:57.252Z",
+    "matchedFields": {
+      "title": {
+        "input": "Enough Is Enough",
+        "matched": "Enough Is Enough",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Post Malone",
+        "matched": "Post Malone",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "GSaXRE2pmWI": {
+    "videoId": "GSaXRE2pmWI",
+    "mbid": "ce8471e2-b6bb-4d6a-88de-bd48beb3f2fc",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-08-18T13:07:57.880Z",
+    "matchedFields": {
+      "title": {
+        "input": "Champion",
+        "matched": "Champion (feat. Nas, Drake & Young Jeezy)",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Nicki Minaj feat. Nas, Drake & Young Jeezy",
+        "matched": "Nicki Minaj",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "cXFTrkNjbaI": {
+    "videoId": "cXFTrkNjbaI",
+    "mbid": "ec14cdd3-dc4b-4cb1-9e01-45d0c1b69540",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-08-18T13:07:58.526Z",
+    "matchedFields": {
+      "title": {
+        "input": "Classic Man (remix)",
+        "matched": "Classic Man (Remix) (feat. Kendrick Lamar)",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Jidenna feat. Kendrick Lamar",
+        "matched": "Jidenna",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "TNrHIhqtno0": {
+    "videoId": "TNrHIhqtno0",
+    "mbid": "a33279eb-0340-4982-8e8c-3adb54fbc379",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-08-18T13:07:59.798Z",
+    "matchedFields": {
+      "title": {
+        "input": "Might as Well",
+        "matched": "Might As Well",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Chlöe & Ty Dolla $ign",
+        "matched": "Chlöe, Ty Dolla $ign",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "P4UnrmPFPA4": {
+    "videoId": "P4UnrmPFPA4",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-18T13:11:12.900Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "CrnRqE8hOIc": {
+    "videoId": "CrnRqE8hOIc",
+    "mbid": "60d2f2bd-0cd8-4ce6-99f8-a2d22682f12c",
+    "confidence": 0.9,
+    "resolved": true,
+    "resolvedAt": "2026-08-19T17:38:32.246Z",
+    "matchedFields": {
+      "title": {
+        "input": "O Mere Dil Ke Chain",
+        "matched": "O Mere Dil Ke Chain",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Kishore Kumar",
+        "matched": "Kishore Kumar",
+        "exact": true,
+        "score": 0.35
+      },
+      "duration": {
+        "inputSeconds": 274,
+        "matchedSeconds": 275,
+        "deltaSecs": 1,
+        "score": 0.1
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "JfcYRdjbcy4": {
+    "videoId": "JfcYRdjbcy4",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-19T17:38:35.210Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "8-aagqHnx7M": {
+    "videoId": "8-aagqHnx7M",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-19T17:38:36.920Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "5P3PGmRxPG0": {
+    "videoId": "5P3PGmRxPG0",
+    "mbid": "2f0d1503-174e-43f0-8872-3fc2074e7206",
+    "confidence": 0.9,
+    "resolved": true,
+    "resolvedAt": "2026-08-19T17:38:39.253Z",
+    "matchedFields": {
+      "title": {
+        "input": "Dil Kehta Hai",
+        "matched": "Dil Kehta Hai",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Kumar Sanu, Alka Yagnik",
+        "matched": "Kumar Sanu Alka Yagnik",
+        "exact": true,
+        "score": 0.35
+      },
+      "duration": {
+        "inputSeconds": 416,
+        "matchedSeconds": 415,
+        "deltaSecs": 1,
+        "score": 0.1
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "PI7OHHhhrNI": {
+    "videoId": "PI7OHHhhrNI",
+    "mbid": "0badc866-5336-4597-bc2a-65dd62e927e5",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-08-19T17:39:58.062Z",
+    "matchedFields": {
+      "title": {
+        "input": "Tu Mere Samne",
+        "matched": "Tu Mere Samne",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Lata Mangeshkar & Udit Narayan",
+        "matched": "Lata Mangeshkar, Udit Narayan",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "WF0HJv-9S_4": {
+    "videoId": "WF0HJv-9S_4",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-19T17:42:10.061Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "NwT1s5K28_Q": {
+    "videoId": "NwT1s5K28_Q",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-19T17:42:11.376Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "8Gw7KYsYJPQ": {
+    "videoId": "8Gw7KYsYJPQ",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-19T17:42:12.713Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "cZy02UPzbUc": {
+    "videoId": "cZy02UPzbUc",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-19T17:42:15.302Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "uNFR3Uw_PZI": {
+    "videoId": "uNFR3Uw_PZI",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-19T17:56:00.695Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "d0JpdfOLXI0": {
+    "videoId": "d0JpdfOLXI0",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-19T17:56:09.172Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "g6RT1Sy8Tso": {
+    "videoId": "g6RT1Sy8Tso",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-19T17:56:10.492Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "GFDBRbKE8s0": {
+    "videoId": "GFDBRbKE8s0",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-20T07:07:09.152Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "-3vUz7QPljM": {
+    "videoId": "-3vUz7QPljM",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-20T07:07:10.473Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "eXkHvT--DBU": {
+    "videoId": "eXkHvT--DBU",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-20T07:07:12.236Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "1vVGjAonhEA": {
+    "videoId": "1vVGjAonhEA",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-20T09:52:07.611Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "kJQP7kiw5Fk": {
+    "videoId": "kJQP7kiw5Fk",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-20T10:20:54.929Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "smIVnaDuGus": {
+    "videoId": "smIVnaDuGus",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-20T10:21:05.861Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "-UBNfYYnCnE": {
+    "videoId": "-UBNfYYnCnE",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-20T10:21:07.203Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "t3IyUATcAbE": {
+    "videoId": "t3IyUATcAbE",
+    "mbid": "c6a8c348-d931-47ec-9ae0-866fb5484158",
+    "confidence": 0.9,
+    "resolved": true,
+    "resolvedAt": "2026-08-20T10:22:05.720Z",
+    "matchedFields": {
+      "title": {
+        "input": "Despacito",
+        "matched": "Despacito",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Luis Fonsi",
+        "matched": "Luis Fonsi",
+        "exact": true,
+        "score": 0.35
+      },
+      "duration": {
+        "inputSeconds": 229,
+        "matchedSeconds": 229,
+        "deltaSecs": 0,
+        "score": 0.1
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "FWOXAPI5kZg": {
+    "videoId": "FWOXAPI5kZg",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-20T10:29:47.225Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "WMK3JXG3Fx0": {
+    "videoId": "WMK3JXG3Fx0",
+    "mbid": "4bda46b4-e724-41ed-ba0a-06a883fbf140",
+    "confidence": 0.9,
+    "resolved": true,
+    "resolvedAt": "2026-08-21T13:44:41.625Z",
+    "matchedFields": {
+      "title": {
+        "input": "Infinity",
+        "matched": "Infinity",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Jaymes Young",
+        "matched": "Jaymes Young",
+        "exact": true,
+        "score": 0.35
+      },
+      "duration": {
+        "inputSeconds": 238,
+        "matchedSeconds": 238,
+        "deltaSecs": 0,
+        "score": 0.1
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "HZbsLxL7GeM": {
+    "videoId": "HZbsLxL7GeM",
+    "mbid": "00698595-281c-4bec-a1e2-cf6d3c9fc780",
+    "confidence": 0.9,
+    "resolved": true,
+    "resolvedAt": "2026-08-21T13:44:43.119Z",
+    "matchedFields": {
+      "title": {
+        "input": "Dandelions",
+        "matched": "Dandelions",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Ruth B.",
+        "matched": "Ruth B.",
+        "exact": true,
+        "score": 0.35
+      },
+      "duration": {
+        "inputSeconds": 234,
+        "matchedSeconds": 234,
+        "deltaSecs": 0,
+        "score": 0.1
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "kIft-LUHHVA": {
+    "videoId": "kIft-LUHHVA",
+    "mbid": "80bb466a-f303-486e-adf0-b0d9968b5c32",
+    "confidence": 0.9,
+    "resolved": true,
+    "resolvedAt": "2026-08-21T13:48:41.930Z",
+    "matchedFields": {
+      "title": {
+        "input": "Espresso",
+        "matched": "Espresso",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Sabrina Carpenter",
+        "matched": "Sabrina Carpenter",
+        "exact": true,
+        "score": 0.35
+      },
+      "duration": {
+        "inputSeconds": 176,
+        "matchedSeconds": 175,
+        "deltaSecs": 1,
+        "score": 0.1
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "J7p4bzqLvCw": {
+    "videoId": "J7p4bzqLvCw",
+    "mbid": "9ce40394-cfc8-43fe-aa14-a36f61680cd3",
+    "confidence": 0.9,
+    "resolved": true,
+    "resolvedAt": "2026-08-21T13:48:43.710Z",
+    "matchedFields": {
+      "title": {
+        "input": "Blinding Lights",
+        "matched": "Blinding Lights",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "The Weeknd",
+        "matched": "The Weeknd",
+        "exact": true,
+        "score": 0.35
+      },
+      "duration": {
+        "inputSeconds": 202,
+        "matchedSeconds": 200,
+        "deltaSecs": 2,
+        "score": 0.1
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "YMxjzP7zLBc": {
+    "videoId": "YMxjzP7zLBc",
+    "mbid": "a9b1dd30-a5ad-4879-8eda-df77946fad52",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-08-21T13:54:59.521Z",
+    "matchedFields": {
+      "title": {
+        "input": "Yayo",
+        "matched": "Yayo",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Lana Del Rey",
+        "matched": "Lana Del Rey",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "TsGw4Dhupw0": {
+    "videoId": "TsGw4Dhupw0",
+    "mbid": "3beedaa7-b121-43aa-ab96-fd8f894d65d6",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-08-21T13:55:00.031Z",
+    "matchedFields": {
+      "title": {
+        "input": "Hold Me Down",
+        "matched": "Hold Me Down",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Halsey",
+        "matched": "Halsey",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "oEJ7Ves0PpU": {
+    "videoId": "oEJ7Ves0PpU",
+    "mbid": "34a37727-9553-48f6-8ddf-a573f046b29d",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-08-21T13:55:00.647Z",
+    "matchedFields": {
+      "title": {
+        "input": "Take Me Back to London",
+        "matched": "Take Me Back to London (feat. Stormzy)",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Ed Sheeran feat. Stormzy",
+        "matched": "Ed Sheeran",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "CcWMVyO4_A4": {
+    "videoId": "CcWMVyO4_A4",
+    "mbid": "37091109-a08e-47fb-bf70-8c45f3b0a8c4",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-08-21T13:55:01.218Z",
+    "matchedFields": {
+      "title": {
+        "input": "Kintsugi",
+        "matched": "Kintsugi",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Lana Del Rey",
+        "matched": "Lana Del Rey",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "3m0CuW5Qbds": {
+    "videoId": "3m0CuW5Qbds",
+    "mbid": "c81d1384-7405-4f7f-bd8b-5081c59d19aa",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-08-21T13:55:01.743Z",
+    "matchedFields": {
+      "title": {
+        "input": "Please Don't Fall In Love With Me",
+        "matched": "Please Don't Fall In Love With Me",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Khalid",
+        "matched": "Khalid",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "wBazjpyZM8w": {
+    "videoId": "wBazjpyZM8w",
+    "mbid": "469ecd18-3ddc-4ae4-a23f-4521f505f33c",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-08-21T15:48:22.131Z",
+    "matchedFields": {
+      "title": {
+        "input": "Up",
+        "matched": "Up",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Justin Bieber",
+        "matched": "Justin Bieber",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "GCx_H4yZtas": {
+    "videoId": "GCx_H4yZtas",
+    "mbid": "671deb4f-961c-4a98-bca8-811e00290ef5",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-08-21T15:48:22.858Z",
+    "matchedFields": {
+      "title": {
+        "input": "Maria",
+        "matched": "Maria",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Justin Bieber",
+        "matched": "Justin Bieber",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "3QQt55D4J_Y": {
+    "videoId": "3QQt55D4J_Y",
+    "mbid": "32d6bfe9-b231-4d5f-9034-61226f7d7d96",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-08-21T15:48:23.391Z",
+    "matchedFields": {
+      "title": {
+        "input": "River",
+        "matched": "River (feat. Ed Sheeran)",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Eminem feat. Ed Sheeran",
+        "matched": "Eminem",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "7FowCr427RQ": {
+    "videoId": "7FowCr427RQ",
+    "mbid": "52643505-f393-455c-9a31-02ccf1707270",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-08-21T15:48:24.848Z",
+    "matchedFields": {
+      "title": {
+        "input": "Don’t Go",
+        "matched": "Don’t Go",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Skrillex, Justin Bieber & Don Toliver",
+        "matched": "Skrillex, Justin Bieber, Don Toliver",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "NJAv_7lHUIU": {
+    "videoId": "NJAv_7lHUIU",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-21T16:22:48.798Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "XtZTpxnrHAc": {
+    "videoId": "XtZTpxnrHAc",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-21T16:22:50.118Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "Kf781IbMQXk": {
+    "videoId": "Kf781IbMQXk",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-21T16:24:07.218Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "GqWYJT-iMTw": {
+    "videoId": "GqWYJT-iMTw",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-21T16:29:30.483Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "-Xd1VSwCi2o": {
+    "videoId": "-Xd1VSwCi2o",
+    "mbid": "62865a1e-b54b-4725-83fa-888528220c79",
+    "confidence": 0.9,
+    "resolved": true,
+    "resolvedAt": "2026-08-21T16:33:46.877Z",
+    "matchedFields": {
+      "title": {
+        "input": "Rush",
+        "matched": "Rush",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Ayra Starr",
+        "matched": "Ayra Starr",
+        "exact": true,
+        "score": 0.35
+      },
+      "duration": {
+        "inputSeconds": 186,
+        "matchedSeconds": 185,
+        "deltaSecs": 1,
+        "score": 0.1
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "lmG0kY9FtRY": {
+    "videoId": "lmG0kY9FtRY",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-21T16:34:04.218Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "OsfAnsMY21M": {
+    "videoId": "OsfAnsMY21M",
+    "mbid": "d1f8ccd0-6898-48dc-acd6-e42a4c60956e",
+    "confidence": 0.9,
+    "resolved": true,
+    "resolvedAt": "2026-08-21T16:39:29.036Z",
+    "matchedFields": {
+      "title": {
+        "input": "Levitating",
+        "matched": "Levitating",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Dua Lipa",
+        "matched": "Dua Lipa",
+        "exact": true,
+        "score": 0.35
+      },
+      "duration": {
+        "inputSeconds": 204,
+        "matchedSeconds": 204,
+        "deltaSecs": 0,
+        "score": 0.1
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "gmoucRvDfIk": {
+    "videoId": "gmoucRvDfIk",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-21T16:40:57.279Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "pnJriqNxpcc": {
+    "videoId": "pnJriqNxpcc",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-21T16:40:59.244Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "3YB27R2t_04": {
+    "videoId": "3YB27R2t_04",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-21T16:41:01.496Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "AsieVqOTRs0": {
+    "videoId": "AsieVqOTRs0",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-21T16:41:04.809Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "WTRm-Yr5Foo": {
+    "videoId": "WTRm-Yr5Foo",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-23T06:21:25.203Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "3Eb2LTRoHVQ": {
+    "videoId": "3Eb2LTRoHVQ",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-23T06:21:45.087Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "QBqAi0M1vhQ": {
+    "videoId": "QBqAi0M1vhQ",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-23T06:21:46.469Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "bySJmNM2fAk": {
+    "videoId": "bySJmNM2fAk",
+    "mbid": "6c93563f-181f-4b1f-ad8d-08b7b5483004",
+    "confidence": 0.9,
+    "resolved": true,
+    "resolvedAt": "2026-08-23T06:21:47.883Z",
+    "matchedFields": {
+      "title": {
+        "input": "On the Low",
+        "matched": "On the low",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Burna Boy",
+        "matched": "Burna Boy",
+        "exact": true,
+        "score": 0.35
+      },
+      "duration": {
+        "inputSeconds": 186,
+        "matchedSeconds": 185,
+        "deltaSecs": 1,
+        "score": 0.1
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "QnaL31BTjdU": {
+    "videoId": "QnaL31BTjdU",
+    "mbid": "b7f56a5c-1d53-4aea-9611-5fc4ba97eb11",
+    "confidence": 0.9,
+    "resolved": true,
+    "resolvedAt": "2026-08-23T06:21:49.250Z",
+    "matchedFields": {
+      "title": {
+        "input": "Tested, Approved & Trusted",
+        "matched": "Tested, Approved & Trusted",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Burna Boy",
+        "matched": "Burna Boy",
+        "exact": true,
+        "score": 0.35
+      },
+      "duration": {
+        "inputSeconds": 221,
+        "matchedSeconds": 220,
+        "deltaSecs": 1,
+        "score": 0.1
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "eW5mMZMv12Y": {
+    "videoId": "eW5mMZMv12Y",
+    "mbid": "b3917e15-5139-41ca-9a92-5b7580765def",
+    "confidence": 0.9,
+    "resolved": true,
+    "resolvedAt": "2026-08-23T06:21:50.574Z",
+    "matchedFields": {
+      "title": {
+        "input": "Asiwaju",
+        "matched": "Asiwaju",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Ruger",
+        "matched": "Ruger",
+        "exact": true,
+        "score": 0.35
+      },
+      "duration": {
+        "inputSeconds": 216,
+        "matchedSeconds": 216,
+        "deltaSecs": 0,
+        "score": 0.1
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "r2htDpoRogU": {
+    "videoId": "r2htDpoRogU",
+    "mbid": "9e9c0ab9-1583-4b8a-91d6-2c039a42cb1d",
+    "confidence": 0.9,
+    "resolved": true,
+    "resolvedAt": "2026-08-23T06:21:52.103Z",
+    "matchedFields": {
+      "title": {
+        "input": "emiliana",
+        "matched": "emiliana",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "CKay",
+        "matched": "CKay",
+        "exact": true,
+        "score": 0.35
+      },
+      "duration": {
+        "inputSeconds": 167,
+        "matchedSeconds": 166,
+        "deltaSecs": 1,
+        "score": 0.1
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "E9AbE8AqplU": {
+    "videoId": "E9AbE8AqplU",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-23T06:22:02.874Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "Boi1A41nuMI": {
+    "videoId": "Boi1A41nuMI",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-23T06:22:06.293Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "SaunnzeF7BE": {
+    "videoId": "SaunnzeF7BE",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-23T06:22:07.597Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "l92Dx1FdGiU": {
+    "videoId": "l92Dx1FdGiU",
+    "mbid": "1a751149-777f-40b2-a70f-c9a0ef9ce76c",
+    "confidence": 0.9,
+    "resolved": true,
+    "resolvedAt": "2026-08-23T06:22:09.136Z",
+    "matchedFields": {
+      "title": {
+        "input": "KU LO SA",
+        "matched": "KU LO SA",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Oxlade",
+        "matched": "Oxlade",
+        "exact": true,
+        "score": 0.35
+      },
+      "duration": {
+        "inputSeconds": 149,
+        "matchedSeconds": 149,
+        "deltaSecs": 0,
+        "score": 0.1
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "4Akn5os57_g": {
+    "videoId": "4Akn5os57_g",
+    "mbid": "de54257d-98ec-43bb-be1d-bd73c327ee4c",
+    "confidence": 0.9,
+    "resolved": true,
+    "resolvedAt": "2026-08-23T06:22:14.511Z",
+    "matchedFields": {
+      "title": {
+        "input": "Sip (Alcohol)",
+        "matched": "Sip (Alcohol)",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Joeboy",
+        "matched": "Joeboy",
+        "exact": true,
+        "score": 0.35
+      },
+      "duration": {
+        "inputSeconds": 159,
+        "matchedSeconds": 158,
+        "deltaSecs": 1,
+        "score": 0.1
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "B89vPpdcMlg": {
+    "videoId": "B89vPpdcMlg",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-23T06:22:17.138Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "tQ2l9zKInDY": {
+    "videoId": "tQ2l9zKInDY",
+    "mbid": "2dccfafd-02a3-419a-ac9f-dc415dec2b55",
+    "confidence": 0.9,
+    "resolved": true,
+    "resolvedAt": "2026-08-23T06:22:21.151Z",
+    "matchedFields": {
+      "title": {
+        "input": "love nwantiti (ah ah ah)",
+        "matched": "Love Nwantiti (ah ah ah)",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "CKay",
+        "matched": "CKay",
+        "exact": true,
+        "score": 0.35
+      },
+      "duration": {
+        "inputSeconds": 146,
+        "matchedSeconds": 147,
+        "deltaSecs": 1,
+        "score": 0.1
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "T4G5uTd72EM": {
+    "videoId": "T4G5uTd72EM",
+    "mbid": "3a7f78d5-61ea-480c-8abf-9dc57f920174",
+    "confidence": 0.9,
+    "resolved": true,
+    "resolvedAt": "2026-08-23T06:22:25.245Z",
+    "matchedFields": {
+      "title": {
+        "input": "Lonely At The Top",
+        "matched": "Lonely At The Top",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Asake",
+        "matched": "Asake",
+        "exact": true,
+        "score": 0.35
+      },
+      "duration": {
+        "inputSeconds": 158,
+        "matchedSeconds": 158,
+        "deltaSecs": 0,
+        "score": 0.1
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "573p9atwhyg": {
+    "videoId": "573p9atwhyg",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-23T06:22:26.521Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "ZCSkhHkgQNk": {
+    "videoId": "ZCSkhHkgQNk",
+    "mbid": "1166c486-02e3-40ad-a4ab-0d6d353ab340",
+    "confidence": 0.9,
+    "resolved": true,
+    "resolvedAt": "2026-08-23T06:22:29.239Z",
+    "matchedFields": {
+      "title": {
+        "input": "No Wahala",
+        "matched": "No Wahala",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "1da Banton",
+        "matched": "1da Banton",
+        "exact": true,
+        "score": 0.35
+      },
+      "duration": {
+        "inputSeconds": 163,
+        "matchedSeconds": 162,
+        "deltaSecs": 1,
+        "score": 0.1
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "QkCfgnYDGnw": {
+    "videoId": "QkCfgnYDGnw",
+    "mbid": "50be96a0-866c-42b9-83d2-d0b009be176f",
+    "confidence": 0.9,
+    "resolved": true,
+    "resolvedAt": "2026-08-23T06:22:30.613Z",
+    "matchedFields": {
+      "title": {
+        "input": "Soso",
+        "matched": "Soso",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Kabusa Oriental Choir",
+        "matched": "Kabusa Oriental Choir",
+        "exact": true,
+        "score": 0.35
+      },
+      "duration": {
+        "inputSeconds": 131,
+        "matchedSeconds": 133,
+        "deltaSecs": 2,
+        "score": 0.1
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "4IyUJ350oJs": {
+    "videoId": "4IyUJ350oJs",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-23T06:22:33.401Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "4NmByrJwOTE": {
+    "videoId": "4NmByrJwOTE",
+    "mbid": "2b6175e3-5c83-4850-ac7c-f1ec4e4d87d9",
+    "confidence": 0.9,
+    "resolved": true,
+    "resolvedAt": "2026-08-23T06:22:35.047Z",
+    "matchedFields": {
+      "title": {
+        "input": "soso",
+        "matched": "soso",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "OMAH LAY",
+        "matched": "Omah Lay",
+        "exact": true,
+        "score": 0.35
+      },
+      "duration": {
+        "inputSeconds": 184,
+        "matchedSeconds": 183,
+        "deltaSecs": 1,
+        "score": 0.1
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "WiqCMleFNdc": {
+    "videoId": "WiqCMleFNdc",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-23T06:22:38.266Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "TG5nGZOmE-w": {
+    "videoId": "TG5nGZOmE-w",
+    "mbid": "e7d4a352-cf63-4c6d-8721-409ca57db03d",
+    "confidence": 0.9,
+    "resolved": true,
+    "resolvedAt": "2026-08-23T06:22:45.343Z",
+    "matchedFields": {
+      "title": {
+        "input": "Calm Down",
+        "matched": "Calm Down",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Rema",
+        "matched": "Rema",
+        "exact": true,
+        "score": 0.35
+      },
+      "duration": {
+        "inputSeconds": 220,
+        "matchedSeconds": 220,
+        "deltaSecs": 0,
+        "score": 0.1
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "qPRNIHxLhmc": {
+    "videoId": "qPRNIHxLhmc",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-23T06:26:31.628Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "GfiJowcJiVw": {
+    "videoId": "GfiJowcJiVw",
+    "mbid": "48227715-9df4-4187-8070-8d980a8f9059",
+    "confidence": 0.8,
+    "resolved": true,
+    "resolvedAt": "2026-08-23T06:26:33.414Z",
+    "matchedFields": {
+      "title": {
+        "input": "The Hills",
+        "matched": "The Hills",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "The Weeknd",
+        "matched": "The Weeknd",
+        "exact": true,
+        "score": 0.35
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "r7Rn4ryE_w8": {
+    "videoId": "r7Rn4ryE_w8",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-23T06:27:00.460Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "U4qD41gPQMU": {
+    "videoId": "U4qD41gPQMU",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-23T06:44:51.126Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "HfaC9nWKrxw": {
+    "videoId": "HfaC9nWKrxw",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-23T06:44:52.488Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "-3un4tp4a1E": {
+    "videoId": "-3un4tp4a1E",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-23T06:47:46.885Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "49pClz5VJyY": {
+    "videoId": "49pClz5VJyY",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-23T06:47:53.335Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "9iabSsLEDkI": {
+    "videoId": "9iabSsLEDkI",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-23T06:47:54.651Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "Uo_OSlQZlgY": {
+    "videoId": "Uo_OSlQZlgY",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-23T06:54:44.346Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "XtPK901WkQ0": {
+    "videoId": "XtPK901WkQ0",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-23T06:55:13.553Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "PVDPkS4v8FQ": {
+    "videoId": "PVDPkS4v8FQ",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-23T06:59:00.586Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "BdMTcZwCokI": {
+    "videoId": "BdMTcZwCokI",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-23T07:03:12.253Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "-Tl_FVOx-cs": {
+    "videoId": "-Tl_FVOx-cs",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-23T07:03:20.499Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "YEp76bA-6rA": {
+    "videoId": "YEp76bA-6rA",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-23T07:03:21.906Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "lLM6pPrrAvQ": {
+    "videoId": "lLM6pPrrAvQ",
+    "mbid": "8ad4f39e-4312-4983-9795-3edb42dd2c0b",
+    "confidence": 0.9,
+    "resolved": true,
+    "resolvedAt": "2026-08-23T07:03:25.986Z",
+    "matchedFields": {
+      "title": {
+        "input": "Akhiyaan Gulaab",
+        "matched": "Akhiyaan Gulaab",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Mitraz",
+        "matched": "Mitraz",
+        "exact": true,
+        "score": 0.35
+      },
+      "duration": {
+        "inputSeconds": 172,
+        "matchedSeconds": 171,
+        "deltaSecs": 1,
+        "score": 0.1
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "tLaJFnc93Oc": {
+    "videoId": "tLaJFnc93Oc",
+    "mbid": "e6564b62-d847-4cc7-84f8-32eefc71f0e1",
+    "confidence": 0.7559,
+    "resolved": true,
+    "resolvedAt": "2026-08-23T07:03:27.376Z",
+    "matchedFields": {
+      "title": {
+        "input": "Tum Hi Aana (From \"Marjaavaan\")",
+        "matched": "Tum Hi Aana (From \"Marjaavaan\")",
+        "exact": true,
+        "score": 0.45
+      },
+      "artist": {
+        "input": "Payal Dev, Jubin Nautiyal",
+        "matched": "Payal Dev Jubin Nautiyal Kunaal Vermaa",
+        "exact": false,
+        "similarity": 0.824,
+        "score": 0.206
+      },
+      "duration": {
+        "inputSeconds": 250,
+        "matchedSeconds": 249,
+        "deltaSecs": 1,
+        "score": 0.1
+      }
+    },
+    "source": "musicbrainz"
+  },
+  "5U5Ru0nTiUM": {
+    "videoId": "5U5Ru0nTiUM",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-23T07:03:29.976Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "q_rtuBQRQfc": {
+    "videoId": "q_rtuBQRQfc",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-23T07:03:34.017Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "TQqBjSAK52s": {
+    "videoId": "TQqBjSAK52s",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-23T07:03:35.395Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "q1uPPBJ2tcI": {
+    "videoId": "q1uPPBJ2tcI",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-23T07:03:38.155Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  },
+  "o-TTwijwArY": {
+    "videoId": "o-TTwijwArY",
+    "mbid": null,
+    "confidence": 0,
+    "resolved": false,
+    "resolvedAt": "2026-08-23T07:03:40.102Z",
+    "matchedFields": {},
+    "source": "musicbrainz"
+  }
+}

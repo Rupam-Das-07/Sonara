@@ -1,0 +1,28 @@
+{
+  "name": "sonara-backend",
+  "version": "1.0.0",
+  "description": "Independent Sonara Android backend — search, stream proxy, media services.",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js --dev",
+    "py:ytmusic": "python python/ytmusic_service.py",
+    "py:audio": "python python/youtube_audio_api.py",
+    "test": "node --test tests/**/*.test.js tests/*.test.js",
+    "test:unit": "node --test tests/unit/*.test.js",
+    "test:security": "node --test tests/security/*.test.js",
+    "check:health": "node scripts/check-api-health.js",
+    "update:featured-artists": "node scripts/update-featured-artists.js",
+    "update:curated-playlists": "node scripts/update-curated-playlists.js"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "express-rate-limit": "^7.5.0"
+  },
+  "license": "MIT"
+}

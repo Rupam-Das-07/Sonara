@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Base Application Theme -->
+    <style name="Theme.Sonara" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowActionBar">false</item>
+    </style>
+
+    <!-- Android 12+ splash: light mode -->
+    <style name="Theme.Sonara.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/sonara_bone</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_logo_light</item>
+        <item name="postSplashScreenTheme">@style/Theme.Sonara</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowActionBar">false</item>
+    </style>
+</resources>

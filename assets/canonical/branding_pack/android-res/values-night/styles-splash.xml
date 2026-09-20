@@ -1,0 +1,8 @@
+<resources>
+    <!-- Android 12+ splash: dark mode -->
+    <style name="Theme.Sonara.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#20383A</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_logo_dark</item>
+        <item name="postSplashScreenTheme">@style/Theme.Sonara</item>
+    </style>
+</resources>

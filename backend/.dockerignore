@@ -1,0 +1,30 @@
+# Git
+.git
+.gitignore
+
+# Development / local env
+.env
+.env.*
+!.env.example
+node_modules
+
+# Test files (not needed at runtime)
+tests/
+
+# Docker build files (no need to COPY these into the image)
+Dockerfile
+.dockerignore
+
+# Logs and editor artefacts
+*.log
+npm-debug.log*
+.DS_Store
+.idea/
+.vscode/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+python/**/__pycache__/

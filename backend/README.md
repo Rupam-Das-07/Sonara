@@ -91,6 +91,29 @@ Internet → HTTPS → Nginx Reverse Proxy → sonara-backend :3002
   - By default, `sonara-backend` starts in `production` mode with all rate limiters enabled.
   - No manual environment configuration is required to achieve secure fail-closed operation.
 
+## Docker / Railway Deployment
+
+The backend runs as a single Docker container with three processes managed by `docker/start.sh`:
+
+| Process | Binding | Port |
+|---|---|---|
+| Python YTMusic service | `127.0.0.1` (loopback only) | 5000 |
+| Python yt-dlp audio service | `127.0.0.1` (loopback only) | 5001 |
+| Node.js gateway | `0.0.0.0` (public) | `$PORT` |
+
+**Railway configuration:**
+- Set the Railway service root to `/backend` — Railway will detect `Dockerfile` automatically.
+- `PORT` is injected by Railway at runtime. Do not hard-code it.
+- `NODE_ENV=production` is set in the Dockerfile. Rate limiting is active.
+- Python services remain loopback-only inside the container and are never publicly exposed.
+
+**Local Docker build** (requires Docker Desktop running):
+```bash
+cd backend
+docker build -t sonara-backend:local .
+docker run --rm -p 3002:3002 -e PORT=3002 sonara-backend:local
+```
+
 ## Environment Variables
 
 | Variable | Default | Description |

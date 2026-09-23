@@ -51,13 +51,21 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
 # ── Backend source ─────────────────────────────────────────────────────────────
-COPY . .
+COPY --chown=node:node . .
+
+# ── Runtime-writable directories & ownership ───────────────────────────────────
+# blitz.cloud runs containers as UID 1000:GID 1000 with dropped capabilities.
+# The base image already provides the 'node' user (uid=1000, gid=1000).
+# Ensure /app/data (identity store) and /home/node are owned by node:node.
+RUN mkdir -p /app/data /home/node/.cache \
+ && chown -R node:node /app /home/node
 
 # ── Runtime environment ────────────────────────────────────────────────────────
 # NODE_ENV=production ensures rate limiting is active and dev-bypass is off.
 # PORT is supplied by Railway at runtime — do NOT hard-code it here.
 # Python service URLs use loopback defaults matching src/config/env.js.
 ENV NODE_ENV=production \
+    HOME=/home/node \
     PYTHON_YTMUSIC_URL=http://127.0.0.1:5000 \
     PYTHON_AUDIO_URL=http://127.0.0.1:5001
 
@@ -65,8 +73,12 @@ ENV NODE_ENV=production \
 COPY docker/start.sh /start.sh
 RUN chmod +x /start.sh
 
+# ── Run as non-root user ───────────────────────────────────────────────────────
+USER node
+
 # Expose is documentation only — Railway routes traffic to $PORT on the Node
 # gateway. Python ports 5000/5001 are intentionally NOT listed here.
 EXPOSE 3002
 
 CMD ["/start.sh"]
+

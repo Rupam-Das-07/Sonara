@@ -57,6 +57,9 @@ shutdown() {
     done
 
     echo "[start.sh] All processes stopped."
+    if [ "$signal" = "SIGTERM" ] || [ "$signal" = "SIGINT" ]; then
+        exit 0
+    fi
 }
 
 trap 'shutdown SIGTERM' TERM

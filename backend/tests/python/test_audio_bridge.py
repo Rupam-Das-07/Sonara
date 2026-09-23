@@ -1241,10 +1241,135 @@ class GroupI_RedirectValidatorUnitTests(unittest.TestCase):
         self.assertFalse(api_mod.validate_audio_redirect_url("https://notgooglevideo.com/vp"))
 
 
+
+# ---------------------------------------------------------------------------
+# Group J — EJS / Node.js runtime configuration
+# ---------------------------------------------------------------------------
+
+class GroupJ_EjsRuntimeConfiguration(unittest.TestCase):
+    """
+    Regression coverage for the yt-dlp EJS / Node.js JS runtime configuration.
+
+    yt-dlp 2026.x requires an external JavaScript runtime to evaluate the
+    YouTube player JS for URL signature decryption.  Sonara ships yt-dlp-ejs
+    and configures the Node.js runtime that is already present in the
+    production Docker image.
+
+    These tests verify the application's yt-dlp configuration without making
+    real network calls.
+    """
+
+    def test_j01_yt_dlp_ejs_importable(self):
+        """yt-dlp-ejs package must be installed and importable in the test venv."""
+        try:
+            import yt_dlp_ejs  # noqa: F401
+        except ImportError:
+            self.fail(
+                "yt_dlp_ejs is not installed. "
+                "Run: pip install yt-dlp-ejs==0.8.0"
+            )
+
+    def test_j02_get_audio_info_ydl_opts_contain_node_runtime(self):
+        """
+        get_audio_info()'s ydl_opts must include js_runtimes: {'node': {}}.
+
+        We intercept the YoutubeDL constructor to capture the opts dict
+        without performing any real extraction.
+        """
+        captured = {}
+
+        class _CapturingYDL:
+            def __init__(self, opts):
+                captured['opts'] = opts
+            def __enter__(self):
+                return self
+            def __exit__(self, *a):
+                pass
+            def extract_info(self, *a, **kw):
+                # Return minimal info to satisfy get_audio_info()'s parsing
+                return {
+                    "id": "dQw4w9WgXcQ",
+                    "title": "Test",
+                    "url": "https://rr1---sn-abc.googlevideo.com/videoplayback?id=1",
+                    "http_headers": {},
+                }
+
+        with patch("youtube_service.yt_dlp.YoutubeDL", _CapturingYDL):
+            try:
+                svc_mod.get_audio_info(
+                    "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+                )
+            except Exception:
+                pass  # extraction outcome is irrelevant; we only need opts
+
+        self.assertIn(
+            'opts', captured,
+            "YoutubeDL constructor was never called — test setup may be wrong."
+        )
+        js_runtimes = captured['opts'].get('js_runtimes')
+        self.assertIsNotNone(
+            js_runtimes,
+            "ydl_opts for get_audio_info() is missing 'js_runtimes' key."
+        )
+        self.assertIn(
+            'node', js_runtimes,
+            f"'node' not found in js_runtimes; got: {js_runtimes!r}"
+        )
+
+    def test_j03_node_runtime_is_a_valid_yt_dlp_runtime(self):
+        """
+        Passing js_runtimes={'node': {}} to YoutubeDL must not raise.
+        This confirms 'node' is a recognised runtime key in the installed
+        yt-dlp version.
+        """
+        import yt_dlp
+        try:
+            ydl = yt_dlp.YoutubeDL({'quiet': True, 'js_runtimes': {'node': {}}})
+        except (ValueError, KeyError) as exc:
+            self.fail(
+                f"yt-dlp rejected js_runtimes={{'node': {{}}}} : {exc}"
+            )
+        self.assertIn(
+            'node', ydl.params.get('js_runtimes', {}),
+            "js_runtimes param was not stored correctly by YoutubeDL."
+        )
+
+    def test_j04_search_ydl_opts_does_not_add_js_runtimes(self):
+        """
+        search_youtube()'s ydl_opts should NOT include js_runtimes.
+        The search path uses extract_flat=True and never invokes the YouTube
+        player JS, so adding js_runtimes there would be redundant.
+        """
+        captured = {}
+
+        class _CapturingYDL:
+            def __init__(self, opts):
+                # Capture every call; the search fires once.
+                captured.setdefault('all_opts', []).append(opts)
+            def __enter__(self):
+                return self
+            def __exit__(self, *a):
+                pass
+            def extract_info(self, *a, **kw):
+                return {"entries": []}
+
+        with patch("youtube_service.yt_dlp.YoutubeDL", _CapturingYDL):
+            try:
+                svc_mod.search_youtube("test query", max_results=1)
+            except Exception:
+                pass
+
+        for opts in captured.get('all_opts', []):
+            self.assertNotIn(
+                'js_runtimes', opts,
+                "search_youtube() ydl_opts should not contain js_runtimes "
+                "(extract_flat path does not invoke player JS)."
+            )
+
+
 # ---------------------------------------------------------------------------
 # Run directly
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
-

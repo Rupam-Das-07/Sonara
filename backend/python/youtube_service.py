@@ -88,7 +88,10 @@ def get_audio_info(url: str) -> dict:
                     "player_client": ["android"],
                     "client": ["android"]
                 }
-            }
+            },
+            # Use Node.js (already in the production container) for YouTube
+            # player JS evaluation. yt-dlp-ejs must be installed.
+            "js_runtimes": {"node": {}},
         }
 
         try:

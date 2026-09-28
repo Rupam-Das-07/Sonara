@@ -231,4 +231,12 @@
     <string name="import_alternatives_label">Alternatives available</string>
     <string name="import_change_selection">Choose alternative</string>
     <string name="import_view_playlist">View Playlist</string>
+
+    <!-- Context Menu & Play Next -->
+    <string name="action_play_next">Play Next</string>
+    <string name="action_play_next_desc">Play immediately after current track</string>
+    <string name="action_play_now">Play Now</string>
+    <string name="action_add_to_playlist">Add to Playlist</string>
+    <string name="action_create_playlist_with_song">Create Playlist with this Song</string>
+    <string name="toast_added_to_play_next">Added to Play Next</string>
 </resources>

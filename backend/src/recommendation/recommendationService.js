@@ -7,6 +7,12 @@
  * 1. Radio (via YouTube Music watch playlist)
  * 2. Related Tracks (via YouTube Music related songs)
  * 3. Similar Tracks (via ListenBrainz collaborative filtering + IdentityStore resolution)
+ *
+ * Finding 6 (Performance): Added TTL caches for radio and related candidates.
+ * Evidence: measurements showed repeat requests for the same seed videoId always
+ * incurred a full Python :5000 round-trip (~400–1200ms above network floor).
+ * Caches use 10-min TTL (results are stable within a session) with stampede
+ * protection via in-flight Map — same pattern as ytmusicProvider.searchSongs.
  */
 
 const ytmusic = require('../search/ytmusicProvider');
@@ -15,9 +21,20 @@ const { identityStore } = require('../identity/IdentityStore');
 const { resolveIdentity, fetchImmediateMetadata } = require('../identity/MusicBrainzService');
 const { getSimilarRecordings, getRecordingMetadataBatch } = require('./ListenBrainzService');
 const { findBestMatch } = require('../identity/IdentityMatcher');
+const BoundedCache = require('../utils/BoundedCache');
 const logger = require('../utils/logger');
 
 const IDENTITY_MATCH_THRESHOLD = 0.70;
+
+// TTL caches for radio and related recommendation results (Finding 6).
+// 10-minute TTL: recommendations for a given seed are stable within a session.
+// maxSize 500: covers typical session breadth without unbounded memory.
+const RECOMMENDATION_CACHE_TTL_MS = 10 * 60 * 1000;
+const _radioCache = new BoundedCache({ maxSize: 500, ttlMs: RECOMMENDATION_CACHE_TTL_MS });
+const _relatedCache = new BoundedCache({ maxSize: 500, ttlMs: RECOMMENDATION_CACHE_TTL_MS });
+// Stampede protection: prevents concurrent identical-seed requests from all hitting Python.
+const _radioInFlight = new Map();
+const _relatedInFlight = new Map();
 
 class RecommendationService {
   static _buildResponse(source, seed, success, tracks = [], error = null, startTime = 0) {
@@ -52,14 +69,43 @@ class RecommendationService {
 
   /**
    * Fetches Radio continuation tracks based on a seed videoId.
+   * Results are cached for RECOMMENDATION_CACHE_TTL_MS (10 min) to avoid
+   * repeat Python :5000 round-trips for the same seed (Finding 6).
    */
   static async getRadioCandidates(videoId) {
     const t0 = Date.now();
     try {
       if (!videoId) throw new Error("videoId is required");
-      let rawTracks = await ytmusic.getWatchPlaylist(videoId);
-      let tracks = filterRecommendations(rawTracks).map(this._mapYtTrack);
-      return this._buildResponse('radio', videoId, true, tracks, null, t0);
+
+      // Cache hit
+      const cached = _radioCache.get(videoId);
+      if (cached) {
+        logger.debug(`[RecommendationService] radio cache hit for ${videoId}`);
+        return cached;
+      }
+
+      // Stampede protection
+      if (_radioInFlight.has(videoId)) {
+        return await _radioInFlight.get(videoId);
+      }
+
+      const fetchPromise = (async () => {
+        try {
+          let rawTracks = await ytmusic.getWatchPlaylist(videoId);
+          let tracks = filterRecommendations(rawTracks).map(this._mapYtTrack);
+          const result = this._buildResponse('radio', videoId, true, tracks, null, t0);
+          _radioCache.set(videoId, result);
+          return result;
+        } catch (e) {
+          logger.warn(`[RecommendationService] getRadioCandidates failed for ${videoId}: ${e.message}`);
+          return this._buildResponse('radio', videoId, false, [], e.message || 'Provider unavailable', t0);
+        } finally {
+          _radioInFlight.delete(videoId);
+        }
+      })();
+
+      _radioInFlight.set(videoId, fetchPromise);
+      return fetchPromise;
     } catch (e) {
       logger.warn(`[RecommendationService] getRadioCandidates failed for ${videoId}: ${e.message}`);
       return this._buildResponse('radio', videoId, false, [], e.message || 'Provider unavailable', t0);
@@ -68,14 +114,43 @@ class RecommendationService {
 
   /**
    * Fetches Related tracks based on a seed videoId.
+   * Results are cached for RECOMMENDATION_CACHE_TTL_MS (10 min) to avoid
+   * repeat Python :5000 round-trips for the same seed (Finding 6).
    */
   static async getRelatedCandidates(videoId) {
     const t0 = Date.now();
     try {
       if (!videoId) throw new Error("videoId is required");
-      let rawTracks = await ytmusic.getRelatedSongs(videoId);
-      let tracks = filterRecommendations(rawTracks).map(this._mapYtTrack);
-      return this._buildResponse('related', videoId, true, tracks, null, t0);
+
+      // Cache hit
+      const cached = _relatedCache.get(videoId);
+      if (cached) {
+        logger.debug(`[RecommendationService] related cache hit for ${videoId}`);
+        return cached;
+      }
+
+      // Stampede protection
+      if (_relatedInFlight.has(videoId)) {
+        return await _relatedInFlight.get(videoId);
+      }
+
+      const fetchPromise = (async () => {
+        try {
+          let rawTracks = await ytmusic.getRelatedSongs(videoId);
+          let tracks = filterRecommendations(rawTracks).map(this._mapYtTrack);
+          const result = this._buildResponse('related', videoId, true, tracks, null, t0);
+          _relatedCache.set(videoId, result);
+          return result;
+        } catch (e) {
+          logger.warn(`[RecommendationService] getRelatedCandidates failed for ${videoId}: ${e.message}`);
+          return this._buildResponse('related', videoId, false, [], e.message || 'Provider unavailable', t0);
+        } finally {
+          _relatedInFlight.delete(videoId);
+        }
+      })();
+
+      _relatedInFlight.set(videoId, fetchPromise);
+      return fetchPromise;
     } catch (e) {
       logger.warn(`[RecommendationService] getRelatedCandidates failed for ${videoId}: ${e.message}`);
       return this._buildResponse('related', videoId, false, [], e.message || 'Provider unavailable', t0);
@@ -205,6 +280,20 @@ class RecommendationService {
       return this._buildResponse('similar', videoId, false, [], e.message || 'Provider unavailable', t0);
     }
   }
+
+  /**
+   * Clears all recommendation caches and in-flight maps (for testing only).
+   */
+  static clearCaches() {
+    _radioCache.clear();
+    _relatedCache.clear();
+    _radioInFlight.clear();
+    _relatedInFlight.clear();
+  }
 }
+
+// Expose caches for test inspection (not for production use).
+RecommendationService._radioCache = _radioCache;
+RecommendationService._relatedCache = _relatedCache;
 
 module.exports = RecommendationService;

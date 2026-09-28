@@ -235,7 +235,7 @@ open class SonaraBackendClient(
      * A null imageUrl is expected and valid — the client renders a monogram.
      * Entries missing a stable id or name are skipped defensively.
      */
-    suspend fun getFeaturedArtists(): Result<List<FeaturedArtist>> = withContext(Dispatchers.IO) {
+    open suspend fun getFeaturedArtists(): Result<List<FeaturedArtist>> = withContext(Dispatchers.IO) {
         val url = "$baseUrl/api/v1/artists/featured"
         try {
             val json = get(url, timeoutMs = SonaraBackendConfig.DISCOVERY_TIMEOUT_MS)
@@ -270,7 +270,7 @@ open class SonaraBackendClient(
      * GET /api/v1/artists/{encodedBrowseId}?name={encodedName} -> { tracks: [ TrackDTO ], playlists: [ PlaylistSummaryDTO ] }
      * Falls back gracefully to search query if deep catalog is empty or unavailable.
      */
-    suspend fun getArtistCatalog(artistId: String, artistName: String): Result<ArtistCatalog> = withContext(Dispatchers.IO) {
+    open suspend fun getArtistCatalog(artistId: String, artistName: String): Result<ArtistCatalog> = withContext(Dispatchers.IO) {
         val queryName = artistName.takeIf { it.isNotBlank() } ?: artistId
         if (queryName.isBlank()) {
             return@withContext Result.success(ArtistCatalog())
@@ -314,7 +314,7 @@ open class SonaraBackendClient(
      * Curated playlist catalog (tiles only; tracks fetched on demand).
      * GET /api/v1/playlists -> { playlists: [ { id, name, description, coverImage|null, size } ] }
      */
-    suspend fun getPlaylists(): Result<List<PlaylistSummary>> = withContext(Dispatchers.IO) {
+    open suspend fun getPlaylists(): Result<List<PlaylistSummary>> = withContext(Dispatchers.IO) {
         val url = "$baseUrl/api/v1/playlists"
         try {
             val json = get(url, timeoutMs = SonaraBackendConfig.DISCOVERY_TIMEOUT_MS)
@@ -349,7 +349,7 @@ open class SonaraBackendClient(
      *
      * Uses READ_TIMEOUT_MS because generation may run upstream provider calls.
      */
-    suspend fun getPlaylistDetail(playlistId: String): Result<PlaylistDetail> = withContext(Dispatchers.IO) {
+    open suspend fun getPlaylistDetail(playlistId: String): Result<PlaylistDetail> = withContext(Dispatchers.IO) {
         if (playlistId.isBlank()) {
             return@withContext Result.failure(
                 SonaraException.NotFoundException("Cannot resolve playlist for blank id")
@@ -385,7 +385,7 @@ open class SonaraBackendClient(
      * @param refresh When true, bypasses the server session cache and rotates the
      *                fallback query so the set changes.
      */
-    suspend fun getQuickPicks(refresh: Boolean = false): Result<List<Track>> = withContext(Dispatchers.IO) {
+    open suspend fun getQuickPicks(refresh: Boolean = false): Result<List<Track>> = withContext(Dispatchers.IO) {
         val url = if (refresh) "$baseUrl/api/v1/quickpicks?refresh=1" else "$baseUrl/api/v1/quickpicks"
         try {
             val json = get(url, timeoutMs = SonaraBackendConfig.READ_TIMEOUT_MS)
@@ -408,7 +408,7 @@ open class SonaraBackendClient(
      * maps to a NetworkException — so an unavailable provider fails (module
      * self-hides) rather than looking like an empty result.
      */
-    suspend fun getRelatedTracks(seedVideoId: String): Result<List<Track>> = withContext(Dispatchers.IO) {
+    open suspend fun getRelatedTracks(seedVideoId: String): Result<List<Track>> = withContext(Dispatchers.IO) {
         if (seedVideoId.isBlank()) {
             return@withContext Result.failure(
                 SonaraException.NotFoundException("Cannot fetch recommendations for blank videoId")

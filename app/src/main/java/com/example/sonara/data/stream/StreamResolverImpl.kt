@@ -6,7 +6,10 @@ import com.example.sonara.domain.model.AudioQuality
 import com.example.sonara.domain.model.StreamInfo
 import com.example.sonara.domain.ports.StreamResolverPort
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
@@ -31,6 +34,8 @@ class StreamResolverImpl(
     }
 
     private val streamCache = ConcurrentHashMap<String, StreamInfo>()
+    private val inFlightMutex = Mutex()
+    private val inFlightRequests = HashMap<String, CompletableDeferred<Result<StreamInfo>>>()
 
     override suspend fun resolveStream(
         trackId: String,
@@ -60,16 +65,54 @@ class StreamResolverImpl(
             return@withContext Result.success(cached)
         }
 
-        Log.d(TAG, "Resolving stream from backend for trackId=$trackId (quality=$qualityKey, title=$title)")
-        val result = backendClient.getStreamUrl(trackId, quality, title, artist, durationSeconds)
-        result.onSuccess { info ->
-            streamCache[cacheKey] = info
+        // Atomic leader-follower in-flight deduplication
+        val (isLeader, deferred, cachedResult) = inFlightMutex.withLock {
+            val cachedInside = streamCache[cacheKey]
+            if (cachedInside != null && (cachedInside.expiresAt == 0L || cachedInside.expiresAt > System.currentTimeMillis() + EXPIRATION_SAFETY_MARGIN_MS)) {
+                return@withLock Triple(false, null, cachedInside)
+            }
+            val existing = inFlightRequests[cacheKey]
+            if (existing != null) {
+                Triple(false, existing, null)
+            } else {
+                val newDeferred = CompletableDeferred<Result<StreamInfo>>()
+                inFlightRequests[cacheKey] = newDeferred
+                Triple(true, newDeferred, null)
+            }
         }
-        result
+
+        if (cachedResult != null) {
+            Log.d(TAG, "Stream cache hit inside lock for key=$cacheKey")
+            return@withContext Result.success(cachedResult)
+        }
+
+        if (!isLeader) {
+            Log.d(TAG, "Joining in-flight stream resolution for key=$cacheKey")
+            return@withContext deferred!!.await()
+        }
+
+        try {
+            Log.d(TAG, "Resolving stream from backend for trackId=$trackId (quality=$qualityKey, title=$title)")
+            val result = backendClient.getStreamUrl(trackId, quality, title, artist, durationSeconds)
+            result.onSuccess { info ->
+                streamCache[cacheKey] = info
+            }
+            deferred?.complete(result)
+            result
+        } catch (t: Throwable) {
+            val failure = Result.failure<StreamInfo>(t)
+            deferred?.complete(failure)
+            failure
+        } finally {
+            inFlightMutex.withLock {
+                inFlightRequests.remove(cacheKey)
+            }
+        }
     }
 
     override fun clearCache() {
         Log.d(TAG, "Clearing in-memory stream cache (${streamCache.size} entries)")
         streamCache.clear()
+        inFlightRequests.clear()
     }
 }

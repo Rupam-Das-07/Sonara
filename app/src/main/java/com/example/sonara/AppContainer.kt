@@ -31,6 +31,7 @@ import com.example.sonara.domain.repository.SettingsRepository
 import com.example.sonara.playback.checkpoint.PlaybackCheckpointEngine
 import com.example.sonara.playback.client.MediaControllerClient
 import com.example.sonara.playback.controller.PlaybackQueueEngine
+import com.example.sonara.playback.controller.TransitionManager
 
 /**
  * Lean, explicit manual dependency container for Sonara Android.
@@ -160,5 +161,9 @@ class AppContainer(context: Context) {
 
     val playbackQueueEngine: PlaybackQueueEngine by lazy {
         PlaybackQueueEngine()
+    }
+
+    val transitionManager: TransitionManager by lazy {
+        TransitionManager()
     }
 }

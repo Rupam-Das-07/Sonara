@@ -54,6 +54,7 @@ import com.example.sonara.core.ui.components.SonaraDivider
 import com.example.sonara.core.ui.components.SonaraEmptyState
 import com.example.sonara.core.ui.components.SonaraErrorBanner
 import com.example.sonara.core.ui.components.SonaraLoadingIndicator
+import com.example.sonara.core.ui.components.TrackContextMenuSheet
 import com.example.sonara.core.ui.theme.SonaraTheme
 import com.example.sonara.domain.model.SearchMode
 import com.example.sonara.domain.model.SearchSuggestion
@@ -83,6 +84,9 @@ fun SearchScreen(
     isLiked: (String) -> Boolean,
     onDeleteHistoryEntry: (Long) -> Unit,
     onClearHistory: () -> Unit,
+    onPlayNext: (Track) -> Unit = {},
+    onAddToPlaylist: ((Track) -> Unit)? = null,
+    onCreatePlaylistWithSong: ((Track) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val colors = SonaraTheme.colors
@@ -91,6 +95,7 @@ fun SearchScreen(
     val focusManager = LocalFocusManager.current
 
     var isClearHistoryDialogOpen by remember { mutableStateOf(false) }
+    var contextMenuTrack by remember { mutableStateOf<Track?>(null) }
 
     Column(
         modifier = modifier
@@ -317,7 +322,8 @@ fun SearchScreen(
                                 track = track,
                                 isLiked = isLiked(track.id),
                                 onPlay = { onPlayTrack(track) },
-                                onToggleLike = { liked -> onToggleLike(track, liked) }
+                                onToggleLike = { liked -> onToggleLike(track, liked) },
+                                onLongClick = { contextMenuTrack = track }
                             )
                         }
                         item {
@@ -337,6 +343,35 @@ fun SearchScreen(
             },
             onDismiss = {
                 isClearHistoryDialogOpen = false
+            }
+        )
+    }
+
+    contextMenuTrack?.let { track ->
+        TrackContextMenuSheet(
+            track = track,
+            onPlayNext = {
+                onPlayNext(track)
+                contextMenuTrack = null
+            },
+            onPlayNow = {
+                onPlayTrack(track)
+                contextMenuTrack = null
+            },
+            onAddToPlaylist = onAddToPlaylist?.let { callback ->
+                {
+                    callback(track)
+                    contextMenuTrack = null
+                }
+            },
+            onCreatePlaylistWithSong = onCreatePlaylistWithSong?.let { callback ->
+                {
+                    callback(track)
+                    contextMenuTrack = null
+                }
+            },
+            onDismiss = {
+                contextMenuTrack = null
             }
         )
     }

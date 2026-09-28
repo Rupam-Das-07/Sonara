@@ -122,6 +122,44 @@ class PlaybackQueueEngine(
     }
 
     /**
+     * Inserts [track] at the top of the upcoming queue (index 0) so that it plays
+     * immediately after the currently playing track finishes, without interrupting
+     * current playback.
+     *
+     * Invariants enforced:
+     * - If [track] id is blank, no-op.
+     * - If [track] is already at index 0 of upcoming queue, no-op.
+     * - If [track] is located elsewhere in upcoming queue, it is moved/repositioned to index 0.
+     * - If [track] exists in recommendation cache, it is removed from cache and placed at index 0.
+     * - If current playing track is selected, it is inserted at index 0 so it plays again next.
+     * - Synchronizes session snapshot if active.
+     * - Fires [onQueueChanged] callback to notify service and listeners.
+     */
+    @Synchronized
+    fun playNext(track: Track) {
+        if (track.id.isBlank()) return
+        if (_upcomingQueue.firstOrNull()?.id == track.id) return
+
+        _upcomingQueue.removeAll { it.id == track.id }
+        _recommendationCache.removeAll { it.id == track.id }
+        _upcomingQueue.add(0, track)
+
+        if (_sessionSnapshot.isNotEmpty()) {
+            if (track.id != _currentTrack?.id) {
+                _sessionSnapshot.removeAll { it.id == track.id }
+                val currentIndex = _sessionSnapshot.indexOfFirst { it.id == _currentTrack?.id }
+                if (currentIndex >= 0) {
+                    _sessionSnapshot.add(currentIndex + 1, track)
+                } else {
+                    _sessionSnapshot.add(track)
+                }
+            }
+        }
+
+        onQueueChanged?.invoke()
+    }
+
+    /**
      * Advances to the next track in the queue, repeat cycle, or recommendation pool.
      * Guaranteed to push the current track to [sessionBackStack] when moving forward.
      *

@@ -31,6 +31,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import java.util.concurrent.CancellationException
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.firstOrNull
 import android.graphics.Bitmap
@@ -76,6 +78,7 @@ class SonaraPlaybackService : MediaSessionService() {
         const val ACTION_OPEN_EXPANDED_PLAYER = "com.example.sonara.ACTION_OPEN_EXPANDED_PLAYER"
         const val EXTRA_OPEN_EXPANDED_PLAYER = "com.example.sonara.EXTRA_OPEN_EXPANDED_PLAYER"
         private const val ARTWORK_BOUND_PX = 512
+        private const val PRELOAD_DEBOUNCE_MS = 1500L
 
         /**
          * Pure controller classification helpers used for authorization decisions
@@ -112,6 +115,12 @@ class SonaraPlaybackService : MediaSessionService() {
     private var mediaSession: MediaSession? = null
     private var playbackController: PlaybackController? = null
     private var equalizerManager: EqualizerManager? = null
+
+    /** Thread-safe transition manager coordinating playback generations across service and viewmodel. */
+    private val transitionManager: TransitionManager by lazy {
+        (application as? SonaraApp)?.container?.transitionManager ?: TransitionManager()
+    }
+    private var activePlaybackJob: kotlinx.coroutines.Job? = null
 
     /** Bounded in-memory software bitmap cache for IPC MediaMetadata delivery. */
     private val artworkCache = LruCache<String, ByteArray>(10)
@@ -164,7 +173,7 @@ class SonaraPlaybackService : MediaSessionService() {
                 if (mediaItem != null) {
                     Log.i(TAG, "onMediaItemTransition: mediaId=${mediaItem.mediaId}, reason=$reason")
                     handleArtworkForMediaItem(mediaItem)
-                    handleTrackTransition(mediaItem.mediaId)
+                    handleTrackTransition(mediaItem.mediaId, reason)
                 }
             }
 
@@ -191,7 +200,6 @@ class SonaraPlaybackService : MediaSessionService() {
         }
 
         val queueManager = QueueManager(emptyList())
-        val transitionManager = TransitionManager()
         val controller = PlaybackController(
             player = playerHolder.player,
             queueManager = queueManager,
@@ -326,6 +334,29 @@ class SonaraPlaybackService : MediaSessionService() {
                 controller: MediaSession.ControllerInfo,
                 mediaItems: MutableList<androidx.media3.common.MediaItem>
             ): com.google.common.util.concurrent.ListenableFuture<MutableList<androidx.media3.common.MediaItem>> {
+                val requestGen = mediaItems.firstOrNull()?.let { item ->
+                    item.requestMetadata.extras?.getLong(
+                        com.example.sonara.playback.client.MediaControllerClient.EXTRA_REQUEST_GENERATION, 0L
+                    ) ?: item.mediaMetadata.extras?.getLong(
+                        com.example.sonara.playback.client.MediaControllerClient.EXTRA_REQUEST_GENERATION, 0L
+                    )
+                } ?: 0L
+
+                if (requestGen > 0L) {
+                    if (requestGen < transitionManager.currentGeneration()) {
+                        Log.w(TAG, "onAddMediaItems: Stale request generation $requestGen < ${transitionManager.currentGeneration()}, rejecting MediaItem")
+                        return com.google.common.util.concurrent.Futures.immediateFailedFuture(
+                            java.util.concurrent.CancellationException("Stale request generation $requestGen < ${transitionManager.currentGeneration()}")
+                        )
+                    }
+                    transitionManager.updateIfGreater(requestGen)
+                } else {
+                    transitionManager.nextGeneration()
+                }
+
+                // Invalidate in-flight service-level async playback resolutions when new items arrive from controller
+                activePlaybackJob?.cancel()
+
                 // The stream URI is always set in requestMetadata.mediaUri by MediaControllerClient
                 // before sending the MediaItem to the session. No local fallback is needed.
                 val updatedMediaItems = mediaItems.map { item ->
@@ -480,6 +511,7 @@ class SonaraPlaybackService : MediaSessionService() {
         likedObserverJob?.cancel()
         artworkLoadJob?.cancel()
         preloadJob?.cancel()
+        activePlaybackJob?.cancel()
         artworkCache.evictAll()
         serviceScope.cancel()
 
@@ -502,12 +534,14 @@ class SonaraPlaybackService : MediaSessionService() {
         val qe = (application as? SonaraApp)?.container?.playbackQueueEngine ?: return
         val currentTrackId = exoPlayerHolder?.player?.currentMediaItem?.mediaId
         val decision = qe.advance(fromTrackId = currentTrackId)
-        Log.i(TAG, "advanceToNext: currentTrackId=$currentTrackId, decision=$decision")
+        val gen = transitionManager.nextGeneration()
+        activePlaybackJob?.cancel()
+        Log.i(TAG, "advanceToNext [gen=$gen]: currentTrackId=$currentTrackId, decision=$decision")
 
         when (decision) {
             is NextTrackDecision.PlayTrack -> {
                 exoPlayerHolder?.player?.pause()
-                playTrackInternal(decision.track)
+                playTrackInternal(decision.track, gen)
             }
             is NextTrackDecision.ReplayCurrent -> {
                 exoPlayerHolder?.player?.seekTo(0L)
@@ -515,7 +549,7 @@ class SonaraPlaybackService : MediaSessionService() {
             }
             is NextTrackDecision.NeedRecommendations -> {
                 exoPlayerHolder?.player?.pause()
-                fetchRecommendationsAndAdvance(decision.seedTrackId)
+                fetchRecommendationsAndAdvance(decision.seedTrackId, gen)
             }
             is NextTrackDecision.StopPlayback -> {
                 exoPlayerHolder?.player?.pause()
@@ -523,16 +557,21 @@ class SonaraPlaybackService : MediaSessionService() {
         }
     }
 
-    private fun fetchRecommendationsAndAdvance(seedTrackId: String) {
+    private fun fetchRecommendationsAndAdvance(seedTrackId: String, generation: Long) {
         val discoveryRepo = (application as? SonaraApp)?.container?.discoveryRepository ?: return
         val qe = (application as? SonaraApp)?.container?.playbackQueueEngine ?: return
-        serviceScope.launch(Dispatchers.IO) {
+        activePlaybackJob?.cancel()
+        activePlaybackJob = serviceScope.launch(Dispatchers.IO) {
             try {
                 discoveryRepo.getRelatedTracks(seedTrackId).onSuccess { candidates ->
+                    if (!transitionManager.isAuthoritative(generation) || !isActive) {
+                        Log.d(TAG, "Dropping stale recommendation result [gen=$generation]")
+                        return@onSuccess
+                    }
                     qe.ingestRecommendations(candidates)
                     val nextDecision = qe.advance()
                     if (nextDecision is NextTrackDecision.PlayTrack) {
-                        playTrackInternal(nextDecision.track)
+                        playTrackInternal(nextDecision.track, generation)
                     } else {
                         Log.i(TAG, "No valid candidates after recommendation fetch -> stopping")
                         withContext(Dispatchers.Main) {
@@ -541,8 +580,10 @@ class SonaraPlaybackService : MediaSessionService() {
                     }
                 }.onFailure { err ->
                     Log.w(TAG, "Recommendation fetch failed: ${err.message}")
-                    withContext(Dispatchers.Main) {
-                        exoPlayerHolder?.player?.pause()
+                    if (transitionManager.isAuthoritative(generation)) {
+                        withContext(Dispatchers.Main) {
+                            exoPlayerHolder?.player?.pause()
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -556,7 +597,9 @@ class SonaraPlaybackService : MediaSessionService() {
         val qe = (application as? SonaraApp)?.container?.playbackQueueEngine ?: return
         val currentPos = player.currentPosition
         val decision = qe.previous(currentPos)
-        Log.i(TAG, "advanceToPrevious: currentPos=$currentPos, decision=$decision")
+        val gen = transitionManager.nextGeneration()
+        activePlaybackJob?.cancel()
+        Log.i(TAG, "advanceToPrevious [gen=$gen]: currentPos=$currentPos, decision=$decision")
 
         when (decision) {
             is PreviousTrackDecision.SeekToStart,
@@ -564,24 +607,32 @@ class SonaraPlaybackService : MediaSessionService() {
                 player.seekTo(0L)
             }
             is PreviousTrackDecision.PlayTrack -> {
-                playTrackInternal(decision.track)
+                playTrackInternal(decision.track, gen)
             }
         }
     }
 
-    private fun playTrackInternal(track: Track) {
+    private fun playTrackInternal(track: Track, generation: Long = transitionManager.currentGeneration()) {
         val container = (application as? SonaraApp)?.container
         val downloadRepo = container?.downloadRepository
         val settingsRepo = container?.settingsRepository
         val historyRepo = container?.historyRepository
 
-        serviceScope.launch(Dispatchers.IO) {
+        activePlaybackJob?.cancel()
+        preloadJob?.cancel()
+        activePlaybackJob = serviceScope.launch(Dispatchers.IO) {
             // 1. Check local download
             val localFilePath = downloadRepo?.getDownloadedFileUri(track.id)
             if (localFilePath != null && localFilePath.isNotBlank()) {
+                if (!transitionManager.isAuthoritative(generation) || !isActive) {
+                    Log.d(TAG, "Dropping stale offline playback commit for ${track.title} [gen=$generation]")
+                    return@launch
+                }
                 Log.i(TAG, "playTrackInternal: Playing offline downloaded track ${track.title}")
                 withContext(Dispatchers.Main) {
-                    setPlayerMediaItem(track, "file://$localFilePath")
+                    if (transitionManager.isAuthoritative(generation)) {
+                        setPlayerMediaItem(track, "file://$localFilePath")
+                    }
                 }
                 recordHistory(historyRepo, track)
                 return@launch
@@ -599,9 +650,20 @@ class SonaraPlaybackService : MediaSessionService() {
                 durationSeconds = durationSec
             )
 
+            if (!transitionManager.isAuthoritative(generation) || !isActive) {
+                Log.d(TAG, "Dropping stale stream resolution for ${track.title} [gen=$generation]")
+                return@launch
+            }
+
             streamResult.onSuccess { streamInfo ->
+                if (!transitionManager.isAuthoritative(generation) || !isActive) {
+                    Log.d(TAG, "Dropping stale stream commit for ${track.title} [gen=$generation]")
+                    return@onSuccess
+                }
                 withContext(Dispatchers.Main) {
-                    setPlayerMediaItem(track, streamInfo.streamUrl)
+                    if (transitionManager.isAuthoritative(generation)) {
+                        setPlayerMediaItem(track, streamInfo.streamUrl)
+                    }
                 }
                 recordHistory(historyRepo, track)
             }.onFailure { error ->
@@ -787,14 +849,21 @@ class SonaraPlaybackService : MediaSessionService() {
         }
     }
 
-    private fun handleTrackTransition(newTrackId: String) {
+    private fun handleTrackTransition(newTrackId: String, reason: Int) {
         val player = exoPlayerHolder?.player ?: return
         val container = (application as? SonaraApp)?.container
         val qe = container?.playbackQueueEngine ?: return
 
-        if (qe.currentTrack?.id != newTrackId) {
-            qe.advance(fromTrackId = qe.currentTrack?.id)
+        // Gate qe.advance() strictly to natural auto-advance or seek-in-playlist.
+        // Explicit setMediaItem() transitions deliver reason = MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED (3),
+        // where the queue has already been advanced/set by the initiator. Advancing here would desynchronize the queue.
+        if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO ||
+            (reason == Player.MEDIA_ITEM_TRANSITION_REASON_SEEK && player.currentMediaItemIndex > 0)) {
+            if (qe.currentTrack?.id != newTrackId) {
+                qe.advance(fromTrackId = qe.currentTrack?.id)
+            }
         }
+
         if (player.currentMediaItemIndex > 0) {
             player.removeMediaItem(0)
         }
@@ -822,6 +891,7 @@ class SonaraPlaybackService : MediaSessionService() {
 
         preloadJob = serviceScope.launch(Dispatchers.IO) {
             try {
+                delay(PRELOAD_DEBOUNCE_MS)
                 var nextTrack = qe.upcomingQueue.firstOrNull() ?: qe.recommendationCache.firstOrNull()
                 if (nextTrack == null && qe.currentTrack != null) {
                     val currentId = qe.currentTrack!!.id
@@ -879,6 +949,8 @@ class SonaraPlaybackService : MediaSessionService() {
                         }
                     }
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.w(TAG, "preloadNextTrackAhead non-fatal: ${e.message}")
             }

@@ -46,6 +46,7 @@ open class MediaControllerClient(
         private const val TAG = "MediaControllerClient"
         const val ACTION_SET_AUDIO_DEVICE = "com.example.sonara.ACTION_SET_AUDIO_DEVICE"
         const val EXTRA_DEVICE_ID = "device_id"
+        const val EXTRA_REQUEST_GENERATION = "com.example.sonara.extra.REQUEST_GENERATION"
     }
 
     private var controllerFuture: ListenableFuture<MediaController>? = null
@@ -174,7 +175,7 @@ open class MediaControllerClient(
         controller?.volume = volume.coerceIn(0f, 1f)
     }
 
-    open fun playTrack(track: com.example.sonara.domain.model.Track, streamUrl: String) {
+    open fun playTrack(track: com.example.sonara.domain.model.Track, streamUrl: String, generation: Long = 0L) {
         val metadataBuilder = androidx.media3.common.MediaMetadata.Builder()
             .setTitle(track.title)
             .setArtist(track.artist)
@@ -186,12 +187,20 @@ open class MediaControllerClient(
             } catch (_: Exception) {}
         }
 
+        val requestExtras = android.os.Bundle().apply {
+            if (generation > 0L) {
+                putLong(EXTRA_REQUEST_GENERATION, generation)
+            }
+        }
+        metadataBuilder.setExtras(requestExtras)
+
         val mediaItem = MediaItem.Builder()
             .setMediaId(track.id)
             .setUri(streamUrl)
             .setRequestMetadata(
                 MediaItem.RequestMetadata.Builder()
                     .setMediaUri(android.net.Uri.parse(streamUrl))
+                    .setExtras(requestExtras)
                     .build()
             )
             .setMediaMetadata(metadataBuilder.build())

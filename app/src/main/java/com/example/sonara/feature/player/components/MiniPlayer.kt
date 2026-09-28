@@ -68,7 +68,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.example.sonara.core.ui.components.AnimatedPlayPauseIcon
 import com.example.sonara.core.ui.components.PhosphorIcons
+import com.example.sonara.core.ui.components.PlayPauseMorph
 import com.example.sonara.core.ui.components.SonaraIconButton
 import com.example.sonara.core.ui.components.SonaraIconButtonVariant
 import com.example.sonara.core.ui.components.SonaraLoadingIndicator
@@ -281,7 +283,7 @@ private fun MiniPlayerCard(
 
                 // Duration timestamp (FROZEN: 13.5sp SemiBold, 36dp width)
                 Text(
-                    text       = formatTime(state.durationMs / 1000L),
+                    text       = if (state.durationMs > 0L) formatTime(state.durationMs / 1000L) else "--:--",
                     fontSize   = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                     color      = timestampColor,
@@ -468,23 +470,18 @@ private fun MiniPlayerCard(
                             ) {
                                 SonaraLoadingIndicator(size = 26.dp)
                             }
-                        } else if (state.isPlaying) {
-                            SonaraIconButton(
-                                onClick            = onPause,
-                                contentDescription = "Pause",
-                                variant            = SonaraIconButtonVariant.Accent,
-                                size               = 42.dp
-                            ) {
-                                PauseIcon(modifier = Modifier.size(16.dp))
-                            }
                         } else {
                             SonaraIconButton(
-                                onClick            = onPlay,
-                                contentDescription = "Play",
+                                onClick            = if (state.isPlaying) onPause else onPlay,
+                                contentDescription = if (state.isPlaying) "Pause" else "Play",
                                 variant            = SonaraIconButtonVariant.Accent,
                                 size               = 42.dp
                             ) {
-                                PlayIcon(modifier = Modifier.size(16.dp))
+                                PlayPauseMorph(
+                                    isPlaying = state.isPlaying,
+                                    size      = 26.dp,
+                                    color     = Color.White
+                                )
                             }
                         }
 

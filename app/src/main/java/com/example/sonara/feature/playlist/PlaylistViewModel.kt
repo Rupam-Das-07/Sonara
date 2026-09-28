@@ -136,8 +136,28 @@ class PlaylistViewModel(
         _isCreateDialogOpen.value = true
     }
 
+    /**
+     * Opens the playlist-creation dialog with [track] pre-set as the pending track.
+     *
+     * When [createPlaylist] is subsequently called, the path
+     * `andAddPendingTrack = true` ensures the creation and track insertion
+     * are performed atomically (create playlist → add track → emit single feedback).
+     *
+     * This is the correct entry point when the user selects
+     * "Create Playlist with this Song" from the track context menu.
+     */
+    fun openCreatePlaylistWithTrack(track: Track) {
+        _pendingAddTrack.value = track
+        _isCreateDialogOpen.value = true
+    }
+
     fun dismissCreateDialog() {
         _isCreateDialogOpen.value = false
+        // Clear pendingAddTrack only if the Add-to-Playlist sheet is not also open
+        // (the sheet manages its own pending track state via dismissAddToPlaylist)
+        if (!_isAddToPlaylistSheetOpen.value) {
+            _pendingAddTrack.value = null
+        }
     }
 
     fun createPlaylist(name: String, andAddPendingTrack: Boolean = false) {

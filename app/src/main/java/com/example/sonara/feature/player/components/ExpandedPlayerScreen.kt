@@ -101,7 +101,12 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import com.example.sonara.core.ui.components.AnimatedPlayPauseIcon
 import com.example.sonara.core.ui.components.PhosphorIcons
+import com.example.sonara.core.ui.components.PlayPauseMorph
 import com.example.sonara.core.ui.components.SonaraCard
 import com.example.sonara.core.ui.components.SonaraEmptyState
 import com.example.sonara.core.ui.components.SonaraIconButton
@@ -531,6 +536,16 @@ private fun ExpandedPlayerContent(
         modifier = Modifier
             .fillMaxSize()
             .background(surfaceColor)
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    down.consume()
+                    do {
+                        val event = awaitPointerEvent()
+                        event.changes.forEach { it.consume() }
+                    } while (event.changes.any { it.pressed })
+                }
+            }
     ) {
         // ── Atmospheric Background Layer ──
         Box(modifier = Modifier.fillMaxSize()) {
@@ -1249,7 +1264,7 @@ private fun PlayerViewContent(
                         color = colors.secondaryText
                     )
                     Text(
-                        text = formatTime(playerState.durationMs / 1000L),
+                        text = if (playerState.durationMs > 0L) formatTime(playerState.durationMs / 1000L) else "--:--",
                         style = typography.playbackTiming.copy(
                             fontSize = 13.sp,
                             fontWeight = FontWeight.SemiBold
@@ -1313,17 +1328,20 @@ private fun PlayerViewContent(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
                             onClick = { if (isPlaying) onPause() else onPlay() }
-                        ),
+                        )
+                        .semantics {
+                            contentDescription = if (isPlaying) "Pause" else "Play"
+                            role = Role.Button
+                        },
                     contentAlignment = Alignment.Center
                 ) {
                     if (playerState.isBuffering) {
                         SonaraLoadingIndicator(size = 28.dp, color = Color.White)
                     } else {
-                        Icon(
-                            imageVector = if (isPlaying) PhosphorIcons.Pause else PhosphorIcons.Play,
-                            contentDescription = if (isPlaying) "Pause" else "Play",
-                            tint = Color.White,
-                            modifier = Modifier.size(28.dp)
+                        PlayPauseMorph(
+                            isPlaying = isPlaying,
+                            size      = 30.dp,
+                            color     = Color.White
                         )
                     }
                 }

@@ -285,12 +285,14 @@ fun ArtistDetailScreen(
                     }
                 } else {
                     items(tracksModule.value, key = { it.id }) { track ->
-                        TrackRow(
-                            track = track,
-                            isLiked = isLiked(track.id),
-                            onPlay = { onPlayTrack(track) },
-                            onToggleLike = { liked -> onToggleLike(track, liked) }
-                        )
+                        Box(modifier = Modifier.padding(horizontal = dimensions.spaceLg)) {
+                            TrackRow(
+                                track = track,
+                                isLiked = isLiked(track.id),
+                                onPlay = { onPlayTrack(track) },
+                                onToggleLike = { liked -> onToggleLike(track, liked) }
+                            )
+                        }
                     }
                 }
             }

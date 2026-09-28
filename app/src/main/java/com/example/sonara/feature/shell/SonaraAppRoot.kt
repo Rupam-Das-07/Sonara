@@ -36,9 +36,14 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
+import com.example.sonara.R
 import com.example.sonara.core.ui.motion.LocalReduceMotion
 import com.example.sonara.core.ui.motion.SonaraMotion
 import com.example.sonara.core.ui.theme.SonaraTheme
@@ -159,6 +164,15 @@ fun SonaraAppRoot(
     LaunchedEffect(openExpandedPlayerTrigger) {
         if (openExpandedPlayerTrigger > 0L) {
             isExpandedPlayerOpen = true
+        }
+    }
+
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    LaunchedEffect(isExpandedPlayerOpen) {
+        if (isExpandedPlayerOpen) {
+            focusManager.clearFocus(force = true)
+            keyboardController?.hide()
         }
     }
 
@@ -358,6 +372,16 @@ fun SonaraAppRoot(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
+                    .focusProperties {
+                        canFocus = !isExpandedPlayerOpen
+                    }
+                    .then(
+                        if (isExpandedPlayerOpen) {
+                            Modifier.clearAndSetSemantics { }
+                        } else {
+                            Modifier
+                        }
+                    )
                     .drawWithContent {
                         // Applied unconditionally so the modifier chain never changes shape; the
                         // draw block itself decides whether to clip. Reading isTransitioning here
@@ -509,7 +533,7 @@ fun SonaraAppRoot(
             CreatePlaylistDialog(
                 isOpen = playlistState.isCreateDialogOpen,
                 onDismiss = { playlistViewModel.dismissCreateDialog() },
-                onConfirm = { name -> playlistViewModel.createPlaylist(name, andAddPendingTrack = playlistState.isAddToPlaylistSheetOpen) }
+                onConfirm = { name -> playlistViewModel.createPlaylist(name, andAddPendingTrack = playlistState.pendingAddTrack != null) }
             )
 
             // Centralized RenamePlaylistDialog
@@ -576,6 +600,7 @@ private fun AppScaffoldContent(
     modifier: Modifier = Modifier
 ) {
     val colors = SonaraTheme.colors
+    val context = LocalContext.current
     val importFallbackState = remember { kotlinx.coroutines.flow.MutableStateFlow(ImportUiState()) }
     val importState by (importViewModel?.uiState ?: importFallbackState).collectAsState()
     // Single centralized reduced-motion gate (see SonaraMotion / LocalReduceMotion). Read here in
@@ -775,7 +800,17 @@ private fun AppScaffoldContent(
                                 onToggleLike = { track, liked -> libraryViewModel.toggleLike(track, liked) },
                                 isLiked = { id -> libraryState.likedSongs.any { it.id == id } },
                                 onDeleteHistoryEntry = { searchViewModel.deleteHistoryEntry(it) },
-                                onClearHistory = { searchViewModel.clearSearchHistory() }
+                                onClearHistory = { searchViewModel.clearSearchHistory() },
+                                onPlayNext = { track ->
+                                    playerViewModel.playNext(track)
+                                    Toast.makeText(context, R.string.toast_added_to_play_next, Toast.LENGTH_SHORT).show()
+                                },
+                                onAddToPlaylist = { track ->
+                                    playlistViewModel.openAddToPlaylist(track)
+                                },
+                                onCreatePlaylistWithSong = { track ->
+                                    playlistViewModel.openCreatePlaylistWithTrack(track)
+                                }
                             )
                         }
                         NavigationDestination.Library -> {

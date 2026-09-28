@@ -214,4 +214,170 @@ class PlaybackQueueEngineTest {
         assertTrue(engine.upcomingQueue.isEmpty())
         assertEquals(listOf(track1, track2), engine.sessionBackStack)
     }
+
+    // ==========================================
+    // Play Next Feature Tests
+    // ==========================================
+
+    @Test
+    fun `playNext on empty upcoming queue inserts track at index 0`() {
+        val engine = PlaybackQueueEngine()
+        engine.setContext(track1, listOf(track1))
+
+        engine.playNext(track2)
+
+        assertEquals(track1, engine.currentTrack)
+        assertEquals(listOf(track2), engine.upcomingQueue)
+    }
+
+    @Test
+    fun `playNext on non-empty upcoming queue prepends to index 0`() {
+        val engine = PlaybackQueueEngine()
+        engine.setContext(track1, listOf(track1, track2, track3))
+
+        engine.playNext(rec1)
+
+        assertEquals(track1, engine.currentTrack)
+        assertEquals(listOf(rec1, track2, track3), engine.upcomingQueue)
+    }
+
+    @Test
+    fun `multiple playNext calls maintain correct LIFO insertion order`() {
+        val engine = PlaybackQueueEngine()
+        engine.setContext(track1, listOf(track1, track2))
+
+        engine.playNext(rec1)
+        engine.playNext(rec2)
+
+        assertEquals(listOf(rec2, rec1, track2), engine.upcomingQueue)
+    }
+
+    @Test
+    fun `playNext with track already in upcoming queue repositions it to index 0 without duplicates`() {
+        val engine = PlaybackQueueEngine()
+        engine.setContext(track1, listOf(track1, track2, track3))
+
+        // track3 is currently at index 1 of upcomingQueue [track2, track3]
+        engine.playNext(track3)
+
+        assertEquals(listOf(track3, track2), engine.upcomingQueue)
+        assertEquals(1, engine.upcomingQueue.count { it.id == track3.id })
+    }
+
+    @Test
+    fun `playNext with track already at index 0 is a clean no-op`() {
+        val engine = PlaybackQueueEngine()
+        engine.setContext(track1, listOf(track1, track2, track3))
+
+        var callbackCount = 0
+        engine.onQueueChanged = { callbackCount++ }
+
+        // track2 is already at index 0
+        engine.playNext(track2)
+
+        assertEquals(listOf(track2, track3), engine.upcomingQueue)
+        assertEquals(0, callbackCount)
+    }
+
+    @Test
+    fun `playNext with track in recommendation cache moves it to upcoming queue index 0`() {
+        val engine = PlaybackQueueEngine()
+        engine.setContext(track1, listOf(track1))
+        engine.ingestRecommendations(listOf(rec1, rec2))
+
+        assertEquals(listOf(rec1, rec2), engine.recommendationCache)
+
+        engine.playNext(rec2)
+
+        assertEquals(listOf(rec2), engine.upcomingQueue)
+        assertEquals(listOf(rec1), engine.recommendationCache)
+    }
+
+    @Test
+    fun `playNext with current playing track inserts it at index 0 so it replays next`() {
+        val engine = PlaybackQueueEngine()
+        engine.setContext(track1, listOf(track1, track2))
+
+        engine.playNext(track1)
+
+        assertEquals(track1, engine.currentTrack)
+        assertEquals(listOf(track1, track2), engine.upcomingQueue)
+
+        // Advancing now should replay track1
+        val decision = engine.advance()
+        assertTrue(decision is NextTrackDecision.PlayTrack)
+        assertEquals(track1, (decision as NextTrackDecision.PlayTrack).track)
+        assertEquals(track1, engine.currentTrack)
+        assertEquals(listOf(track1), engine.sessionBackStack)
+        assertEquals(listOf(track2), engine.upcomingQueue)
+    }
+
+    @Test
+    fun `playNext with blank track id is ignored`() {
+        val engine = PlaybackQueueEngine()
+        engine.setContext(track1, listOf(track1, track2))
+
+        engine.playNext(Track(id = "", title = "Unknown", artist = "Unknown"))
+        engine.playNext(Track(id = "   ", title = "Unknown", artist = "Unknown"))
+
+        assertEquals(listOf(track2), engine.upcomingQueue)
+    }
+
+    @Test
+    fun `playNext triggers onQueueChanged callback`() {
+        val engine = PlaybackQueueEngine()
+        engine.setContext(track1, listOf(track1))
+
+        var callbackFired = false
+        engine.onQueueChanged = { callbackFired = true }
+
+        engine.playNext(track2)
+        assertTrue(callbackFired)
+    }
+
+    @Test
+    fun `advance seamlessly plays track inserted via playNext in correct order`() {
+        val engine = PlaybackQueueEngine()
+        engine.setContext(track1, listOf(track1, track2, track3))
+
+        engine.playNext(rec1)
+
+        // Advance 1 -> rec1
+        val d1 = engine.advance()
+        assertTrue(d1 is NextTrackDecision.PlayTrack)
+        assertEquals(rec1, (d1 as NextTrackDecision.PlayTrack).track)
+        assertEquals(listOf(track1), engine.sessionBackStack)
+        assertEquals(listOf(track2, track3), engine.upcomingQueue)
+
+        // Advance 2 -> track2
+        val d2 = engine.advance()
+        assertTrue(d2 is NextTrackDecision.PlayTrack)
+        assertEquals(track2, (d2 as NextTrackDecision.PlayTrack).track)
+        assertEquals(listOf(track1, rec1), engine.sessionBackStack)
+        assertEquals(listOf(track3), engine.upcomingQueue)
+
+        // Advance 3 -> track3
+        val d3 = engine.advance()
+        assertTrue(d3 is NextTrackDecision.PlayTrack)
+        assertEquals(track3, (d3 as NextTrackDecision.PlayTrack).track)
+        assertEquals(listOf(track1, rec1, track2), engine.sessionBackStack)
+        assertTrue(engine.upcomingQueue.isEmpty())
+    }
+
+    @Test
+    fun `playNext updates session snapshot for Repeat All mode`() {
+        val engine = PlaybackQueueEngine()
+        engine.setContext(track1, listOf(track1, track2))
+        engine.toggleRepeatMode() // 1 = Repeat All
+
+        engine.playNext(rec1)
+
+        // Upcoming is [rec1, track2]
+        engine.advance() // on rec1
+        engine.advance() // on track2
+        // Queue now exhausted -> repeat all reloads snapshot which includes rec1
+        val wrapDecision = engine.advance()
+        assertTrue(wrapDecision is NextTrackDecision.PlayTrack)
+        assertEquals(track1, (wrapDecision as NextTrackDecision.PlayTrack).track)
+    }
 }

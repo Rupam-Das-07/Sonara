@@ -198,13 +198,15 @@ fun TrackRowItem(
     isLiked: Boolean,
     onPlay: () -> Unit,
     onToggleLike: (Boolean) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onLongClick: (() -> Unit)? = null
 ) {
     com.example.sonara.core.ui.components.TrackRow(
         track = track,
         isLiked = isLiked,
         onPlay = onPlay,
         onToggleLike = onToggleLike,
-        modifier = modifier
+        modifier = modifier,
+        onLongClick = onLongClick
     )
 }

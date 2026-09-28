@@ -74,7 +74,8 @@ class MainActivity : ComponentActivity() {
                     settingsRepository = appContainer.settingsRepository,
                     audioOutputRepository = appContainer.audioOutputRepository,
                     historyRepository = appContainer.historyRepository,
-                    queueEngine = appContainer.playbackQueueEngine
+                    queueEngine = appContainer.playbackQueueEngine,
+                    transitionManager = appContainer.transitionManager
                 ) as T
             }
         })[PlayerViewModel::class.java]

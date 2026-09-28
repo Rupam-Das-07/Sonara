@@ -13,7 +13,8 @@
     "test:security": "node --test tests/security/*.test.js",
     "check:health": "node scripts/check-api-health.js",
     "update:featured-artists": "node scripts/update-featured-artists.js",
-    "update:curated-playlists": "node scripts/update-curated-playlists.js"
+    "update:curated-playlists": "node scripts/update-curated-playlists.js",
+    "verify:production": "node scripts/verify-production-smoke.js"
   },
   "engines": {
     "node": ">=20.0.0"

@@ -316,7 +316,7 @@ private class FakeMediaControllerClient : MediaControllerClient(null) {
         )
     }
 
-    override fun playTrack(track: Track, streamUrl: String) {
+    override fun playTrack(track: Track, streamUrl: String, generation: Long) {
         lastPlayedTrack = track
         lastPlayedStreamUrl = streamUrl
         isPaused = false

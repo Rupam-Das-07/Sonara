@@ -34,20 +34,48 @@ class RefreshingDataSource(
             upstreamDataSource.open(dataSpec)
         } catch (e: HttpDataSource.InvalidResponseCodeException) {
             if (e.responseCode == 403 || e.responseCode == 410) {
-                // Token expired mid-stream: extract track ID and resolve fresh URL
-                val trackId = dataSpec.customData as? String ?: dataSpec.uri.getQueryParameter("trackId")
+                // Expired/revoked stream token. Recover by force-refreshing a FRESH URL for
+                // this track (bypassing AND invalidating any stale cache entry), then retrying
+                // the open on the new URL. Recovery is scoped to THIS track's DataSource
+                // instance and refreshStream() only invalidates this trackId, so it can never
+                // affect a different track or a newer generation.
+                val trackId = resolveTrackId(dataSpec)
                 if (trackId != null) {
-                    val freshStream = runBlocking { streamResolverPort.resolveStream(trackId) }
-                    if (freshStream.isSuccess) {
-                        val newUri = Uri.parse(freshStream.getOrThrow().streamUrl)
-                        val refreshedDataSpec = dataSpec.buildUpon().setUri(newUri).build()
+                    val refreshed = runBlocking { streamResolverPort.refreshStream(trackId) }
+                    val fresh = refreshed.getOrNull()
+                    if (fresh != null && fresh.streamUrl.isNotBlank()) {
+                        // Preserve every other DataSpec field (position, length, key,
+                        // customData, flags, headers); only the URI is swapped to the fresh one.
+                        val refreshedDataSpec = dataSpec.buildUpon()
+                            .setUri(Uri.parse(fresh.streamUrl))
+                            .build()
                         currentDataSpec = refreshedDataSpec
                         return upstreamDataSource.open(refreshedDataSpec)
                     }
                 }
             }
+            // Unknown trackId, non-recoverable status, or refresh failed: preserve original failure.
             throw e
         }
+    }
+
+    /**
+     * Resolves the authoritative trackId for 403/410 recovery, in priority order:
+     *  1. [DataSpec.key] — wired from MediaItem.setCustomCacheKey(trackId). This is the
+     *     authoritative, backend-URL-independent channel and works for BOTH proxy-path and
+     *     direct (googlevideo) stream delivery. No CacheDataSource is present in this chain,
+     *     so `key` carries no caching side-effect — it is purely a trackId carrier here.
+     *  2. [DataSpec.customData] — honored if a resolver layer ever sets it.
+     *  3. URI query params `video_id` / `trackId` — defensive fallback for proxy-path
+     *     delivery, where the backend embeds video_id=<trackId> in the proxy URL.
+     */
+    private fun resolveTrackId(dataSpec: DataSpec): String? {
+        dataSpec.key?.takeIf { it.isNotBlank() }?.let { return it }
+        (dataSpec.customData as? String)?.takeIf { it.isNotBlank() }?.let { return it }
+        val uri = dataSpec.uri
+        uri.getQueryParameter("video_id")?.takeIf { it.isNotBlank() }?.let { return it }
+        uri.getQueryParameter("trackId")?.takeIf { it.isNotBlank() }?.let { return it }
+        return null
     }
 
     override fun read(buffer: ByteArray, offset: Int, length: Int): Int {

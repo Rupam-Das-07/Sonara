@@ -21,5 +21,16 @@ interface StreamResolverPort {
         durationSeconds: Int
     ): Result<StreamInfo> = resolveStream(trackId, quality)
 
+    /**
+     * Force a fresh resolution for [trackId], bypassing (and invalidating) any cached
+     * StreamInfo for that track. Used by the 403/410 recovery path so a stale/expired
+     * proxy URL is never returned. Default delegates to [resolveStream] so existing
+     * implementers (and test fakes) that do not cache remain correct without changes.
+     */
+    suspend fun refreshStream(
+        trackId: String,
+        quality: AudioQuality = AudioQuality.AUTO
+    ): Result<StreamInfo> = resolveStream(trackId, quality)
+
     fun clearCache()
 }

@@ -822,6 +822,8 @@ class SonaraPlaybackService : MediaSessionService() {
         return androidx.media3.common.MediaItem.Builder()
             .setMediaId(track.id)
             .setUri(streamUrl)
+            // Authoritative trackId carrier → propagates to DataSpec.key for 403/410 recovery.
+            .setCustomCacheKey(track.id)
             .setRequestMetadata(
                 androidx.media3.common.MediaItem.RequestMetadata.Builder()
                     .setMediaUri(android.net.Uri.parse(streamUrl))

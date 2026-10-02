@@ -52,6 +52,7 @@ class PlaybackController(
                 val mediaItem = MediaItem.Builder()
                     .setMediaId(track.id)
                     .setUri(streamInfo.streamUrl)
+                    .setCustomCacheKey(track.id)
                     .setMediaMetadata(metadata)
                     .build()
 

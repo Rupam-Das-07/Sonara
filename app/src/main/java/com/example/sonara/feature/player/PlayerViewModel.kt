@@ -70,6 +70,11 @@ class PlayerViewModel(
         private const val TAG = "PlayerViewModel"
         private const val LOOKAHEAD_DEBOUNCE_MS = 1500L
         private const val RATE_LIMIT_COOLDOWN_MS = 4000L
+
+        // Point 2 — Area 1: backstop that releases a stuck consume-in-flight guard if the
+        // controller never reports the expected track transition (pathological; the guard is
+        // normally cleared within tens of ms by the controllerState reconcile collector).
+        private const val CONSUME_INFLIGHT_TIMEOUT_MS = 3000L
     }
 
     private val _localState = MutableStateFlow(
@@ -98,6 +103,12 @@ class PlayerViewModel(
     private var rateLimitCooldownJob: Job? = null
     private var rateLimitCooldownActive: Boolean = false
 
+    // Point 2 — Area 1: true from the moment a gapless preload-consume seek is dispatched until
+    // the controller reports the target track live (or the backstop timeout fires). While true,
+    // Next/Previous intents are DROPPED so a racing dispatch cannot desync the authoritative queue.
+    private var consumeInFlight: Boolean = false
+    private var consumeTimeoutJob: Job? = null
+
     init {
         client.connect()
 
@@ -122,9 +133,15 @@ class PlayerViewModel(
                 val currentMediaId = state.currentMediaItem?.mediaId
                 val transitional = _localState.value.transitionalTrack
                 if (currentMediaId != null && transitional != null && currentMediaId == transitional.id) {
+                    // Target track is now live on the controller: a pending preload-consume (if any)
+                    // has landed, so release the in-flight guard and cancel its backstop.
+                    clearConsumeInFlight()
                     _localState.update { it.copy(transitionalTrack = null, initialPositionMs = 0L, errorMessage = null) }
                 }
                 if (state.errorMessage != null && transitional != null) {
+                    // Controller surfaced an error for the pending transition: release the guard too,
+                    // otherwise a failed consume would wedge skip handling until the timeout fires.
+                    clearConsumeInFlight()
                     _localState.update { it.copy(transitionalTrack = null, isResolvingStream = false, initialPositionMs = 0L) }
                 }
             }
@@ -289,13 +306,68 @@ class PlayerViewModel(
      * Advances to next track in queue or resolves next recommendation candidate.
      */
     fun skipToNext(fromTrackId: String? = queueEngine.currentTrack?.id) {
+        // Point 2 — Area 1: never begin a new skip while a gapless preload-consume is still
+        // settling. A racing setMediaItem() or a second seek during that window would fire an
+        // async SEEK transition that desyncs the authoritative queue, so we DROP (not fall back).
+        if (consumeInFlight) {
+            Log.d(TAG, "skipToNext dropped: preload-consume still in flight")
+            return
+        }
         lookaheadJob?.cancel()
         lookaheadJob = null
         rateLimitCooldownJob?.cancel()
         rateLimitCooldownActive = false
+
+        // Point 2 — Area 1: snapshot the consume preconditions that depend on PRE-advance
+        // queue/controller state (advance() mutates the queue). The authoritative-target identity
+        // check is completed AFTER advance, against the decision it actually produces.
+        //  - presentation settled (no optimistic transition, not resolving)
+        //  - the advance originates from the genuinely-current track
+        //  - the controller is actually sitting on that same current track (no desync)
+        val consumeEligible =
+            _localState.value.transitionalTrack == null &&
+                !_localState.value.isResolvingStream &&
+                fromTrackId != null &&
+                fromTrackId == queueEngine.currentTrack?.id &&
+                client.currentMediaId() == queueEngine.currentTrack?.id
+
         val gen = transitionManager.nextGeneration()
         val decision = queueEngine.advance(fromTrackId = fromTrackId)
         Log.d(TAG, "skipToNext [fromTrackId=$fromTrackId, gen=$gen]: decision=$decision")
+
+        // Point 2 — Area 1: if the service has already preloaded EXACTLY the authoritative next
+        // track (verified by media-id identity against the ExoPlayer timeline's index+1 item),
+        // consume it gaplessly with a controller seek instead of a fresh resolve + setMediaItem.
+        // `decision is PlayTrack` already excludes repeat-one (ReplayCurrent); the id-identity
+        // check excludes the repeat-all snapshot-refill case (the preload reflects the non-repeat
+        // next). Any mismatch / stale / absent preload falls through to the unchanged resolve path.
+        if (consumeEligible &&
+            decision is NextTrackDecision.PlayTrack &&
+            client.peekNextMediaId() == decision.track.id
+        ) {
+            Log.d(TAG, "skipToNext [gen=$gen]: consuming preloaded ${decision.track.id} via gapless seekToNext")
+            _localState.update {
+                it.copy(
+                    transitionalTrack = decision.track,
+                    isResolvingStream = false,
+                    initialPositionMs = 0L,
+                    errorMessage = null
+                )
+            }
+            consumeInFlight = true
+            // Abandon any in-flight resolve job; the preloaded item needs no resolution.
+            activePlaybackJob?.cancel()
+            // Routes through SonaraForwardingPlayer.seekToNextMediaItem(): because the timeline
+            // already holds this item at index+1, it is consumed instantly (gapless). The service's
+            // resulting SEEK transition sees the shared queue already advanced to this id, so its
+            // handleTrackTransition guard does NOT double-advance.
+            client.skipToNext()
+            // Warm the resolver cache for the NEW next track (same debounced lookahead mechanism the
+            // fallback path uses via prefetch; does not change lookahead timing/depth/concurrency).
+            triggerLookaheadPreResolution()
+            armConsumeTimeout()
+            return
+        }
 
         when (decision) {
             is NextTrackDecision.PlayTrack -> {
@@ -370,6 +442,12 @@ class PlayerViewModel(
      * Executes Previous action respecting 3000ms restart threshold and session backstack.
      */
     fun skipToPrevious() {
+        // Point 2 — Area 1: drop Previous while a gapless preload-consume is settling, so a
+        // Next-then-Previous race cannot inject a setMediaItem() that desyncs the pending seek.
+        if (consumeInFlight) {
+            Log.d(TAG, "skipToPrevious dropped: preload-consume still in flight")
+            return
+        }
         lookaheadJob?.cancel()
         lookaheadJob = null
         rateLimitCooldownJob?.cancel()
@@ -654,11 +732,38 @@ class PlayerViewModel(
                 msg.contains("rate limit", ignoreCase = true)
     }
 
+    /**
+     * Point 2 — Area 1: arm the backstop that releases a stuck consume-in-flight guard if the
+     * controller never reports the expected track transition. Normally the reconcile collector
+     * clears the guard first (within tens of ms) and cancels this job.
+     */
+    private fun armConsumeTimeout() {
+        consumeTimeoutJob?.cancel()
+        consumeTimeoutJob = viewModelScope.launch {
+            delay(CONSUME_INFLIGHT_TIMEOUT_MS)
+            if (consumeInFlight) {
+                Log.w(TAG, "Preload-consume timed out without a reported transition; clearing guard")
+                consumeInFlight = false
+            }
+        }
+    }
+
+    /**
+     * Point 2 — Area 1: release the consume-in-flight guard and cancel its backstop. Idempotent and
+     * safe to call for non-consume transitions (guard already false, timeout job already null).
+     */
+    private fun clearConsumeInFlight() {
+        consumeInFlight = false
+        consumeTimeoutJob?.cancel()
+        consumeTimeoutJob = null
+    }
+
     override fun onCleared() {
         super.onCleared()
         activePlaybackJob?.cancel()
         lookaheadJob?.cancel()
         rateLimitCooldownJob?.cancel()
+        consumeTimeoutJob?.cancel()
         client.onPlaybackEnded = null
         client.disconnect()
     }

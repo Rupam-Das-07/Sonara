@@ -167,6 +167,37 @@ open class MediaControllerClient(
 
     open fun hasNextMediaItem(): Boolean = controller?.hasNextMediaItem() == true
 
+    /**
+     * Media id of the item ExoPlayer currently has loaded (timeline index
+     * `currentMediaItemIndex`), read LIVE from the controller. Null when disconnected —
+     * and, in unit-test fakes constructed as `MediaControllerClient(null)` that do not
+     * override this, likewise null, so the Point 2 preload-consume gate stays dormant on
+     * the legacy fallback path.
+     */
+    open fun currentMediaId(): String? = controller?.currentMediaItem?.mediaId
+
+    /**
+     * Media id of the item ExoPlayer has PRELOADED immediately after the current one
+     * (structural timeline index `currentMediaItemIndex + 1`), or null when nothing is
+     * preloaded / disconnected.
+     *
+     * Read LIVE from the controller timeline — never from the cached [controllerState]
+     * snapshot, which carries no next-item field. ExoPlayer runs REPEAT_MODE_OFF with
+     * shuffle disabled, so `index + 1` is an unambiguous structural "next". Used by
+     * [PlayerViewModel] to verify the preloaded item's identity before consuming it with a
+     * gapless [skipToNext]; a stale/mismatched preload must never be consumed.
+     */
+    open fun peekNextMediaId(): String? {
+        val c = controller ?: return null
+        return try {
+            val count = c.mediaItemCount
+            val nextIndex = c.currentMediaItemIndex + 1
+            if (nextIndex in 1 until count) c.getMediaItemAt(nextIndex).mediaId else null
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     open fun skipToPrevious() {
         controller?.seekToPreviousMediaItem()
     }
@@ -197,6 +228,9 @@ open class MediaControllerClient(
         val mediaItem = MediaItem.Builder()
             .setMediaId(track.id)
             .setUri(streamUrl)
+            // Authoritative trackId carrier → propagates to DataSpec.key, enabling
+            // RefreshingDataSource 403/410 recovery without touching the proxy URL.
+            .setCustomCacheKey(track.id)
             .setRequestMetadata(
                 MediaItem.RequestMetadata.Builder()
                     .setMediaUri(android.net.Uri.parse(streamUrl))
@@ -215,6 +249,7 @@ open class MediaControllerClient(
         val mediaItem = MediaItem.Builder()
             .setMediaId(trackId)
             .setUri(streamUrl)
+            .setCustomCacheKey(trackId)
             .setRequestMetadata(
                 MediaItem.RequestMetadata.Builder()
                     .setMediaUri(android.net.Uri.parse(streamUrl))

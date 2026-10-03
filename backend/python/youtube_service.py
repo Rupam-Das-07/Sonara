@@ -12,33 +12,141 @@ Responsibilities:
 
 import yt_dlp
 import gevent
+import json
 from gevent.event import AsyncResult
+from gevent.lock import Semaphore
 
 _in_flight_extractions = {}
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Bounded, reusable YoutubeDL instance pool (Stage C-1A, Part A)
+#
+# yt-dlp is used as an in-process library. Previously a brand-new
+# ``yt_dlp.YoutubeDL`` was constructed for EVERY extraction, re-paying per-instance
+# setup each time — most importantly yt-dlp's lazily-built request director and
+# its HTTP handlers / connection pool. yt-dlp owns its networking stack, so a
+# hand-rolled ``requests.Session`` would NOT be reused by it; the correct unit of
+# reuse is the YoutubeDL instance itself. Reusing an open instance across
+# sequential extractions amortizes that setup and permits upstream connection reuse.
+#
+# A single shared instance is NOT safe here: the service runs under gevent and a
+# YoutubeDL carries mutable per-extraction state, so two greenlets must never drive
+# the same instance concurrently. We therefore keep a SMALL, bounded pool with
+# checkout/checkin semantics (exactly one greenlet owns an instance at a time),
+# keyed by a stable signature of ``ydl_opts`` (the module uses two distinct opts
+# sets: audio extraction and flat search). When every pooled instance is busy and
+# the cap is reached, we fall back to a transient instance that is closed after use
+# — i.e. exactly the previous behaviour — so callers never block. A failed
+# extraction DISCARDS its instance (it is closed and never returned to the pool),
+# so an instance left in an edge state can never poison a later extraction.
+#
+# Memory is bounded by the hard cap below. Only yt-dlp process state is retained;
+# no audio bytes and nothing on disk. All existing yt-dlp options, extraction
+# semantics, retry behaviour, stream-URL parsing and expiry handling are preserved.
+_YDL_POOL_MAX_INSTANCES = 4           # hard cap on retained reusable instances
+_ydl_pool = {}                         # opts-signature -> list[idle YoutubeDL]
+_ydl_live_count = 0                    # pooled instances alive (idle + checked-out)
+_ydl_pool_lock = Semaphore()           # guards _ydl_pool and _ydl_live_count
+
+
+def _opts_signature(ydl_opts):
+    """Stable key for an options dict so identical configurations share instances."""
+    try:
+        return json.dumps(ydl_opts, sort_keys=True, default=str)
+    except Exception:
+        return repr(sorted(ydl_opts.items()))
+
+
+def _acquire_ydl(ydl_opts):
+    """Check out a reusable YoutubeDL for *ydl_opts*, or construct one.
+
+    Returns ``(ydl, pooled)``. A ``pooled=False`` instance is transient (the cap
+    was reached) and MUST be closed by the caller rather than returned to the pool.
+    Construction happens outside the lock; a failed construction restores the count.
+    """
+    global _ydl_live_count
+    sig = _opts_signature(ydl_opts)
+    with _ydl_pool_lock:
+        idle = _ydl_pool.get(sig)
+        if idle:
+            return idle.pop(), True
+        pooled = _ydl_live_count < _YDL_POOL_MAX_INSTANCES
+        if pooled:
+            _ydl_live_count += 1
+    try:
+        ydl = yt_dlp.YoutubeDL(ydl_opts)
+    except Exception:
+        if pooled:
+            with _ydl_pool_lock:
+                _ydl_live_count -= 1
+        raise
+    ydl._sonara_sig = sig
+    return ydl, pooled
+
+
+def _release_ydl(ydl, pooled):
+    """Return a healthy instance to the pool for reuse (or close a transient one)."""
+    if not pooled:
+        _close_ydl_quietly(ydl)
+        return
+    sig = getattr(ydl, "_sonara_sig", None)
+    with _ydl_pool_lock:
+        _ydl_pool.setdefault(sig, []).append(ydl)
+
+
+def _discard_ydl(ydl, pooled):
+    """Drop an instance after an error so it is never reused; keeps the pool clean."""
+    global _ydl_live_count
+    if pooled:
+        with _ydl_pool_lock:
+            _ydl_live_count -= 1
+    _close_ydl_quietly(ydl)
+
+
+def _close_ydl_quietly(ydl):
+    """Best-effort close; never raises."""
+    try:
+        ydl.close()
+    except Exception:
+        pass
+
+
 def _extract_with_retry(ydl_opts, url):
-    """Executes yt_dlp extract_info with a 15-second timeout and up to 2 retries on DownloadError."""
+    """Executes yt_dlp extract_info with a 15-second timeout and up to 2 retries on DownloadError.
+
+    Uses the bounded, reusable YoutubeDL pool above. The observable behaviour —
+    the 15s timeout, retry/backoff on DownloadError, timeout/error wrapping into
+    RuntimeError — is IDENTICAL to the previous per-call implementation; only the
+    YoutubeDL instance lifecycle changed (checkout/checkin instead of construct/close
+    per attempt). Any failing attempt discards its instance so it is never reused.
+    """
     max_retries = 2
     backoff = 1.0
 
     for attempt in range(max_retries + 1):
+        ydl, pooled = _acquire_ydl(ydl_opts)
         try:
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                try:
-                    with gevent.Timeout(15):
-                        return ydl.extract_info(url, download=False)
-                except gevent.Timeout:
-                    raise RuntimeError("yt-dlp extraction timed out after 15 seconds")
+            try:
+                with gevent.Timeout(15):
+                    info = ydl.extract_info(url, download=False)
+            except gevent.Timeout:
+                raise RuntimeError("yt-dlp extraction timed out after 15 seconds")
         except yt_dlp.utils.DownloadError as exc:
+            _discard_ydl(ydl, pooled)
             if attempt < max_retries:
                 gevent.sleep(backoff)
                 backoff *= 2
                 continue
             raise RuntimeError(f"Video is unavailable: {exc}") from exc
         except RuntimeError:
+            _discard_ydl(ydl, pooled)
             raise
         except Exception as exc:
+            _discard_ydl(ydl, pooled)
             raise RuntimeError(f"Failed to extract info: {exc}") from exc
+        else:
+            _release_ydl(ydl, pooled)
+            return info
 
 
 

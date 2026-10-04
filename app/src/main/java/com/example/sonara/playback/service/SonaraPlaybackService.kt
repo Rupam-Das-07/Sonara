@@ -27,6 +27,10 @@ import com.example.sonara.playback.controller.TransitionManager
 import com.example.sonara.playback.player.EqualizerManager
 import com.example.sonara.playback.player.ExoPlayerHolder
 import com.example.sonara.playback.player.datasource.RefreshingDataSource
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.cache.CacheDataSource
+import com.example.sonara.playback.player.cache.NextTrackPrefetcher
+import com.example.sonara.playback.player.cache.SonaraMediaCache
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -108,6 +112,10 @@ class SonaraPlaybackService : MediaSessionService() {
             }
             return false
         }
+
+        @Volatile
+        var instancePrefetcher: NextTrackPrefetcher? = null
+            private set
     }
 
     private var exoPlayerHolder: ExoPlayerHolder? = null
@@ -115,6 +123,7 @@ class SonaraPlaybackService : MediaSessionService() {
     private var mediaSession: MediaSession? = null
     private var playbackController: PlaybackController? = null
     private var equalizerManager: EqualizerManager? = null
+    private var nextTrackPrefetcher: NextTrackPrefetcher? = null
 
     /** Thread-safe transition manager coordinating playback generations across service and viewmodel. */
     private val transitionManager: TransitionManager by lazy {
@@ -144,10 +153,32 @@ class SonaraPlaybackService : MediaSessionService() {
         Log.i(TAG, "SonaraPlaybackService onCreate")
 
         val streamResolver = (application as? SonaraApp)?.container?.streamResolver ?: StreamResolverImpl()
-        val dataSourceFactory = RefreshingDataSource.Factory(this, streamResolver)
+        val refreshingFactory = RefreshingDataSource.Factory(this, streamResolver)
 
-        val playerHolder = ExoPlayerHolder(this, dataSourceFactory)
+        val cache = SonaraMediaCache.getCache(this)
+        val cacheDataSourceFactory = CacheDataSource.Factory()
+            .setCache(cache)
+            .setUpstreamDataSourceFactory(refreshingFactory)
+            .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+            .setEventListener(object : CacheDataSource.EventListener {
+                override fun onCachedBytesRead(cacheSizeBytes: Long, cachedBytesRead: Long) {
+                    Log.d("SonaraMediaCache", "CACHE_HIT: cachedBytesRead=$cachedBytesRead totalCacheSize=$cacheSizeBytes t=${System.currentTimeMillis()}")
+                }
+                override fun onCacheIgnored(reason: Int) {
+                    Log.d("SonaraMediaCache", "CACHE_IGNORED: reason=$reason t=${System.currentTimeMillis()}")
+                }
+            })
+
+        val defaultDataSourceFactory = DefaultDataSource.Factory(this, cacheDataSourceFactory)
+        val playerHolder = ExoPlayerHolder(this, defaultDataSourceFactory)
         exoPlayerHolder = playerHolder
+
+        val prefetcher = NextTrackPrefetcher(
+            cacheDataSourceFactory = cacheDataSourceFactory,
+            coroutineScope = serviceScope
+        )
+        nextTrackPrefetcher = prefetcher
+        instancePrefetcher = prefetcher
 
         val forwardingPlayer = SonaraForwardingPlayer(
             player = playerHolder.player,
@@ -506,8 +537,19 @@ class SonaraPlaybackService : MediaSessionService() {
         }
     }
 
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.hasExtra("EXTRA_PREFETCH_ENABLED") == true) {
+            val enabled = intent.getBooleanExtra("EXTRA_PREFETCH_ENABLED", true)
+            nextTrackPrefetcher?.isEnabled = enabled
+            Log.i(TAG, "onStartCommand: updated prefetcher isEnabled=$enabled")
+        }
+        return super.onStartCommand(intent, flags, startId)
+    }
+
     override fun onDestroy() {
         Log.i(TAG, "SonaraPlaybackService onDestroy")
+        nextTrackPrefetcher?.cancelActivePrefetch("service_destroyed")
+        instancePrefetcher = null
         likedObserverJob?.cancel()
         artworkLoadJob?.cancel()
         preloadJob?.cancel()
@@ -536,7 +578,7 @@ class SonaraPlaybackService : MediaSessionService() {
         val decision = qe.advance(fromTrackId = currentTrackId)
         val gen = transitionManager.nextGeneration()
         activePlaybackJob?.cancel()
-        Log.i(TAG, "advanceToNext [gen=$gen]: currentTrackId=$currentTrackId, decision=$decision")
+        Log.i(TAG, "advanceToNext [gen=$gen]: currentTrackId=$currentTrackId, decision=$decision t=${System.currentTimeMillis()}")
 
         when (decision) {
             is NextTrackDecision.PlayTrack -> {
@@ -620,6 +662,7 @@ class SonaraPlaybackService : MediaSessionService() {
 
         activePlaybackJob?.cancel()
         preloadJob?.cancel()
+        nextTrackPrefetcher?.cancelActivePrefetch("play_track_internal")
         activePlaybackJob = serviceScope.launch(Dispatchers.IO) {
             // 1. Check local download
             val localFilePath = downloadRepo?.getDownloadedFileUri(track.id)
@@ -852,6 +895,7 @@ class SonaraPlaybackService : MediaSessionService() {
     }
 
     private fun handleTrackTransition(newTrackId: String, reason: Int) {
+        nextTrackPrefetcher?.cancelActivePrefetch("track_transition")
         val player = exoPlayerHolder?.player ?: return
         val container = (application as? SonaraApp)?.container
         val qe = container?.playbackQueueEngine ?: return
@@ -947,7 +991,13 @@ class SonaraPlaybackService : MediaSessionService() {
                         val p = exoPlayerHolder?.player ?: return@withContext
                         if (p.mediaItemCount == 1 && qe.currentTrack?.id != nextTrack.id) {
                             p.addMediaItem(buildMediaItem(nextTrack, streamUrl, preloadedArtworkBytes))
-                            Log.i(TAG, "Preloaded next track into ExoPlayer: ${nextTrack.title}")
+                            Log.i(TAG, "Preloaded next track into ExoPlayer: ${nextTrack.title} t=${System.currentTimeMillis()}")
+                            val gen = transitionManager.currentGeneration()
+                            nextTrackPrefetcher?.prefetch(
+                                trackId = nextTrack.id,
+                                streamUrl = streamUrl,
+                                generation = gen
+                            )
                         }
                     }
                 }

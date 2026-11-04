@@ -408,10 +408,17 @@ class Finding4_ProductionRegressionTest {
         val itunesUpgraded = ArtworkUrlUpgrader.upgrade(itunesRaw)
         assertEquals("https://mzstatic.com/image/thumb/600x600bb.jpg", itunesUpgraded)
 
-        // YouTube CDN
+        // YouTube CDN — preserved, never guessed upward.
+        // TEST FIX (Phase 2C): previously asserted hqdefault -> maxresdefault. maxresdefault.jpg
+        // is a separate stored file that does not exist for every video, so the rewrite risked
+        // replacing a working thumbnail with a 404; it also corrupted already-maxres URLs.
         val ytRaw = "https://i.ytimg.com/vi/abc/hqdefault.jpg"
         val ytUpgraded = ArtworkUrlUpgrader.upgrade(ytRaw)
-        assertEquals("https://i.ytimg.com/vi/abc/maxresdefault.jpg", ytUpgraded)
+        assertEquals(ytRaw, ytUpgraded)
+        assertEquals(
+            "https://i.ytimg.com/vi/abc/maxresdefault.jpg",
+            ArtworkUrlUpgrader.upgrade("https://i.ytimg.com/vi/abc/maxresdefault.jpg")
+        )
     }
 
     @Test

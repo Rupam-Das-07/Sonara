@@ -243,6 +243,54 @@ class PlaylistRepositoryTest {
     }
 
     @Test
+    fun addTrackToPlaylist_rejectsBlankAndWhitespaceTrackIds() = runTest {
+        val id = repository.createPlaylist("Focus Beats").getOrThrow()
+
+        // 1. Blank track ID returns failure with IllegalArgumentException
+        val emptyTrack = Track(id = "", title = "Empty ID", artist = "Artist")
+        val emptyResult = repository.addTrackToPlaylist(id, emptyTrack)
+        assertTrue(emptyResult.isFailure)
+        assertTrue(emptyResult.exceptionOrNull() is IllegalArgumentException)
+
+        // 2. Whitespace-only track ID returns failure with IllegalArgumentException
+        val whitespaceTrack = Track(id = "   \t \n ", title = "Whitespace ID", artist = "Artist")
+        val whitespaceResult = repository.addTrackToPlaylist(id, whitespaceTrack)
+        assertTrue(whitespaceResult.isFailure)
+        assertTrue(whitespaceResult.exceptionOrNull() is IllegalArgumentException)
+
+        // 3. Proves no playlist-track records or track entities were created
+        val detail = repository.getPlaylistDetail(id).first()
+        assertNotNull(detail)
+        assertTrue(detail?.tracks?.isEmpty() == true)
+        assertEquals(0, fakePlaylistDao.crossRefs.value.size)
+        assertTrue(fakePlaylistDao.tracksMap.isEmpty())
+    }
+
+    @Test
+    fun addTrackToPlaylist_validTrackIdFollowsExistingBehaviorAndPreventsDuplicates() = runTest {
+        val id = repository.createPlaylist("Chill Mix").getOrThrow()
+        val validTrack = Track(id = "valid_track_55", title = "Chill Track", artist = "Chill Artist")
+
+        // First addition succeeds and persists
+        val firstResult = repository.addTrackToPlaylist(id, validTrack)
+        assertTrue(firstResult.isSuccess)
+
+        val detailAfterFirst = repository.getPlaylistDetail(id).first()
+        assertNotNull(detailAfterFirst)
+        assertEquals(1, detailAfterFirst?.tracks?.size)
+        assertEquals("valid_track_55", detailAfterFirst?.tracks?.first()?.id)
+        assertEquals(1, fakePlaylistDao.crossRefs.value.size)
+
+        // Duplicate addition succeeds and retains single record
+        val duplicateResult = repository.addTrackToPlaylist(id, validTrack)
+        assertTrue(duplicateResult.isSuccess)
+
+        val detailAfterDuplicate = repository.getPlaylistDetail(id).first()
+        assertEquals(1, detailAfterDuplicate?.tracks?.size)
+        assertEquals(1, fakePlaylistDao.crossRefs.value.size)
+    }
+
+    @Test
     fun removeTrack_removesTrackAndPreservesOthers() = runTest {
         val id = repository.createPlaylist("Mixed").getOrThrow()
         val track1 = Track(id = "track_1", title = "One", artist = "A")

@@ -7,10 +7,12 @@ import androidx.lifecycle.viewModelScope
 import coil.Coil
 import com.example.sonara.domain.model.AppLanguage
 import com.example.sonara.domain.model.AudioQuality
+import com.example.sonara.domain.model.ColorPalette
 import com.example.sonara.domain.model.DownloadFileFormat
 import com.example.sonara.domain.model.DownloadLocationMode
 import com.example.sonara.domain.model.SearchMode
 import com.example.sonara.domain.model.ThemeMode
+import com.example.sonara.domain.model.video.VideoQuality
 import com.example.sonara.domain.ports.StreamResolverPort
 import com.example.sonara.domain.repository.DownloadRepository
 import com.example.sonara.domain.repository.HistoryRepository
@@ -84,6 +86,13 @@ class SettingsViewModel(
         }
     }
 
+    fun setSelectedPalette(palette: ColorPalette) {
+        viewModelScope.launch {
+            settingsRepository.setSelectedPalette(palette)
+            dismissDialog()
+        }
+    }
+
     fun setShowRomanized(show: Boolean) {
         viewModelScope.launch { settingsRepository.setShowRomanized(show) }
     }
@@ -119,6 +128,13 @@ class SettingsViewModel(
 
     fun setDownloadOverWifiOnly(wifiOnly: Boolean) {
         viewModelScope.launch { settingsRepository.setDownloadOverWifiOnly(wifiOnly) }
+    }
+
+    fun setDefaultVideoQuality(quality: VideoQuality) {
+        viewModelScope.launch {
+            settingsRepository.setDefaultVideoQuality(quality)
+            dismissDialog()
+        }
     }
 
     // ─── Phase 1 setters ──────────────────────────────────────────────────────

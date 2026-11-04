@@ -27,6 +27,7 @@ import java.util.concurrent.CopyOnWriteArraySet
 class SonaraForwardingPlayer(
     player: Player,
     private val queueEngineProvider: () -> PlaybackQueueEngine?,
+    private val isIFrameVideoActive: () -> Boolean = { false },
     private val onSeekToNext: () -> Unit,
     private val onSeekToPrevious: () -> Unit
 ) : ForwardingPlayer(player) {
@@ -77,6 +78,16 @@ class SonaraForwardingPlayer(
         listeners.remove(listener)
     }
 
+    override fun play() {
+        if (isIFrameVideoActive()) return
+        super.play()
+    }
+
+    override fun setPlayWhenReady(playWhenReady: Boolean) {
+        if (playWhenReady && isIFrameVideoActive()) return
+        super.setPlayWhenReady(playWhenReady)
+    }
+
     override fun getAvailableCommands(): Player.Commands {
         val builder = super.getAvailableCommands().buildUpon()
 
@@ -93,10 +104,27 @@ class SonaraForwardingPlayer(
             builder.remove(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
         }
 
+        if (isIFrameVideoActive()) {
+            builder.remove(Player.COMMAND_PLAY_PAUSE)
+            builder.remove(Player.COMMAND_SEEK_TO_NEXT)
+            builder.remove(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
+            builder.remove(Player.COMMAND_SEEK_TO_PREVIOUS)
+            builder.remove(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+        }
+
         return builder.build()
     }
 
     override fun isCommandAvailable(command: Int): Boolean {
+        if (isIFrameVideoActive()) {
+            when (command) {
+                Player.COMMAND_PLAY_PAUSE,
+                Player.COMMAND_SEEK_TO_NEXT,
+                Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM,
+                Player.COMMAND_SEEK_TO_PREVIOUS,
+                Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM -> return false
+            }
+        }
         return when (command) {
             Player.COMMAND_SEEK_TO_PREVIOUS,
             Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM -> true
@@ -107,6 +135,7 @@ class SonaraForwardingPlayer(
     }
 
     override fun seekToNext() {
+        if (isIFrameVideoActive()) return
         if (super.hasNextMediaItem()) {
             super.seekToNext()
         } else {
@@ -115,6 +144,7 @@ class SonaraForwardingPlayer(
     }
 
     override fun seekToNextMediaItem() {
+        if (isIFrameVideoActive()) return
         if (super.hasNextMediaItem()) {
             super.seekToNextMediaItem()
         } else {
@@ -123,10 +153,12 @@ class SonaraForwardingPlayer(
     }
 
     override fun seekToPrevious() {
+        if (isIFrameVideoActive()) return
         onSeekToPrevious()
     }
 
     override fun seekToPreviousMediaItem() {
+        if (isIFrameVideoActive()) return
         onSeekToPrevious()
     }
 

@@ -17,6 +17,7 @@ sealed interface SettingsDialog {
     data object DefaultSearchModeSelector : SettingsDialog
     data object StreamingQualitySelector : SettingsDialog
     data object DownloadQualitySelector : SettingsDialog
+    data object DefaultVideoQualitySelector : SettingsDialog
     data object ClearDownloadsConfirmation : SettingsDialog
     data object ClearHistoryConfirmation : SettingsDialog
     data object ResetSettingsConfirmation : SettingsDialog
@@ -26,6 +27,9 @@ sealed interface SettingsDialog {
     data object AppLanguageSelector : SettingsDialog
     data object EqualizerSettings : SettingsDialog
     data object DownloadFormatSelector : SettingsDialog
+
+    // ─── Phase 5 additions ────────────────────────────────────────────────────
+    data object ColorPaletteSelector : SettingsDialog
 }
 
 /**

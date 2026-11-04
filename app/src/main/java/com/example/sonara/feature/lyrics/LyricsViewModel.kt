@@ -35,6 +35,14 @@ class LyricsViewModel(
     private var activeArtistName: String = ""
     private var fetchJob: Job? = null
 
+    /**
+     * Monotonically increasing id assigned to each lyrics request (Stage 3). A completed request may
+     * only update UI state if its generation is still current, so an older in-flight request can never
+     * overwrite a newer track's lyrics. This is an additional safety guard layered on top of the
+     * existing [fetchJob] cancellation, which is preserved.
+     */
+    private var requestGeneration: Long = 0L
+
     init {
         // Collect persisted Romanization preference (default true for Indic Romanization)
         if (settingsRepository != null) {
@@ -78,11 +86,21 @@ class LyricsViewModel(
         activeTrackId = trackId
         activeTrackTitle = title
         activeArtistName = artist
+        val generation = ++requestGeneration
         fetchJob?.cancel()
+        // Stage 3: clear the previous track's lyrics so a playback-position update arriving while the
+        // new request is in flight cannot republish stale lyrics over the Loading state. Without this,
+        // updateSyncPosition would re-emit the old SyncedLyrics (under the new track's header) until the
+        // new request completes — the stale-content window this stage removes.
+        currentLyrics = null
+        lastActiveIndex = 0
         _uiState.value = LyricsUiState.Loading
 
         fetchJob = viewModelScope.launch {
             val result = lyricsRepository.getLyrics(trackId, title, artist, durationMs)
+            // Stage 3: generation guard — only the current request may update state. Defense-in-depth
+            // alongside fetchJob cancellation; a stale (older) request can never overwrite newer lyrics.
+            if (generation != requestGeneration) return@launch
             result.fold(
                 onSuccess = { lyrics ->
                     currentLyrics = lyrics

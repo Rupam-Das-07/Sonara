@@ -137,54 +137,99 @@ def search_music():
         return jsonify({'error': 'Failed to search songs'}), 500
 
 
-from functools import lru_cache
+try:
+    from .artist_image import exact_artist_image, is_valid_browse_id, normalize_artist_name, thumbnail_url
+except ImportError:  # Script execution from backend/python.
+    from artist_image import exact_artist_image, is_valid_browse_id, normalize_artist_name, thumbnail_url
+
+from collections import OrderedDict
 
 # Return None on failure so the Node layer can trigger its own fallback chain (JioSaavn, etc.)
 # Previously this was a placeholder URL that poisoned the Node-side cache.
 ARTIST_IMAGE_PLACEHOLDER = None
+_ARTIST_IMAGE_CACHE_MAX = 500
+_ARTIST_IMAGE_SUCCESS_TTL = 5 * 60
+_ARTIST_IMAGE_NEGATIVE_TTL = 15
+_ARTIST_IMAGE_CACHE_MISS = object()
 
-@lru_cache(maxsize=500)
+
+class _TimedArtistImageCache:
+    """Small bounded cache; misses expire quickly and never live forever."""
+
+    def __init__(self):
+        self._items = OrderedDict()
+
+    def get(self, key):
+        now = time.monotonic()
+        entry = self._items.get(key, _ARTIST_IMAGE_CACHE_MISS)
+        if entry is _ARTIST_IMAGE_CACHE_MISS:
+            return _ARTIST_IMAGE_CACHE_MISS
+        expires_at, value = entry
+        if expires_at <= now:
+            self._items.pop(key, None)
+            return _ARTIST_IMAGE_CACHE_MISS
+        self._items.move_to_end(key)
+        return value
+
+    def put(self, key, value):
+        ttl = _ARTIST_IMAGE_SUCCESS_TTL if value else _ARTIST_IMAGE_NEGATIVE_TTL
+        self._items[key] = (time.monotonic() + ttl, value)
+        self._items.move_to_end(key)
+        while len(self._items) > _ARTIST_IMAGE_CACHE_MAX:
+            self._items.popitem(last=False)
+
+    def clear(self):
+        self._items.clear()
+
+
+_artist_image_cache = _TimedArtistImageCache()
+
+
 def _fetch_cached_artist_image(original_name):
+    target_name = normalize_artist_name(original_name)
+    if target_name is None:
+        return None
+    cache_key = f"name:{target_name}"
+    cached = _artist_image_cache.get(cache_key)
+    if cached is not _ARTIST_IMAGE_CACHE_MISS:
+        return cached
     try:
         import gevent
         image_url = None
         with gevent.Timeout(4, False):
             results = yt.search(original_name, filter='artists', limit=3)
-            if results:
-                for r in results:
-                    thumbnails = r.get('thumbnails', [])
-                    if thumbnails:
-                        url = thumbnails[-1].get('url')
-                        if url:
-                            image_url = url
-                            break
+            image_url = exact_artist_image(results, original_name)
         if image_url is None:
             # We either timed out or found nothing
             logger.debug(f"Artist image fetch finished without url for '{original_name}'")
+        _artist_image_cache.put(cache_key, image_url)
         return image_url
 
     except Exception as e:
         logger.error(f"Artist image fetch error for '{original_name}': {e}")
+        _artist_image_cache.put(cache_key, None)
         return None
 
 
-@lru_cache(maxsize=500)
 def _fetch_cached_artist_image_by_id(artist_id):
+    if not is_valid_browse_id(artist_id):
+        return None
+    cache_key = f"id:{artist_id}"
+    cached = _artist_image_cache.get(cache_key)
+    if cached is not _ARTIST_IMAGE_CACHE_MISS:
+        return cached
     try:
         import gevent
         image_url = None
         with gevent.Timeout(4, False):
             result = yt.get_artist(artist_id)
-            if result:
-                thumbnails = result.get('thumbnails', [])
-                if thumbnails:
-                    url = thumbnails[-1].get('url')
-                    if url:
-                        image_url = url
+            image_url = thumbnail_url(result)
+        _artist_image_cache.put(cache_key, image_url)
         return image_url
 
     except Exception as e:
         logger.error(f"Artist image fetch error for ID '{artist_id}': {e}")
+        _artist_image_cache.put(cache_key, None)
         return None
 
 
@@ -204,8 +249,7 @@ def get_artist_image():
     if artist_id:
         image_url = _fetch_cached_artist_image_by_id(artist_id)
     else:
-        # Fallback to string search if no ID
-        image_url = _fetch_cached_artist_image(name.lower())
+        image_url = _fetch_cached_artist_image(name)
         
     return jsonify({'name': name or artist_id, 'image': image_url})
 
@@ -233,6 +277,184 @@ def get_chart_artists():
     except Exception as e:
         logger.error(f"Error fetching chart artists: {e}")
         return jsonify({'error': str(e), 'artists': []}), 500
+
+
+@app.route('/api/charts/tracks', methods=['GET'])
+def get_chart_tracks():
+    """Fetch tracks from a YouTube Music Chart playlist.
+
+    Query params:
+        country: optional country code (default: 'IN')
+        language: optional language chart name (default: 'Hindi')
+        playlistId: optional explicit playlist ID
+        limit: optional maximum tracks to retrieve (default: 100)
+    """
+    try:
+        import gevent
+        country = request.args.get('country', 'IN').strip().upper() or 'IN'
+        language = request.args.get('language', 'Hindi').strip()
+        explicit_id = request.args.get('playlistId', '').strip()
+        limit = min(int(request.args.get('limit', 100)), 100)
+
+        resolved_id = explicit_id
+        chart_title = None
+
+        with gevent.Timeout(15):
+            if not resolved_id:
+                try:
+                    charts = yt.get_charts(country=country)
+                    langs = charts.get('languages', [])
+                    lang_lower = language.lower()
+                    for item in langs:
+                        title = item.get('title', '')
+                        if lang_lower in title.lower():
+                            resolved_id = item.get('playlistId')
+                            chart_title = title
+                            break
+                except Exception as ex:
+                    logger.warning(f"Dynamic chart lookup failed for {country}/{language}: {ex}")
+
+            # Fallback for Hindi chart if dynamic lookup did not resolve an ID
+            if not resolved_id and country == 'IN' and 'hindi' in language.lower():
+                resolved_id = 'PL4fGSI1pDJn5RgLW0Sb_zECecWdH_4zOX'
+                chart_title = 'Top Weekly Videos Hindi (Fallback)'
+
+            if not resolved_id:
+                return jsonify({'error': 'No matching chart playlist found', 'tracks': []}), 404
+
+            pl_data = yt.get_playlist(resolved_id, limit=limit)
+            raw_tracks = pl_data.get('tracks', []) if pl_data else []
+            if not chart_title and pl_data:
+                chart_title = pl_data.get('title', '')
+
+            normalized = []
+            for track in raw_tracks:
+                if track.get('videoId'):
+                    mapped = normalize_yt_track(track, source='ytmusic_chart')
+                    if mapped:
+                        normalized.append(mapped)
+
+            return jsonify({
+                'success': True,
+                'chartTitle': chart_title,
+                'playlistId': resolved_id,
+                'country': country,
+                'tracks': normalized
+            })
+
+    except gevent.Timeout:
+        logger.error(json.dumps({
+            "event": "timeout",
+            "endpoint": "/api/charts/tracks",
+            "operation": "get_chart_tracks",
+            "threshold": 15,
+            "exception": "gevent.Timeout"
+        }))
+        return jsonify({'error': 'Upstream request timed out', 'tracks': []}), 504
+    except Exception as e:
+        logger.error(f"Error fetching chart tracks: {e}")
+        return jsonify({'error': str(e), 'tracks': []}), 500
+
+
+def _format_shelf_artists(raw_artists):
+    """Normalize shelf artist metadata without trusting its element shapes."""
+    if not isinstance(raw_artists, list):
+        return '', []
+
+    artists = []
+    names = []
+    for entry in raw_artists:
+        if not isinstance(entry, dict):
+            continue
+
+        name = entry.get('name')
+        artist_id = entry.get('id')
+        name = name if isinstance(name, str) and name.strip() else ''
+        artist_id = artist_id if isinstance(artist_id, str) and artist_id.strip() else ''
+        if not name and not artist_id:
+            continue
+
+        artists.append({'name': name, 'id': artist_id})
+        if name:
+            names.append(name)
+
+    return ', '.join(names), artists
+
+
+def _format_thumbnail_url(thumbnails):
+    """Return the last usable thumbnail URL without trusting upstream shape."""
+    if not isinstance(thumbnails, list):
+        return ''
+
+    for thumbnail in reversed(thumbnails):
+        if not isinstance(thumbnail, dict):
+            continue
+        url = thumbnail.get('url')
+        if isinstance(url, str) and url:
+            return url
+    return ''
+
+
+@app.route('/api/explore/new-releases', methods=['GET'])
+def get_new_releases():
+    """Fetch YouTube Music's native New Releases shelf.
+
+    Returns album CONTAINERS, not tracks: the shelf carries no track-level videoId,
+    so a caller that wants playable tracks must resolve a container through
+    /api/album/<browse_id>. This endpoint deliberately performs NO album lookups so
+    its request budget stays at exactly one upstream call.
+
+    FRESHNESS IS AN EDITORIAL APPROXIMATION, NOT A VERIFIED RELEASE DATE. The only
+    freshness signals upstream supplies here are membership of this shelf and the
+    container 'type' ('Single' / 'EP' / 'Album'). There is no release date anywhere on
+    this path, and the album-level 'year' is positional in the upstream parser and
+    usually absent, so it is forwarded only when present and never synthesised. A
+    Single or EP can still contain older recordings, reissues, or recent re-uploads
+    of old material.
+    """
+    try:
+        import gevent
+        with gevent.Timeout(8):
+            explore = yt.get_explore()
+            raw = (explore or {}).get('new_releases') or []
+
+            containers = []
+            for item in raw:
+                if not isinstance(item, dict):
+                    continue
+                browse_id = item.get('browseId')
+                if not browse_id:
+                    continue
+                artist, artists = _format_shelf_artists(item.get('artists'))
+                containers.append({
+                    'browseId': browse_id,
+                    'audioPlaylistId': item.get('audioPlaylistId') or '',
+                    'title': item.get('title') or '',
+                    'type': item.get('type') or '',
+                    'artist': artist,
+                    'artists': artists,
+                    'year': item.get('year') or '',
+                    'thumbnailUrl': _format_thumbnail_url(item.get('thumbnails')),
+                    'isExplicit': bool(item.get('isExplicit')),
+                })
+
+            return jsonify({
+                'success': True,
+                'containers': containers
+            })
+
+    except gevent.Timeout:
+        logger.error(json.dumps({
+            "event": "timeout",
+            "endpoint": "/api/explore/new-releases",
+            "operation": "get_explore",
+            "threshold": 8,
+            "exception": "gevent.Timeout"
+        }))
+        return jsonify({'error': 'Upstream request timed out', 'containers': []}), 504
+    except Exception as e:
+        logger.error(f"Error fetching new releases shelf: {e}")
+        return jsonify({'error': str(e), 'containers': []}), 500
 
 
 @app.route('/api/song/<video_id>', methods=['GET'])
@@ -305,6 +527,29 @@ def get_artist_info(browse_id):
         return jsonify({'error': 'Failed to fetch artist information'}), 500
 
 
+def _format_album_artist(album):
+    """Return an album artist string across ytmusicapi response shapes."""
+    if not isinstance(album, dict):
+        return ''
+
+    scalar_artist = album.get('artist')
+    if isinstance(scalar_artist, str) and scalar_artist.strip():
+        return scalar_artist.strip()
+
+    artists = album.get('artists')
+    if not isinstance(artists, list):
+        return ''
+
+    names = []
+    for entry in artists:
+        if not isinstance(entry, dict):
+            continue
+        name = entry.get('name')
+        if isinstance(name, str) and name.strip():
+            names.append(name.strip())
+    return ', '.join(names)
+
+
 @app.route('/api/album/<browse_id>', methods=['GET'])
 def get_album_info(browse_id):
     """Get album information and tracks"""
@@ -319,9 +564,9 @@ def get_album_info(browse_id):
             formatted_album = {
                 'id': browse_id,
                 'title': album.get('title', ''),
-                'artist': album.get('artist', ''),
+                'artist': _format_album_artist(album),
                 'year': album.get('year', ''),
-                'thumbnailUrl': album.get('thumbnails', [{}])[-1].get('url', '') if album.get('thumbnails') else '',
+                'thumbnailUrl': _format_thumbnail_url(album.get('thumbnails')),
                 'description': album.get('description', ''),
                 'tracks': album.get('tracks', [])
             }

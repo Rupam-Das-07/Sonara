@@ -10,6 +10,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.sonara.data.local.db.entity.PlaylistEntity
 import com.example.sonara.data.local.db.entity.PlaylistTrackCrossRefEntity
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.first
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -139,7 +140,9 @@ class SonaraMigrationInstrumentedTest {
                 SonaraDatabase.MIGRATION_2_3,
                 SonaraDatabase.MIGRATION_3_4,
                 SonaraDatabase.MIGRATION_4_5,
-                SonaraDatabase.MIGRATION_5_6
+                SonaraDatabase.MIGRATION_5_6,
+                SonaraDatabase.MIGRATION_6_7,
+                SonaraDatabase.MIGRATION_7_8
             )
             .build()
         try {
@@ -173,7 +176,9 @@ class SonaraMigrationInstrumentedTest {
                 SonaraDatabase.MIGRATION_2_3,
                 SonaraDatabase.MIGRATION_3_4,
                 SonaraDatabase.MIGRATION_4_5,
-                SonaraDatabase.MIGRATION_5_6
+                SonaraDatabase.MIGRATION_5_6,
+                SonaraDatabase.MIGRATION_6_7,
+                SonaraDatabase.MIGRATION_7_8
             )
             .build()
         try {
@@ -217,7 +222,9 @@ class SonaraMigrationInstrumentedTest {
                 SonaraDatabase.MIGRATION_2_3,
                 SonaraDatabase.MIGRATION_3_4,
                 SonaraDatabase.MIGRATION_4_5,
-                SonaraDatabase.MIGRATION_5_6
+                SonaraDatabase.MIGRATION_5_6,
+                SonaraDatabase.MIGRATION_6_7,
+                SonaraDatabase.MIGRATION_7_8
             )
             .build()
         try {
@@ -302,7 +309,9 @@ class SonaraMigrationInstrumentedTest {
                 SonaraDatabase.MIGRATION_2_3,
                 SonaraDatabase.MIGRATION_3_4,
                 SonaraDatabase.MIGRATION_4_5,
-                SonaraDatabase.MIGRATION_5_6
+                SonaraDatabase.MIGRATION_5_6,
+                SonaraDatabase.MIGRATION_6_7,
+                SonaraDatabase.MIGRATION_7_8
             )
             .build()
         try {
@@ -349,7 +358,9 @@ class SonaraMigrationInstrumentedTest {
                 SonaraDatabase.MIGRATION_2_3,
                 SonaraDatabase.MIGRATION_3_4,
                 SonaraDatabase.MIGRATION_4_5,
-                SonaraDatabase.MIGRATION_5_6
+                SonaraDatabase.MIGRATION_5_6,
+                SonaraDatabase.MIGRATION_6_7,
+                SonaraDatabase.MIGRATION_7_8
             )
             .build()
         try {
@@ -364,6 +375,49 @@ class SonaraMigrationInstrumentedTest {
                 val retrieved = dao.getPlaylistByIdSync("fresh_user")
                 assertNotNull(retrieved)
                 assertEquals("USER", retrieved?.origin)
+            }
+        } finally {
+            roomDb.close()
+        }
+    }
+
+    // ─── MIGRATION 7 → 8 (history provenance/session identity) ───────────────────────────
+
+    @Test
+    fun migration7to8_roomOpensAndValidatesUpgradedDatabase_andPreservesLegacyDefaults() {
+        buildV5Database()
+
+        // Produce a real v7 file: apply the production 5->6 and 6->7 migrations, then seed
+        // the pre-8 history shape before Room performs 7->8.
+        val rawHelper = openRawHelper(version = 5)
+        try {
+            val raw = rawHelper.writableDatabase
+            SonaraDatabase.MIGRATION_5_6.migrate(raw)
+            SonaraDatabase.MIGRATION_6_7.migrate(raw)
+            raw.execSQL(
+                "INSERT INTO `playback_history` (`trackId`,`listenedAt`,`completed`) VALUES ('track_1',1700000020000,1)"
+            )
+            raw.version = 7
+        } finally {
+            rawHelper.close()
+        }
+
+        val roomDb = Room.databaseBuilder(context, SonaraDatabase::class.java, TEST_DB)
+            .addMigrations(
+                SonaraDatabase.MIGRATION_1_2,
+                SonaraDatabase.MIGRATION_2_3,
+                SonaraDatabase.MIGRATION_3_4,
+                SonaraDatabase.MIGRATION_4_5,
+                SonaraDatabase.MIGRATION_5_6,
+                SonaraDatabase.MIGRATION_6_7,
+                SonaraDatabase.MIGRATION_7_8
+            )
+            .build()
+        try {
+            runBlocking {
+                val item = roomDb.historyDao().getRecentHistory(10).first().single()
+                assertEquals("LEGACY_UNKNOWN", item.sourceSection)
+                assertEquals(null, item.playbackSessionId)
             }
         } finally {
             roomDb.close()

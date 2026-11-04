@@ -37,7 +37,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.sonara.R
 import com.example.sonara.core.ui.components.PhosphorIcons
-import com.example.sonara.core.ui.theme.SonaraPalette
 import com.example.sonara.core.ui.theme.SonaraTheme
 import com.example.sonara.domain.model.AudioDeviceType
 import com.example.sonara.domain.model.AudioOutputDevice
@@ -63,8 +62,8 @@ fun AudioOutputSelectorDialog(
     val typography = SonaraTheme.typography
     val isDark = colors.isDark
 
-    val dialogBg = if (isDark) Color(0xFF0D2326) else SonaraPalette.BoneElevatedSurface
-    val dialogBorder = if (isDark) Color(0xFF264043) else SonaraPalette.BoneBorder
+    val dialogBg = colors.surface
+    val dialogBorder = colors.divider
 
     BasicAlertDialog(
         onDismissRequest = onDismiss
@@ -94,13 +93,13 @@ fun AudioOutputSelectorDialog(
                             modifier = Modifier
                                 .size(36.dp)
                                 .clip(CircleShape)
-                                .background(SonaraPalette.OxideAccent.copy(alpha = 0.15f)),
+                                .background(colors.accentContainer),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = getDeviceIcon(state.activeDevice.type),
                                 contentDescription = null,
-                                tint = SonaraPalette.OxideAccent,
+                                tint = colors.accent,
                                 modifier = Modifier.size(18.dp)
                             )
                         }
@@ -159,7 +158,7 @@ fun AudioOutputSelectorDialog(
                     TextButton(onClick = onDismiss) {
                         Text(
                             text = stringResource(R.string.action_close),
-                            color = SonaraPalette.OxideAccent,
+                            color = colors.accent,
                             fontWeight = FontWeight.SemiBold
                         )
                     }
@@ -180,12 +179,11 @@ private fun AudioOutputDeviceRow(
     val isDark = colors.isDark
 
     val rowBg = when {
-        isSelected && isDark -> Color(0xFF133235)
-        isSelected && !isDark -> SonaraPalette.BoneSecondarySurface
+        isSelected -> colors.surfaceVariant
         else -> Color.Transparent
     }
     val rowBorder = when {
-        isSelected -> SonaraPalette.OxideAccent.copy(alpha = 0.50f)
+        isSelected -> colors.accent.copy(alpha = 0.50f)
         isDark -> Color.White.copy(alpha = 0.06f)
         else -> Color.Black.copy(alpha = 0.05f)
     }
@@ -214,7 +212,7 @@ private fun AudioOutputDeviceRow(
             Icon(
                 imageVector = getDeviceIcon(device.type),
                 contentDescription = null,
-                tint = if (isSelected) SonaraPalette.OxideAccent else colors.secondaryText,
+                tint = if (isSelected) colors.accent else colors.secondaryText,
                 modifier = Modifier.size(20.dp)
             )
 
@@ -240,7 +238,7 @@ private fun AudioOutputDeviceRow(
                         fontSize = 11.5.sp,
                         fontWeight = FontWeight.Normal
                     ),
-                    color = if (isSelected) SonaraPalette.OxideAccent.copy(alpha = 0.90f) else colors.secondaryText,
+                    color = if (isSelected) colors.accent.copy(alpha = 0.90f) else colors.secondaryText,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -254,7 +252,7 @@ private fun AudioOutputDeviceRow(
                 .clip(CircleShape)
                 .border(
                     width = if (isSelected) 2.dp else 1.5.dp,
-                    color = if (isSelected) SonaraPalette.OxideAccent else colors.secondaryText.copy(alpha = 0.40f),
+                    color = if (isSelected) colors.accent else colors.secondaryText.copy(alpha = 0.40f),
                     shape = CircleShape
                 ),
             contentAlignment = Alignment.Center
@@ -264,7 +262,7 @@ private fun AudioOutputDeviceRow(
                     modifier = Modifier
                         .size(8.dp)
                         .clip(CircleShape)
-                        .background(SonaraPalette.OxideAccent)
+                        .background(colors.accent)
                 )
             }
         }

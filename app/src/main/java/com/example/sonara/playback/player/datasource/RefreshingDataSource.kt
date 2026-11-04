@@ -18,10 +18,16 @@ import java.io.IOException
  */
 class RefreshingDataSource(
     private val upstreamDataSource: DataSource,
-    private val streamResolverPort: StreamResolverPort
+    private val streamResolverPort: StreamResolverPort,
+    private val uriParser: (String) -> Uri = { Uri.parse(it) }
 ) : DataSource {
 
     private var currentDataSpec: DataSpec? = null
+    private var refreshAttempts = 0
+
+    companion object {
+        const val MAX_REFRESH_ATTEMPTS = 1
+    }
 
     override fun addTransferListener(transferListener: TransferListener) {
         upstreamDataSource.addTransferListener(transferListener)
@@ -33,7 +39,8 @@ class RefreshingDataSource(
         return try {
             upstreamDataSource.open(dataSpec)
         } catch (e: HttpDataSource.InvalidResponseCodeException) {
-            if (e.responseCode == 403 || e.responseCode == 410) {
+            if ((e.responseCode == 403 || e.responseCode == 410) && refreshAttempts < MAX_REFRESH_ATTEMPTS) {
+                refreshAttempts++
                 // Expired/revoked stream token. Recover by force-refreshing a FRESH URL for
                 // this track (bypassing AND invalidating any stale cache entry), then retrying
                 // the open on the new URL. Recovery is scoped to THIS track's DataSource
@@ -47,7 +54,7 @@ class RefreshingDataSource(
                         // Preserve every other DataSpec field (position, length, key,
                         // customData, flags, headers); only the URI is swapped to the fresh one.
                         val refreshedDataSpec = dataSpec.buildUpon()
-                            .setUri(Uri.parse(fresh.streamUrl))
+                            .setUri(uriParser(fresh.streamUrl))
                             .build()
                         currentDataSpec = refreshedDataSpec
                         return upstreamDataSource.open(refreshedDataSpec)
@@ -73,8 +80,8 @@ class RefreshingDataSource(
         dataSpec.key?.takeIf { it.isNotBlank() }?.let { return it }
         (dataSpec.customData as? String)?.takeIf { it.isNotBlank() }?.let { return it }
         val uri = dataSpec.uri
-        uri.getQueryParameter("video_id")?.takeIf { it.isNotBlank() }?.let { return it }
-        uri.getQueryParameter("trackId")?.takeIf { it.isNotBlank() }?.let { return it }
+        uri?.getQueryParameter("video_id")?.takeIf { it.isNotBlank() }?.let { return it }
+        uri?.getQueryParameter("trackId")?.takeIf { it.isNotBlank() }?.let { return it }
         return null
     }
 
@@ -94,12 +101,14 @@ class RefreshingDataSource(
     class Factory(
         private val context: Context,
         private val streamResolverPort: StreamResolverPort,
+    private val uriParser: (String) -> Uri = { Uri.parse(it) },
         private val baseHttpDataSourceFactory: DataSource.Factory = DefaultHttpDataSource.Factory()
     ) : DataSource.Factory {
         override fun createDataSource(): DataSource {
             return RefreshingDataSource(
                 upstreamDataSource = baseHttpDataSourceFactory.createDataSource(),
-                streamResolverPort = streamResolverPort
+                streamResolverPort = streamResolverPort,
+                uriParser = uriParser
             )
         }
     }

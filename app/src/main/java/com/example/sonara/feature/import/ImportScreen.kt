@@ -57,6 +57,7 @@ import com.example.sonara.core.ui.components.SonaraButton
 import com.example.sonara.core.ui.components.SonaraButtonVariant
 import com.example.sonara.core.ui.components.SonaraCard
 import com.example.sonara.core.ui.theme.SonaraTheme
+import com.example.sonara.core.util.MediaTitleFormatter
 import com.example.sonara.domain.model.ImportMatchItem
 import com.example.sonara.domain.model.Track
 
@@ -532,7 +533,7 @@ private fun ReviewTrackRow(
 
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = item.selectedTrack.title,
+                text = MediaTitleFormatter.format(item.selectedTrack.title, item.selectedTrack.artist),
                 style = typography.body.copy(fontWeight = FontWeight.Medium),
                 color = colors.primaryText,
                 maxLines = 1,
@@ -565,7 +566,11 @@ private fun ReviewTrackRow(
                             DropdownMenuItem(
                                 text = {
                                     Column {
-                                        Text(alt.title, style = typography.body, color = colors.primaryText)
+                                         Text(
+                                             MediaTitleFormatter.format(alt.title, alt.artist),
+                                             style = typography.body,
+                                             color = colors.primaryText
+                                         )
                                         Text(alt.artist, style = typography.caption, color = colors.secondaryText)
                                     }
                                 },
@@ -605,7 +610,9 @@ private fun SkippedTrackRow(item: ImportMatchItem) {
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = item.resolvedTrack?.title ?: "Track #${item.sourceOrder + 1}",
+                text = item.resolvedTrack?.let {
+                    MediaTitleFormatter.format(it.title, it.artist)
+                } ?: "Track #${item.sourceOrder + 1}",
                 style = typography.body.copy(fontWeight = FontWeight.Normal),
                 color = colors.secondaryText,
                 maxLines = 1,

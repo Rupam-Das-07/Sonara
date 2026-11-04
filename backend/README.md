@@ -25,6 +25,64 @@ Both backends share the same Python infrastructure but are independently runnabl
 | `GET` | `/api/v1/search?q={query}` | Ranked music search |
 | `GET` | `/api/v1/stream/resolve?url={yt-url}` | Resolve a YouTube URL to a stream |
 | `GET` | `/api/v1/stream/play?video_id=...&audio_url=...` | Proxy stream bytes to Android |
+| `GET` | `/api/v1/videos/:videoId/status` | Read separate YouTube made-for-kids and embeddability statuses |
+
+### Video status
+
+`GET /api/v1/videos/:videoId/status` accepts an 11-character YouTube video ID and
+uses the server-side `YOUTUBE_DATA_API_KEY` in one YouTube Data API `videos.list`
+GET request with `part=id,status` and `id` equal to the requested video ID.
+The Made-for-Kids guide explicitly specifies both parts; `status` includes both
+`madeForKids` and `embeddable`, so no second request is needed.
+
+A successful response has this shape (illustrative, not a live lookup):
+
+```json
+{
+  "videoId": "dQw4w9WgXcQ",
+  "madeForKidsStatus": "NOT_MADE_FOR_KIDS",
+  "embeddabilityStatus": "EMBEDDABLE"
+}
+```
+
+| Upstream field | `true` | `false` | Missing, null, or nonboolean |
+|---|---|---|---|
+| `status.madeForKids` | `MADE_FOR_KIDS` | `NOT_MADE_FOR_KIDS` | `UNKNOWN` |
+| `status.embeddable` | `EMBEDDABLE` | `NOT_EMBEDDABLE` | `UNKNOWN` |
+
+These results are independent. Missing `status` makes both results `UNKNOWN`.
+Only a returned item whose `id` matches the request can supply either result;
+malformed/missing item IDs or duplicate matching IDs produce a malformed-response
+error rather than a fabricated verification result.
+
+This endpoint reports metadata, not playback authorization. A future player must
+not embed when either result is `UNKNOWN`, embeddability is `NOT_EMBEDDABLE`, or
+verification fails (including quota exhaustion). `MADE_FOR_KIDS` additionally
+requires the applicable tracking/data-collection safeguards before embedding.
+Even `EMBEDDABLE` does not guarantee playback: the official reference notes that
+platform policies or third-party claims can still block an embedded player.
+This endpoint does not implement player origin/referrer handling or legal compliance.
+
+Official references checked for this contract:
+- `https://developers.google.com/youtube/data/guides/made_for_kids_status`
+- `https://developers.google.com/youtube/v3/docs/videos/list`
+- `https://developers.google.com/youtube/v3/docs/videos#status.embeddable`
+
+The route returns `400` (`INVALID_VIDEO_ID`) for an invalid ID, `404`
+(`YOUTUBE_VIDEO_NOT_FOUND`) when YouTube returns no matching items, and `503`
+(`YOUTUBE_CONFIG_MISSING`) when the API key is empty. An upstream `403` whose
+error reason is `quotaExceeded` returns `429` (`YOUTUBE_QUOTA_EXCEEDED`); a
+generic upstream `429` returns `429` (`YOUTUBE_RATE_LIMITED`). Generic upstream
+`403` and `5xx` responses return sanitized `502` (`YOUTUBE_UPSTREAM_FAILURE`).
+Malformed JSON returns `502` (`YOUTUBE_MALFORMED_RESPONSE`), network failures
+return `502` (`YOUTUBE_NETWORK_ERROR`), and timeouts return `504`
+(`YOUTUBE_TIMEOUT`). An empty `YOUTUBE_DATA_API_KEY` must fail before calling
+upstream. API credentials are never returned to Android or written to logs.
+
+For local configuration, copy `.env.example` to `.env` and set
+`YOUTUBE_DATA_API_KEY` only in that untracked file. The mocked backend tests cover
+the route contract without internet access or real credentials. Live YouTube
+verification has not been performed.
 
 ## Security Boundary
 
@@ -59,15 +117,25 @@ The server starts on `PORT` from `.env` (default: 3002).
 
 ### Android Configuration
 
-**Emulator:**
-```
-http://10.0.2.2:3002
+The debug Android build defaults to `http://127.0.0.1:3002`. For a USB-connected physical
+device, forward that device-local address to the host Node gateway:
+
+```powershell
+adb -s <device-serial> reverse tcp:3002 tcp:3002
+adb -s <device-serial> reverse --list
 ```
 
-**Physical device (update SonaraBackendConfig.kt):**
+The reverse mapping must be re-established after the device disconnects. Do not point Android
+at Python ports `5000` or `5001`; Node owns the public client boundary and calls Python over
+its internal loopback.
+
+For a LAN topology, keep source unchanged and provide an origin at build time:
+
+```powershell
+.\gradlew.bat :app:assembleDebug -PSONARA_DEBUG_BACKEND_URL=http://192.168.x.x:3002
 ```
-http://192.168.x.x:3002
-```
+
+The emulator alternative is `-PSONARA_DEBUG_BACKEND_URL=http://10.0.2.2:3002`.
 
 ## Tests
 
@@ -125,6 +193,7 @@ docker run --rm -p 3002:3002 -e PORT=3002 sonara-backend:local
 | `YTMUSIC_TIMEOUT_MS` | `8000` | Search timeout |
 | `STREAM_RESOLVE_TIMEOUT_MS` | `30000` | Stream resolution timeout |
 | `SEARCH_TIMEOUT_MS` | `12000` | Video search timeout (yt-dlp) |
+| `YOUTUBE_DATA_API_TIMEOUT_MS` | `8000` | Bounded YouTube Data API status-request timeout |
 | `SEARCH_RATE_LIMIT_MAX` | `60` | Max search requests/min |
 | `STREAM_RESOLVE_RATE_LIMIT_MAX` | `20` | Max stream resolves/min |
 | `GLOBAL_RATE_LIMIT_MAX` | `200` | Global max requests/min |

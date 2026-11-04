@@ -29,14 +29,23 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import coil.request.CachePolicy
+import coil.request.ErrorResult
+import coil.request.ImageRequest
+import coil.request.SuccessResult
+import com.example.sonara.BuildConfig
 import com.example.sonara.R
 import com.example.sonara.core.ui.components.PhosphorIcons
 import com.example.sonara.core.ui.components.SonaraIconButton
 import com.example.sonara.core.ui.components.SonaraIconButtonVariant
 import com.example.sonara.core.ui.theme.SonaraTheme
+import com.example.sonara.core.util.MediaTitleFormatter
 import com.example.sonara.domain.model.FeaturedArtist
 import com.example.sonara.domain.model.PlaylistSummary
 import com.example.sonara.domain.model.Track
+import androidx.compose.ui.platform.LocalContext
+import android.graphics.drawable.BitmapDrawable
+import android.util.Log
 import java.util.Locale
 
 /**
@@ -54,6 +63,7 @@ fun ArtistTile(
     val colors = SonaraTheme.colors
     val typography = SonaraTheme.typography
     val dimensions = SonaraTheme.dimensions
+    val context = LocalContext.current
 
     Column(
         modifier = modifier
@@ -70,22 +80,56 @@ fun ArtistTile(
                 .clip(CircleShape),
             contentAlignment = Alignment.Center
         ) {
+            // Keep the monogram underneath Coil: a failed image load then naturally reveals
+            // the same fallback as a missing URL, while a successful image covers it.
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(colors.surfaceVariant),
+                contentAlignment = Alignment.Center
+            ) {
+                Monogram(name = artist.name, textStyle = typography.cardTitle)
+            }
             if (!artist.imageUrl.isNullOrBlank()) {
+                val imageModel = if (BuildConfig.VERIFY_PORTRAITS) {
+                    ImageRequest.Builder(context)
+                        .data(
+                            if (BuildConfig.FAIL_PORTRAITS) {
+                                // Debug-only deterministic failure injection. The monogram
+                                // remains underneath the request and must be revealed by Coil.
+                                "https://127.0.0.1:1/sonara-debug-portrait-failure"
+                            } else {
+                                artist.imageUrl
+                            }
+                        )
+                        .memoryCachePolicy(CachePolicy.DISABLED)
+                        .diskCachePolicy(CachePolicy.DISABLED)
+                        .listener(
+                            onSuccess = { request, result ->
+                                val drawable = result.drawable
+                                val bitmap = drawable as? BitmapDrawable
+                                Log.i(
+                                    "FeaturedArtistImage",
+                                    "BITMAP_SUCCESS name=${artist.name} source=${result.dataSource} " +
+                                        "decoded=${bitmap != null} size=${drawable.intrinsicWidth}x${drawable.intrinsicHeight}"
+                                )
+                            },
+                            onError = { request, result ->
+                                if (BuildConfig.FAIL_PORTRAITS) {
+                                    Log.e("FeaturedArtistImage", "BITMAP_FAILURE name=${artist.name} error=${result.throwable.message}")
+                                }
+                            }
+                        )
+                        .build()
+                } else {
+                    artist.imageUrl
+                }
                 AsyncImage(
-                    model = artist.imageUrl,
+                    model = imageModel,
                     contentDescription = "${artist.name} portrait",
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
                 )
-            } else {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(colors.surfaceVariant),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Monogram(name = artist.name, textStyle = typography.cardTitle)
-                }
             }
         }
         Text(
@@ -310,6 +354,7 @@ fun QuickPickRow(
     val colors = SonaraTheme.colors
     val typography = SonaraTheme.typography
     val dimensions = SonaraTheme.dimensions
+    val displayTitle = MediaTitleFormatter.format(track.title, track.artist)
 
     val durationStr = formatDuration(track.durationMs)
 
@@ -347,7 +392,7 @@ fun QuickPickRow(
             verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             Text(
-                text = track.title,
+                text = displayTitle,
                 style = typography.trackTitle,
                 color = colors.primaryText,
                 maxLines = 1,
@@ -398,7 +443,13 @@ fun QuickPickRow(
 private fun formatDuration(durationMs: Long): String {
     if (durationMs <= 0L) return ""
     val totalSeconds = durationMs / 1000
-    val minutes = totalSeconds / 60
-    val seconds = totalSeconds % 60
-    return String.format(Locale.getDefault(), "%d:%02d", minutes, seconds)
+    val hours = totalSeconds / 3600
+    val remainderSeconds = totalSeconds % 3600
+    val minutes = remainderSeconds / 60
+    val seconds = remainderSeconds % 60
+    return if (hours > 0) {
+        String.format(Locale.getDefault(), "%d:%02d:%02d", hours, minutes, seconds)
+    } else {
+        String.format(Locale.getDefault(), "%d:%02d", minutes, seconds)
+    }
 }

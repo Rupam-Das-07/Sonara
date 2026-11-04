@@ -67,6 +67,7 @@ fun ArtistDetailScreen(
     playlistsModule: HomeModule<List<PlaylistSummary>> = HomeModule.Hidden,
     onBack: () -> Unit,
     onPlayTrack: (Track) -> Unit,
+    onPlayTrackWithContext: (Track, List<Track>) -> Unit = { track, _ -> onPlayTrack(track) },
     onPlaylistClick: (PlaylistSummary) -> Unit = {},
     onToggleLike: (Track, Boolean) -> Unit,
     isLiked: (String) -> Boolean,
@@ -129,7 +130,16 @@ fun ArtistDetailScreen(
                     .background(colors.surfaceVariant),
                 contentAlignment = Alignment.Center
             ) {
-                // Artwork or monogram fallback
+                // Keep the monogram underneath Coil so a loading or failed image request
+                // naturally reveals the same fallback as a missing URL.
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(colors.surfaceVariant),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Monogram(name = artist.name, textStyle = typography.display)
+                }
                 if (!artist.imageUrl.isNullOrBlank()) {
                     AsyncImage(
                         model = artist.imageUrl,
@@ -137,8 +147,6 @@ fun ArtistDetailScreen(
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
                     )
-                } else {
-                    Monogram(name = artist.name, textStyle = typography.display)
                 }
 
                 // Dissolved gradient from artwork into theme background
@@ -194,7 +202,7 @@ fun ArtistDetailScreen(
                 if (tracksModule is HomeModule.Ready && tracksModule.value.isNotEmpty()) {
                     SonaraButton(
                         text = "Play All",
-                        onClick = { onPlayTrack(tracksModule.value.first()) },
+                        onClick = { onPlayTrackWithContext(tracksModule.value.first(), tracksModule.value) },
                         variant = SonaraButtonVariant.Primary,
                         leadingIcon = {
                             Icon(
@@ -289,7 +297,7 @@ fun ArtistDetailScreen(
                             TrackRow(
                                 track = track,
                                 isLiked = isLiked(track.id),
-                                onPlay = { onPlayTrack(track) },
+                                onPlay = { onPlayTrackWithContext(track, tracksModule.value) },
                                 onToggleLike = { liked -> onToggleLike(track, liked) }
                             )
                         }

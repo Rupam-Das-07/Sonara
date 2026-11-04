@@ -39,6 +39,7 @@ import com.example.sonara.core.ui.components.SonaraIconButton
 import com.example.sonara.core.ui.components.SonaraIconButtonVariant
 import com.example.sonara.core.ui.components.TrackRow
 import com.example.sonara.core.ui.theme.SonaraTheme
+import com.example.sonara.core.util.MediaTitleFormatter
 import com.example.sonara.domain.model.PlaylistDetail
 import com.example.sonara.domain.model.PlaylistSummary
 import com.example.sonara.domain.model.Track
@@ -50,6 +51,7 @@ fun UserPlaylistDetailScreen(
     reorderedTracks: List<Track>,
     onBack: () -> Unit,
     onPlayTrack: (Track) -> Unit,
+    onPlayTrackWithContext: (Track, List<Track>) -> Unit = { track, _ -> onPlayTrack(track) },
     onToggleLike: (Track, Boolean) -> Unit,
     isLiked: (String) -> Boolean,
     onStartReorder: () -> Unit,
@@ -242,7 +244,7 @@ fun UserPlaylistDetailScreen(
                     Spacer(modifier = Modifier.height(dimensions.spaceXs))
                     SonaraButton(
                         text = "Play All",
-                        onClick = { onPlayTrack(playlist.tracks.first()) },
+                         onClick = { onPlayTrackWithContext(tracksToDisplay.first(), tracksToDisplay) },
                         variant = SonaraButtonVariant.Primary,
                         leadingIcon = {
                             Icon(
@@ -282,7 +284,7 @@ fun UserPlaylistDetailScreen(
                         TrackRow(
                             track = track,
                             isLiked = isLiked(track.id),
-                            onPlay = { onPlayTrack(track) },
+                             onPlay = { onPlayTrackWithContext(track, tracksToDisplay) },
                             onToggleLike = { liked -> onToggleLike(track, liked) },
                             trailingContent = {
                                 SonaraIconButton(
@@ -337,7 +339,7 @@ private fun ReorderTrackRow(
 
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = track.title,
+                text = MediaTitleFormatter.format(track.title, track.artist),
                 style = typography.trackTitle,
                 color = colors.primaryText,
                 maxLines = 1,

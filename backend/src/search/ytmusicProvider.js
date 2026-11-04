@@ -25,6 +25,12 @@ const logger = require('../utils/logger');
 const searchCache = new BoundedCache({ maxSize: 1000, ttlMs: 15 * 60 * 1000 });
 const _inFlightSearches = new Map();
 
+function sourceFailureResult() {
+  const result = [];
+  Object.defineProperty(result, 'sourceFailed', { value: true, enumerable: false });
+  return result;
+}
+
 const searchMetrics = {
   cacheHits:       0,
   cacheMisses:     0,
@@ -235,10 +241,122 @@ async function getSongDetails(videoId) {
   return createTrack(data);
 }
 
+/**
+ * Fetches tracks from a YouTube Music chart playlist via the Python service.
+ *
+ * @param {object} [options={}]
+ * @param {string} [options.country='IN']
+ * @param {string} [options.language='Hindi']
+ * @param {string} [options.playlistId]
+ * @param {number} [options.limit=100]
+ * @returns {Promise<object[]>} Array of CanonicalTrack objects
+ */
+async function getChartTracks(options = {}) {
+  const country = (options.country || 'IN').toUpperCase();
+  const language = options.language || 'Hindi';
+  const playlistId = options.playlistId || '';
+  const limit = options.limit || 100;
+
+  const queryParams = new URLSearchParams({
+    country,
+    language,
+    limit: String(limit),
+  });
+  if (playlistId) {
+    queryParams.set('playlistId', playlistId);
+  }
+
+  const url = `${config.pythonYtmusicUrl}/api/charts/tracks?${queryParams.toString()}`;
+  try {
+    const res = await fetch(url, {
+      signal: AbortSignal.timeout(config.ytmusicTimeoutMs || 10000),
+      headers: { Accept: 'application/json' },
+    });
+
+    if (!res.ok) {
+      logger.warn('[YTMUSIC] Chart tracks returned non-OK', { status: res.status });
+      return [];
+    }
+
+    const data = await res.json();
+    const rawTracks = Array.isArray(data?.tracks) ? data.tracks : [];
+    return rawTracks.map(createTrack).filter(Boolean);
+  } catch (err) {
+    logger.warn('[YTMUSIC] getChartTracks failed', { error: err.message });
+    return [];
+  }
+}
+
+/**
+ * Fetches YouTube Music's native New Releases shelf.
+ *
+ * Returns album CONTAINERS, not tracks — the shelf exposes no track-level videoId,
+ * so each container must be resolved through getAlbumDetail() to obtain playable
+ * tracks. Freshness here is upstream's own editorial shelf membership plus the
+ * container type; it is NOT a verified release date.
+ *
+ * @returns {Promise<object[]>} Raw container objects ([] on any failure)
+ */
+async function getNewReleaseShelf() {
+  const url = `${config.pythonYtmusicUrl}/api/explore/new-releases`;
+  try {
+    const res = await fetch(url, {
+      signal: AbortSignal.timeout(config.ytmusicTimeoutMs || 10000),
+      headers: { Accept: 'application/json' },
+    });
+
+    if (!res.ok) {
+      logger.warn('[YTMUSIC] New releases shelf returned non-OK', { status: res.status });
+      return sourceFailureResult();
+    }
+
+    const data = await res.json();
+    return Array.isArray(data?.containers) ? data.containers : sourceFailureResult();
+  } catch (err) {
+    logger.warn('[YTMUSIC] getNewReleaseShelf failed', { error: err.message });
+    return sourceFailureResult();
+  }
+}
+
+/**
+ * Fetches one album's detail: album-level title/year/artwork plus its raw tracks.
+ *
+ * Album tracks arrive with `thumbnails: null` and carry no year of their own, which
+ * is why the caller inherits artwork and year from the album level.
+ *
+ * @param {string} browseId - Album browseId (upstream form: "MPREb_...")
+ * @returns {Promise<object|null>} Album detail, or null on any failure
+ */
+async function getAlbumDetail(browseId) {
+  if (!browseId || typeof browseId !== 'string') return null;
+
+  const url = `${config.pythonYtmusicUrl}/api/album/${encodeURIComponent(browseId)}`;
+  try {
+    const res = await fetch(url, {
+      signal: AbortSignal.timeout(config.ytmusicTimeoutMs || 10000),
+      headers: { Accept: 'application/json' },
+    });
+
+    if (!res.ok) {
+      logger.warn('[YTMUSIC] Album detail returned non-OK', { status: res.status, browseId });
+      return null;
+    }
+
+    const data = await res.json();
+    return data && typeof data === 'object' ? data : null;
+  } catch (err) {
+    logger.warn('[YTMUSIC] getAlbumDetail failed', { browseId, error: err.message });
+    return null;
+  }
+}
+
 module.exports = {
   searchSongs,
   searchMetrics,
   getWatchPlaylist,
   getRelatedSongs,
   getSongDetails,
+  getChartTracks,
+  getNewReleaseShelf,
+  getAlbumDetail,
 };

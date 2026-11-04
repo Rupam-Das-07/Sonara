@@ -93,4 +93,23 @@ class DesignSystemTest {
         assertEquals(LightSonaraColors.background, lightM3.background)
         assertEquals(LightSonaraColors.surface, lightM3.surface)
     }
+
+    @Test
+    fun verifySourceBadgeThemeColors() {
+        val darkYt = SourceBadgeTheme.colorsFor(com.example.sonara.domain.model.TrackSource.YOUTUBE_MUSIC, isDark = true)
+        assertEquals(SonaraPalette.YoutubeBadgeContainerDark, darkYt.container)
+        assertEquals(SonaraPalette.YoutubeBadgeTextDark, darkYt.text)
+
+        val lightYt = SourceBadgeTheme.colorsFor(com.example.sonara.domain.model.TrackSource.YOUTUBE_MUSIC, isDark = false)
+        assertEquals(SonaraPalette.YoutubeBadgeContainerLight, lightYt.container)
+        assertEquals(SonaraPalette.YoutubeBadgeTextLight, lightYt.text)
+
+        val darkSc = SourceBadgeTheme.colorsFor(com.example.sonara.domain.model.TrackSource.SOUNDCLOUD, isDark = true)
+        assertEquals(SonaraPalette.SoundcloudBadgeContainerDark, darkSc.container)
+        assertEquals(SonaraPalette.SoundcloudBadgeTextDark, darkSc.text)
+
+        val lightSc = SourceBadgeTheme.colorsFor(com.example.sonara.domain.model.TrackSource.SOUNDCLOUD, isDark = false)
+        assertEquals(SonaraPalette.SoundcloudBadgeContainerLight, lightSc.container)
+        assertEquals(SonaraPalette.SoundcloudBadgeTextLight, lightSc.text)
+    }
 }

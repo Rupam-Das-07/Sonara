@@ -35,9 +35,22 @@ class ArtworkUrlUpgraderTest {
     }
 
     @Test
-    fun `YouTube thumbnail urls upgraded to maxresdefault`() {
+    fun `YouTube thumbnail urls are preserved, not guessed upward`() {
+        // TEST FIX (Phase 2C): this previously asserted hqdefault -> maxresdefault. The Phase 2C
+        // rule is "Never allow a generic or guessed maxresdefault.jpg URL to masquerade as
+        // verified artwork. Verify candidate availability before treating a resolution-specific
+        // variant as usable." maxresdefault.jpg is a separate stored file that is absent for many
+        // videos, so the rewrite could replace a working thumbnail with a 404.
         val original = "https://i.ytimg.com/vi/abc/hqdefault.jpg"
-        val expected = "https://i.ytimg.com/vi/abc/maxresdefault.jpg"
-        assertEquals(expected, ArtworkUrlUpgrader.upgrade(original))
+        assertEquals(original, ArtworkUrlUpgrader.upgrade(original))
+    }
+
+    @Test
+    fun `an already maxres YouTube url is not corrupted`() {
+        // Regression: the old pattern allowed the bare alternative `default`, and
+        // `maxresdefault.jpg` ends with `default.jpg`, so this URL — the one the backend
+        // actually emits for video results — became `maxresmaxresdefault.jpg`.
+        val original = "https://i.ytimg.com/vi/abc/maxresdefault.jpg"
+        assertEquals(original, ArtworkUrlUpgrader.upgrade(original))
     }
 }

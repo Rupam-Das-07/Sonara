@@ -45,8 +45,41 @@ const Errors = {
   streamUnavailable: (msg = 'Unable to resolve audio stream') =>
     new SonaraBackendError('STREAM_UNAVAILABLE', msg, 502),
 
+  youtubeConfigMissing: (msg = 'YouTube video verification is not configured') =>
+    new SonaraBackendError('YOUTUBE_CONFIG_MISSING', msg, 503),
+
+  invalidVideoId: (msg = 'Invalid YouTube video ID') =>
+    new SonaraBackendError('INVALID_VIDEO_ID', msg, 400),
+
+  youtubeVideoNotFound: (msg = 'YouTube video not found') =>
+    new SonaraBackendError('YOUTUBE_VIDEO_NOT_FOUND', msg, 404),
+
+  youtubeQuotaExceeded: (msg = 'YouTube API quota exceeded') =>
+    new SonaraBackendError('YOUTUBE_QUOTA_EXCEEDED', msg, 429),
+
+  youtubeRateLimited: (msg = 'YouTube API rate limit exceeded') =>
+    new SonaraBackendError('YOUTUBE_RATE_LIMITED', msg, 429),
+
+  youtubeUpstreamFailure: (msg = 'YouTube API unavailable') =>
+    new SonaraBackendError('YOUTUBE_UPSTREAM_FAILURE', msg, 502),
+
+  youtubeTimeout: (msg = 'YouTube API request timed out') =>
+    new SonaraBackendError('YOUTUBE_TIMEOUT', msg, 504),
+
+  youtubeNetworkFailure: (msg = 'Unable to reach YouTube API') =>
+    new SonaraBackendError('YOUTUBE_NETWORK_ERROR', msg, 502),
+
+  youtubeMalformedResponse: (msg = 'YouTube API returned an invalid response') =>
+    new SonaraBackendError('YOUTUBE_MALFORMED_RESPONSE', msg, 502),
+
   internal: (msg = 'Internal server error') =>
     new SonaraBackendError('INTERNAL_ERROR', msg, 500),
+
+  sessionNotFound: (msg = 'Streaming session not found or server restarted') =>
+    new SonaraBackendError('SESSION_NOT_FOUND', msg, 404),
+
+  sessionExpired: (msg = 'Streaming session has expired') =>
+    new SonaraBackendError('SESSION_EXPIRED', msg, 410),
 };
 
 module.exports = { SonaraBackendError, Errors };

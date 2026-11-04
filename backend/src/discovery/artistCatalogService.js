@@ -35,6 +35,28 @@ const logger = require('../utils/logger');
 
 const artistCatalogCache = new BoundedCache({ maxSize: 500, ttlMs: 8 * 60 * 60 * 1000 }); // 8 hours
 
+// Stage C-3E — in-flight request deduplication (single-flight).
+//
+// WHY: /api/artist-catalog-deep is the heaviest upstream in the system — Python
+// wraps it in a 20s gevent timeout and it fetches an artist's full official
+// Songs playlist (up to 100 tracks) plus a deep-search supplement. Unlike every
+// other Node->Python call it had NO stampede protection on either side:
+// ytmusic_service.py keeps no cache and no in-flight map for this endpoint, and
+// the 8-hour cache above is only populated AFTER a build completes. Two requests
+// for the same artist arriving inside that multi-second window therefore each ran
+// a full catalog build. Measured at 8 concurrent identical cold requests: 8
+// upstream builds, and because a single gevent process serializes the CPU-bound
+// portion, wall clock degraded ~6x versus one build.
+//
+// This map holds the in-flight promise per cache key so concurrent callers share
+// one build. It is NOT a cache: entries are removed in a finally block as soon as
+// the build settles, so the map is bounded by genuine concurrency. Cache
+// semantics, response shape, the never-cache-an-empty-catalog rule and the
+// never-throws contract are all unchanged. Same pattern already used by
+// ytmusicProvider.searchSongs, ytmusicProvider._detailGet,
+// recommendationService and featuredArtistsService.refreshWithLock.
+const _inFlightCatalogs = new Map();
+
 // Python's /api/artist-catalog-deep wraps its work in a 20s gevent timeout.
 const DEEP_CATALOG_TIMEOUT_MS = 21000;
 const SEARCH_FALLBACK_TIMEOUT_MS = 8000;
@@ -64,11 +86,11 @@ function isJunkVariant(title) {
 }
 
 function normalizeTitle(title) {
-  let t = (title || '').toLowerCase();
+  let t = typeof title === 'string' ? title.normalize('NFC').toLowerCase() : '';
   t = t.replace(/\(from\s+"[^"]*"\)/gi, '');
   t = t.replace(/\([^)]*\)/g, '');
   t = t.replace(/\[[^\]]*\]/g, '');
-  t = t.replace(/[^a-z0-9]/g, '');
+  t = t.replace(/[^\p{L}\p{N}\p{M}]+/gu, '');
   return t;
 }
 
@@ -168,26 +190,18 @@ async function searchFallback(artistName, browseId) {
 }
 
 /**
- * Builds an artist catalog, preferring the deep YTMusic endpoint.
+ * Performs one real catalog build: deep endpoint, search fallback, cache write.
  *
- * @param {string} browseId - YTMusic artist browseId, may be null.
- * @param {string} artistName - Display name, may be null if browseId is known.
- * @returns {Promise<object>} Catalog object. Never throws; degrades to empty.
+ * Extracted from [generateArtistCatalog] so that concurrent callers for the same
+ * artist can share a single execution. The logic, the error degradation and the
+ * never-cache-an-empty-catalog rule are byte-for-byte the previous behaviour.
+ *
+ * @param {string|null} resolvedBrowseId
+ * @param {string} resolvedName
+ * @param {string} cacheKey
+ * @returns {Promise<object>} Catalog object. Never throws.
  */
-async function generateArtistCatalog(browseId, artistName) {
-  // The route derives artistName as `req.query.name || browseId`, so either
-  // position may hold either kind of value. Normalize before doing anything.
-  const resolvedBrowseId = isRealBrowseId(browseId) ? browseId : null;
-  const resolvedName = isRealBrowseId(artistName) ? '' : (artistName || browseId || '');
-
-  if (!resolvedBrowseId && !resolvedName) {
-    return emptyCatalog('', null);
-  }
-
-  const cacheKey = `artist:${resolvedBrowseId || resolvedName.toLowerCase().trim()}`;
-  const cached = artistCatalogCache.get(cacheKey);
-  if (cached) return cached;
-
+async function _buildCatalog(resolvedBrowseId, resolvedName, cacheKey) {
   try {
     const params = new URLSearchParams();
     if (resolvedName) params.append('artistName', resolvedName);
@@ -230,6 +244,46 @@ async function generateArtistCatalog(browseId, artistName) {
     logger.warn(`[artistCatalogService] Failed to generate catalog for ${resolvedBrowseId || resolvedName}: ${err.message}`);
     return emptyCatalog(resolvedName, resolvedBrowseId);
   }
+}
+
+/**
+ * Builds an artist catalog, preferring the deep YTMusic endpoint.
+ *
+ * Concurrent calls for the same artist share one upstream build (see
+ * [_inFlightCatalogs]); the cache is still consulted first, so a warm hit never
+ * touches the map.
+ *
+ * @param {string} browseId - YTMusic artist browseId, may be null.
+ * @param {string} artistName - Display name, may be null if browseId is known.
+ * @returns {Promise<object>} Catalog object. Never throws; degrades to empty.
+ */
+async function generateArtistCatalog(browseId, artistName) {
+  // The route derives artistName as `req.query.name || browseId`, so either
+  // position may hold either kind of value. Normalize before doing anything.
+  const resolvedBrowseId = isRealBrowseId(browseId) ? browseId : null;
+  const resolvedName = isRealBrowseId(artistName) ? '' : (artistName || browseId || '');
+
+  if (!resolvedBrowseId && !resolvedName) {
+    return emptyCatalog('', null);
+  }
+
+  const cacheKey = `artist:${resolvedBrowseId || resolvedName.toLowerCase().trim()}`;
+  const cached = artistCatalogCache.get(cacheKey);
+  if (cached) return cached;
+
+  // Join an identical build already in progress rather than starting a second one.
+  const inFlight = _inFlightCatalogs.get(cacheKey);
+  if (inFlight) return inFlight;
+
+  // Registered synchronously (before the first await inside _buildCatalog) so two
+  // callers in the same tick cannot both miss and both start a build.
+  const build = _buildCatalog(resolvedBrowseId, resolvedName, cacheKey)
+    .finally(() => {
+      _inFlightCatalogs.delete(cacheKey);
+    });
+
+  _inFlightCatalogs.set(cacheKey, build);
+  return build;
 }
 
 module.exports = { generateArtistCatalog, isJunkVariant, normalizeTitle, isRealBrowseId };

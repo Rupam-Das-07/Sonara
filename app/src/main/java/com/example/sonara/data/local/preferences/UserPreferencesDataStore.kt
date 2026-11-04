@@ -11,12 +11,14 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.example.sonara.domain.model.AppLanguage
 import com.example.sonara.domain.model.AudioQuality
+import com.example.sonara.domain.model.ColorPalette
 import com.example.sonara.domain.model.DownloadFileFormat
 import com.example.sonara.domain.model.DownloadLocationMode
 import com.example.sonara.domain.model.PlaybackSessionSnapshot
 import com.example.sonara.domain.model.SearchMode
 import com.example.sonara.domain.model.ThemeMode
 import com.example.sonara.domain.model.UserPreferences
+import com.example.sonara.domain.model.video.VideoQuality
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.firstOrNull
@@ -28,15 +30,22 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
 /**
  * Preferences DataStore wrapper for app settings, streaming/download quality, and session checkpoints.
  *
- * All Phase 1 additions use safe defaults that are backward-compatible:
+ * All Phase 1 & Phase 2 additions use safe defaults that are backward-compatible:
  * - Existing users on earlier versions will receive the default value for any new key.
  * - No migrations or re-creates are needed; DataStore handles missing keys gracefully.
  */
-class UserPreferencesDataStore(private val context: Context) {
+class UserPreferencesDataStore(
+    private val context: Context? = null,
+    private val customDataStore: DataStore<Preferences>? = null
+) {
+
+    private val dataStore: DataStore<Preferences>
+        get() = customDataStore ?: requireNotNull(context) { "Context must be provided if customDataStore is null" }.dataStore
 
     companion object {
         // ─── Existing keys ────────────────────────────────────────────────────────
         private val KEY_THEME_MODE           = stringPreferencesKey("theme_mode")
+        private val KEY_SELECTED_PALETTE     = stringPreferencesKey("selected_palette")
         private val KEY_SHOW_ROMANIZED       = booleanPreferencesKey("show_romanized")
         private val KEY_RESTORE_SESSION      = booleanPreferencesKey("restore_session")
         private val KEY_DEFAULT_SEARCH_MODE  = stringPreferencesKey("default_search_mode")
@@ -44,9 +53,11 @@ class UserPreferencesDataStore(private val context: Context) {
         private val KEY_STREAMING_QUALITY    = stringPreferencesKey("streaming_quality")
         private val KEY_DOWNLOAD_QUALITY     = stringPreferencesKey("download_quality")
         private val KEY_DOWNLOAD_WIFI_ONLY   = booleanPreferencesKey("download_wifi_only")
+        private val KEY_DEFAULT_VIDEO_QUALITY = stringPreferencesKey("default_video_quality")
         private val KEY_LAST_TRACK_ID        = stringPreferencesKey("last_track_id")
         private val KEY_LAST_POSITION_MS     = longPreferencesKey("last_position_ms")
         private val KEY_LAST_QUEUE_IDS       = stringPreferencesKey("last_queue_ids")
+        private val KEY_PLAYBACK_SESSION_ID  = stringPreferencesKey("playback_session_id")
 
         // ─── Phase 1 additions ────────────────────────────────────────────────────
         private val KEY_APP_LANGUAGE            = stringPreferencesKey("app_language")
@@ -69,7 +80,7 @@ class UserPreferencesDataStore(private val context: Context) {
         private const val BAND_COUNT = 5
     }
 
-    val userPreferences: Flow<UserPreferences> = context.dataStore.data
+    val userPreferences: Flow<UserPreferences> = dataStore.data
         .catch { exception ->
             if (exception is IOException) {
                 emit(emptyPreferences())
@@ -80,6 +91,7 @@ class UserPreferencesDataStore(private val context: Context) {
         .map { preferences ->
             // ─── Existing fields ──────────────────────────────────────────────────
             val themeMode = safeEnum(preferences[KEY_THEME_MODE], ThemeMode.SYSTEM) { ThemeMode.valueOf(it) }
+            val selectedPalette = safeEnum(preferences[KEY_SELECTED_PALETTE], ColorPalette.SONARA_CLASSIC) { ColorPalette.valueOf(it) }
             val showRomanized = preferences[KEY_SHOW_ROMANIZED] ?: true
             val restorePlaybackSession = preferences[KEY_RESTORE_SESSION] ?: true
             val defaultSearchMode = safeEnum(preferences[KEY_DEFAULT_SEARCH_MODE], SearchMode.SONGS) { SearchMode.valueOf(it) }
@@ -87,6 +99,7 @@ class UserPreferencesDataStore(private val context: Context) {
             val streamingQuality = safeEnum(preferences[KEY_STREAMING_QUALITY], AudioQuality.AUTO) { AudioQuality.valueOf(it) }
             val downloadQuality = safeEnum(preferences[KEY_DOWNLOAD_QUALITY], AudioQuality.VERY_HIGH) { AudioQuality.valueOf(it) }
             val downloadOverWifiOnly = preferences[KEY_DOWNLOAD_WIFI_ONLY] ?: false
+            val defaultVideoQuality = VideoQuality.fromName(preferences[KEY_DEFAULT_VIDEO_QUALITY])
 
             // ─── Phase 1 fields ───────────────────────────────────────────────────
             val appLanguage = AppLanguage.fromName(preferences[KEY_APP_LANGUAGE] ?: AppLanguage.SYSTEM_DEFAULT.name)
@@ -98,6 +111,7 @@ class UserPreferencesDataStore(private val context: Context) {
 
             UserPreferences(
                 themeMode = themeMode,
+                selectedPalette = selectedPalette,
                 showRomanized = showRomanized,
                 restorePlaybackSession = restorePlaybackSession,
                 defaultSearchMode = defaultSearchMode,
@@ -105,6 +119,7 @@ class UserPreferencesDataStore(private val context: Context) {
                 streamingQuality = streamingQuality,
                 downloadQuality = downloadQuality,
                 downloadOverWifiOnly = downloadOverWifiOnly,
+                defaultVideoQuality = defaultVideoQuality,
                 appLanguage = appLanguage,
                 equalizerEnabled = equalizerEnabled,
                 equalizerBandGains = equalizerBandGains,
@@ -117,40 +132,49 @@ class UserPreferencesDataStore(private val context: Context) {
     // ─── Existing setters ─────────────────────────────────────────────────────
 
     suspend fun setThemeMode(mode: ThemeMode) {
-        context.dataStore.edit { it[KEY_THEME_MODE] = mode.name }
+        dataStore.edit { it[KEY_THEME_MODE] = mode.name }
+    }
+
+    suspend fun setSelectedPalette(palette: ColorPalette) {
+        dataStore.edit { it[KEY_SELECTED_PALETTE] = palette.name }
     }
 
     suspend fun setShowRomanized(show: Boolean) {
-        context.dataStore.edit { it[KEY_SHOW_ROMANIZED] = show }
+        dataStore.edit { it[KEY_SHOW_ROMANIZED] = show }
     }
 
     suspend fun setRestorePlaybackSession(enabled: Boolean) {
-        context.dataStore.edit { it[KEY_RESTORE_SESSION] = enabled }
+        dataStore.edit { it[KEY_RESTORE_SESSION] = enabled }
     }
 
     suspend fun setDefaultSearchMode(mode: SearchMode) {
-        context.dataStore.edit { it[KEY_DEFAULT_SEARCH_MODE] = mode.name }
+        dataStore.edit { it[KEY_DEFAULT_SEARCH_MODE] = mode.name }
     }
 
     suspend fun setReduceMotion(enabled: Boolean) {
-        context.dataStore.edit { it[KEY_REDUCE_MOTION] = enabled }
+        dataStore.edit { it[KEY_REDUCE_MOTION] = enabled }
     }
 
     suspend fun setStreamingQuality(quality: AudioQuality) {
-        context.dataStore.edit { it[KEY_STREAMING_QUALITY] = quality.name }
+        dataStore.edit { it[KEY_STREAMING_QUALITY] = quality.name }
     }
 
     suspend fun setDownloadQuality(quality: AudioQuality) {
-        context.dataStore.edit { it[KEY_DOWNLOAD_QUALITY] = quality.name }
+        dataStore.edit { it[KEY_DOWNLOAD_QUALITY] = quality.name }
     }
 
     suspend fun setDownloadOverWifiOnly(wifiOnly: Boolean) {
-        context.dataStore.edit { it[KEY_DOWNLOAD_WIFI_ONLY] = wifiOnly }
+        dataStore.edit { it[KEY_DOWNLOAD_WIFI_ONLY] = wifiOnly }
+    }
+
+    suspend fun setDefaultVideoQuality(quality: VideoQuality) {
+        dataStore.edit { it[KEY_DEFAULT_VIDEO_QUALITY] = quality.name }
     }
 
     suspend fun resetSettings() {
-        context.dataStore.edit { preferences ->
+        dataStore.edit { preferences ->
             preferences.remove(KEY_THEME_MODE)
+            preferences.remove(KEY_SELECTED_PALETTE)
             preferences.remove(KEY_SHOW_ROMANIZED)
             preferences.remove(KEY_RESTORE_SESSION)
             preferences.remove(KEY_DEFAULT_SEARCH_MODE)
@@ -158,6 +182,7 @@ class UserPreferencesDataStore(private val context: Context) {
             preferences.remove(KEY_STREAMING_QUALITY)
             preferences.remove(KEY_DOWNLOAD_QUALITY)
             preferences.remove(KEY_DOWNLOAD_WIFI_ONLY)
+            preferences.remove(KEY_DEFAULT_VIDEO_QUALITY)
             // Phase 1 fields — also reset to defaults
             preferences.remove(KEY_APP_LANGUAGE)
             preferences.remove(KEY_EQUALIZER_ENABLED)
@@ -172,11 +197,11 @@ class UserPreferencesDataStore(private val context: Context) {
     // ─── Phase 1 setters ──────────────────────────────────────────────────────
 
     suspend fun setAppLanguage(language: AppLanguage) {
-        context.dataStore.edit { it[KEY_APP_LANGUAGE] = language.name }
+        dataStore.edit { it[KEY_APP_LANGUAGE] = language.name }
     }
 
     suspend fun setEqualizerEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[KEY_EQUALIZER_ENABLED] = enabled }
+        dataStore.edit { it[KEY_EQUALIZER_ENABLED] = enabled }
     }
 
     /**
@@ -185,23 +210,23 @@ class UserPreferencesDataStore(private val context: Context) {
      */
     suspend fun setEqualizerBandGains(gains: List<Int>) {
         if (gains.size != BAND_COUNT) return
-        context.dataStore.edit { it[KEY_EQUALIZER_BAND_GAINS] = gains.joinToString(",") }
+        dataStore.edit { it[KEY_EQUALIZER_BAND_GAINS] = gains.joinToString(",") }
     }
 
     suspend fun setStopMusicOnTaskClear(enabled: Boolean) {
-        context.dataStore.edit { it[KEY_STOP_MUSIC_ON_TASK_CLEAR] = enabled }
+        dataStore.edit { it[KEY_STOP_MUSIC_ON_TASK_CLEAR] = enabled }
     }
 
     suspend fun setDownloadFileFormat(format: DownloadFileFormat) {
-        context.dataStore.edit { it[KEY_DOWNLOAD_FILE_FORMAT] = format.name }
+        dataStore.edit { it[KEY_DOWNLOAD_FILE_FORMAT] = format.name }
     }
 
     suspend fun setDownloadLocationMode(mode: DownloadLocationMode) {
-        context.dataStore.edit { it[KEY_DOWNLOAD_LOCATION_MODE] = mode.name }
+        dataStore.edit { it[KEY_DOWNLOAD_LOCATION_MODE] = mode.name }
     }
 
     suspend fun setDownloadLocationUri(uri: String?) {
-        context.dataStore.edit { preferences ->
+        dataStore.edit { preferences ->
             if (uri != null) {
                 preferences[KEY_DOWNLOAD_LOCATION_URI] = uri
             } else {
@@ -212,14 +237,14 @@ class UserPreferencesDataStore(private val context: Context) {
 
     /** Read the currently stored SAF URI, or null if none. */
     suspend fun getDownloadLocationUri(): String? {
-        val preferences = context.dataStore.data.firstOrNull() ?: return null
+        val preferences = dataStore.data.firstOrNull() ?: return null
         return preferences[KEY_DOWNLOAD_LOCATION_URI]
     }
 
     // ─── Session checkpoint ───────────────────────────────────────────────────
 
     suspend fun savePlaybackSession(snapshot: PlaybackSessionSnapshot) {
-        context.dataStore.edit { preferences ->
+        dataStore.edit { preferences ->
             if (snapshot.lastTrackId != null) {
                 preferences[KEY_LAST_TRACK_ID] = snapshot.lastTrackId
             } else {
@@ -227,22 +252,29 @@ class UserPreferencesDataStore(private val context: Context) {
             }
             preferences[KEY_LAST_POSITION_MS] = snapshot.lastPositionMs
             preferences[KEY_LAST_QUEUE_IDS] = snapshot.queueTrackIds.joinToString(",")
+            if (snapshot.playbackSessionId.isNullOrBlank()) {
+                preferences.remove(KEY_PLAYBACK_SESSION_ID)
+            } else {
+                preferences[KEY_PLAYBACK_SESSION_ID] = snapshot.playbackSessionId
+            }
         }
     }
 
     suspend fun getPlaybackSession(): PlaybackSessionSnapshot? {
-        val preferences = context.dataStore.data.firstOrNull() ?: return null
+        val preferences = dataStore.data.firstOrNull() ?: return null
         val trackId = preferences[KEY_LAST_TRACK_ID]
         val positionMs = preferences[KEY_LAST_POSITION_MS] ?: 0L
         val queueIdsString = preferences[KEY_LAST_QUEUE_IDS] ?: ""
         val queueIds = if (queueIdsString.isNotEmpty()) queueIdsString.split(",") else emptyList()
+        val playbackSessionId = preferences[KEY_PLAYBACK_SESSION_ID]?.takeIf { it.isNotBlank() }
 
         if (trackId == null && queueIds.isEmpty()) return null
 
         return PlaybackSessionSnapshot(
             lastTrackId = trackId,
             lastPositionMs = positionMs,
-            queueTrackIds = queueIds
+            queueTrackIds = queueIds,
+            playbackSessionId = playbackSessionId
         )
     }
 

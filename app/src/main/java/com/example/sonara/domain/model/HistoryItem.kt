@@ -7,5 +7,7 @@ data class HistoryItem(
     val id: Long = 0L,
     val track: Track,
     val listenedAt: Long = System.currentTimeMillis(),
-    val completed: Boolean = false
+    val completed: Boolean = false,
+    val sourceSection: PlaybackOrigin = PlaybackOrigin.LEGACY_UNKNOWN,
+    val playbackSessionId: String = ""
 )

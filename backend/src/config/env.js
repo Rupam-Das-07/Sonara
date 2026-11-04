@@ -46,6 +46,11 @@ const config = {
   port: parseInt(requireEnv('PORT', '3002'), 10),
   nodeEnv: initialNodeEnv,
 
+  // Optional YouTube Data API v3 credential. The video status endpoint checks
+  // this at request time so a missing deployment secret is reported as a
+  // sanitized service configuration error rather than crashing startup.
+  youtubeDataApiKey: (process.env.YOUTUBE_DATA_API_KEY || '').trim(),
+
   // Internal Python service URLs — internal only, never exposed to clients
   pythonYtmusicUrl: requireEnv('PYTHON_YTMUSIC_URL', 'http://127.0.0.1:5000'),
   pythonAudioUrl: requireEnv('PYTHON_AUDIO_URL', 'http://127.0.0.1:5001'),
@@ -54,6 +59,7 @@ const config = {
   ytmusicTimeoutMs: parseInt(requireEnv('YTMUSIC_TIMEOUT_MS', '8000'), 10),
   streamResolveTimeoutMs: parseInt(requireEnv('STREAM_RESOLVE_TIMEOUT_MS', '30000'), 10),
   searchTimeoutMs: parseInt(requireEnv('SEARCH_TIMEOUT_MS', '12000'), 10),
+  youtubeDataApiTimeoutMs: parseInt(requireEnv('YOUTUBE_DATA_API_TIMEOUT_MS', '8000'), 10),
 
   // Rate limits
   searchRateLimitMax: parseInt(requireEnv('SEARCH_RATE_LIMIT_MAX', '60'), 10),

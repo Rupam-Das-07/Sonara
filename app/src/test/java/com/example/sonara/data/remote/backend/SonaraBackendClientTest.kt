@@ -100,19 +100,42 @@ class SonaraBackendClientTest {
     }
 
     @Test
-    fun `TrackMapper upgrades ytimg artwork URL`() {
-        val track = TrackMapper.map(
-            "abc", "T", "A", "", 0,
-            "https://i.ytimg.com/vi/abc/hqdefault.jpg"
-        )
-        // ArtworkUrlUpgrader should upgrade to maxresdefault
-        assertTrue("Expected maxresdefault", track?.artworkUrl?.contains("maxresdefault") == true)
+    fun `TrackMapper preserves ytimg artwork URL`() {
+        val raw = "https://i.ytimg.com/vi/abc/hqdefault.jpg"
+        val track = TrackMapper.map("abc", "T", "A", "", 0, raw)
+        // TEST FIX (Phase 2C): previously asserted the URL was upgraded to maxresdefault.
+        // A resolution-specific ytimg variant is a different stored asset, not a resize, so it
+        // must be preserved rather than guessed upward.
+        assertEquals(raw, track?.artworkUrl)
     }
 
     @Test
     fun `TrackMapper returns null artworkUrl when rawArtworkUrl is null`() {
         val track = TrackMapper.map("abc", "T", "A", "", 0, null)
         assertNull(track?.artworkUrl)
+    }
+
+    @Test
+    fun `featured roster image boundary preserves trusted HTTPS URLs`() {
+        val url = "https://yt3.ggpht.com/avatar=w540-h540-p-l90-rj"
+
+        assertEquals(url, sanitizeFeaturedArtistImageUrl(url))
+    }
+
+    @Test
+    fun `featured roster image boundary maps invalid URLs to null`() {
+        val invalidUrls = listOf(
+            "http://yt3.ggpht.com/avatar",
+            "https://user:pass@yt3.ggpht.com/avatar",
+            "https://yt3.ggpht.com:8443/avatar",
+            "not a URL",
+            "https://example.com/avatar.jpg",
+            null
+        )
+
+        for (url in invalidUrls) {
+            assertNull("Invalid roster image must be rejected: $url", sanitizeFeaturedArtistImageUrl(url))
+        }
     }
 
     // -------------------------------------------------------------------------

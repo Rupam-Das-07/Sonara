@@ -56,6 +56,7 @@ import com.example.sonara.core.ui.components.SonaraErrorBanner
 import com.example.sonara.core.ui.components.SonaraLoadingIndicator
 import com.example.sonara.core.ui.components.TrackContextMenuSheet
 import com.example.sonara.core.ui.theme.SonaraTheme
+import com.example.sonara.domain.model.PlaybackOrigin
 import com.example.sonara.domain.model.SearchMode
 import com.example.sonara.domain.model.SearchSuggestion
 import com.example.sonara.domain.model.Track
@@ -80,11 +81,22 @@ fun SearchScreen(
     },
     onSelectMode: (SearchMode) -> Unit,
     onPlayTrack: (Track) -> Unit,
+    onPlayVideo: (Track) -> Unit = onPlayTrack,
+    /**
+     * Phase 2B: play intent carrying this screen's provenance. The origin is derived from
+     * the active search MODE, not from the screen's identity — the Songs and Videos tabs
+     * render through the same list, so only [SearchMode.SONGS] may yield the eligible
+     * [PlaybackOrigin.SEARCH_SONGS]; Videos is explicitly [PlaybackOrigin.VIDEO_SEARCH].
+     */
+    onPlayTrackWithOrigin: (Track, PlaybackOrigin) -> Unit = { track, _ -> onPlayTrack(track) },
+    onPlayTrackWithContext: (Track, PlaybackOrigin, List<Track>) -> Unit = { track, origin, _ ->
+        onPlayTrackWithOrigin(track, origin)
+    },
     onToggleLike: (Track, Boolean) -> Unit,
     isLiked: (String) -> Boolean,
     onDeleteHistoryEntry: (Long) -> Unit,
     onClearHistory: () -> Unit,
-    onPlayNext: (Track) -> Unit = {},
+    onPlayNext: (Track, PlaybackOrigin) -> Unit = { _, _ -> },
     onAddToPlaylist: ((Track) -> Unit)? = null,
     onCreatePlaylistWithSong: ((Track) -> Unit)? = null,
     modifier: Modifier = Modifier
@@ -321,9 +333,20 @@ fun SearchScreen(
                             TrackRowItem(
                                 track = track,
                                 isLiked = isLiked(track.id),
-                                onPlay = { onPlayTrack(track) },
+                                onPlay = {
+                                    if (state.activeMode == SearchMode.VIDEOS) {
+                                        onPlayVideo(track)
+                                    } else {
+                                         onPlayTrackWithContext(track, PlaybackOrigin.SEARCH_SONGS, modeState.tracks)
+                                    }
+                                },
                                 onToggleLike = { liked -> onToggleLike(track, liked) },
-                                onLongClick = { contextMenuTrack = track }
+                                onLongClick = if (state.activeMode == SearchMode.SONGS) {
+                                    { contextMenuTrack = track }
+                                } else {
+                                    null
+                                },
+                                isVideo = state.activeMode == SearchMode.VIDEOS
                             )
                         }
                         item {
@@ -347,15 +370,15 @@ fun SearchScreen(
         )
     }
 
-    contextMenuTrack?.let { track ->
+    contextMenuTrack?.takeIf { state.activeMode == SearchMode.SONGS }?.let { track ->
         TrackContextMenuSheet(
             track = track,
             onPlayNext = {
-                onPlayNext(track)
+                onPlayNext(track, searchPlaybackOrigin(state.activeMode))
                 contextMenuTrack = null
             },
             onPlayNow = {
-                onPlayTrack(track)
+                 onPlayTrackWithContext(track, searchPlaybackOrigin(state.activeMode), (state.currentModeState as? ModeSearchState.Success)?.tracks.orEmpty())
                 contextMenuTrack = null
             },
             onAddToPlaylist = onAddToPlaylist?.let { callback ->
@@ -452,4 +475,18 @@ private fun SearchModeTabSwitcher(
             }
         }
     }
+}
+
+/**
+ * Provenance of a play initiated from the search surface (Phase 2B).
+ *
+ * The Songs and Videos tabs share one track list and one play callback, so the ONLY
+ * trustworthy discriminator is the active [SearchMode]. Mapping is exhaustive and fails
+ * closed: anything that is not [SearchMode.SONGS] is ineligible.
+ *
+ * Deliberately a top-level pure function so the mapping is unit-testable without Compose.
+ */
+internal fun searchPlaybackOrigin(mode: SearchMode): PlaybackOrigin = when (mode) {
+    SearchMode.SONGS -> PlaybackOrigin.SEARCH_SONGS
+    SearchMode.VIDEOS -> PlaybackOrigin.VIDEO_SEARCH
 }

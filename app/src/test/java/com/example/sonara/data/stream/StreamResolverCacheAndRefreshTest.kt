@@ -6,6 +6,7 @@ import com.example.sonara.domain.model.StreamInfo
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -210,6 +211,114 @@ class StreamResolverCacheAndRefreshTest {
             1,
             calls.get()
         )
+    }
+
+    @Test
+    fun `clearCache isolates newer in-flight work and prevents stale completion from repopulating cache`() = runBlocking {
+        val firstEntered = CompletableDeferred<Unit>()
+        val secondEntered = CompletableDeferred<Unit>()
+        val releaseFirst = CompletableDeferred<Unit>()
+        val releaseSecond = CompletableDeferred<Unit>()
+        val calls = AtomicInteger(0)
+        val backend = object : SonaraBackendClient() {
+            override suspend fun getStreamUrl(
+                videoId: String,
+                quality: AudioQuality,
+                title: String,
+                artist: String,
+                durationSeconds: Int
+            ): Result<StreamInfo> {
+                val callNumber = calls.incrementAndGet()
+                when (callNumber) {
+                    1 -> {
+                        firstEntered.complete(Unit)
+                        releaseFirst.await()
+                    }
+                    2 -> {
+                        secondEntered.complete(Unit)
+                        releaseSecond.await()
+                    }
+                }
+                return Result.success(
+                    StreamInfo(
+                        trackId = videoId,
+                        streamUrl = "https://stream/$videoId#v$callNumber",
+                        expiresAt = System.currentTimeMillis() + 3_600_000L
+                    )
+                )
+            }
+        }
+        val resolver = StreamResolverImpl(backend)
+
+        val first = async(Dispatchers.Default) { resolver.resolveStream("clearRace") }
+        firstEntered.await()
+
+        resolver.clearCache()
+        val second = async(Dispatchers.Default) { resolver.resolveStream("clearRace") }
+        secondEntered.await()
+
+        // Finish the pre-clear request first. Its result must not enter the cleared cache,
+        // and its cleanup must not remove the post-clear request from the registry.
+        releaseFirst.complete(Unit)
+        val firstResult = first.await()
+
+        // The third caller is started while the post-clear request is still blocked. It must
+        // join request #2 rather than see stale #1 data or start request #3.
+        val joined = async(Dispatchers.Default) { resolver.resolveStream("clearRace") }
+        releaseSecond.complete(Unit)
+
+        assertTrue(firstResult.isSuccess)
+        assertEquals("https://stream/clearRace#v1", firstResult.getOrNull()?.streamUrl)
+        assertEquals("https://stream/clearRace#v2", second.await().getOrNull()?.streamUrl)
+        assertEquals("https://stream/clearRace#v2", joined.await().getOrNull()?.streamUrl)
+        assertEquals(
+            "clearCache must isolate the replacement request without breaking deduplication",
+            2,
+            calls.get()
+        )
+        assertEquals(
+            "the replacement result is the only value cached after invalidation",
+            "https://stream/clearRace#v2",
+            resolver.resolveStream("clearRace").getOrNull()?.streamUrl
+        )
+        assertEquals(2, calls.get())
+    }
+
+    @Test
+    fun `cancelled leader is cleaned up so a later resolve can retry`() = runBlocking {
+        val entered = CompletableDeferred<Unit>()
+        val calls = AtomicInteger(0)
+        val backend = object : SonaraBackendClient() {
+            override suspend fun getStreamUrl(
+                videoId: String,
+                quality: AudioQuality,
+                title: String,
+                artist: String,
+                durationSeconds: Int
+            ): Result<StreamInfo> {
+                if (calls.incrementAndGet() == 1) {
+                    entered.complete(Unit)
+                    CompletableDeferred<Unit>().await()
+                }
+                return Result.success(
+                    StreamInfo(
+                        trackId = videoId,
+                        streamUrl = "https://stream/$videoId#retry",
+                        expiresAt = System.currentTimeMillis() + 3_600_000L
+                    )
+                )
+            }
+        }
+        val resolver = StreamResolverImpl(backend)
+
+        val cancelled = async(Dispatchers.Default) { resolver.resolveStream("cancelRace") }
+        entered.await()
+        cancelled.cancelAndJoin()
+
+        val retry = resolver.resolveStream("cancelRace")
+        assertTrue(retry.isSuccess)
+        assertEquals("https://stream/cancelRace#retry", retry.getOrNull()?.streamUrl)
+        assertEquals("the cancelled request must not leave a stuck in-flight entry", 2, calls.get())
     }
 
     // ---------------------------------------------------------------------------------------

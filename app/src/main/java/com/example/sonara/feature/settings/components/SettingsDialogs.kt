@@ -31,6 +31,7 @@ import com.example.sonara.R
 import com.example.sonara.core.ui.theme.SonaraTheme
 import com.example.sonara.domain.model.AppLanguage
 import com.example.sonara.domain.model.AudioQuality
+import com.example.sonara.domain.model.video.VideoQuality
 import com.example.sonara.domain.model.DownloadFileFormat
 import com.example.sonara.domain.model.DownloadLocationMode
 import com.example.sonara.domain.model.SearchMode
@@ -296,6 +297,58 @@ fun DownloadQualitySelectorDialog(
 }
 
 @Composable
+fun VideoQualitySelectorDialog(
+    currentQuality: VideoQuality,
+    onSelect: (VideoQuality) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val colors = SonaraTheme.colors
+    val typography = SonaraTheme.typography
+    val dimensions = SonaraTheme.dimensions
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = colors.surface,
+        shape = RoundedCornerShape(12.dp),
+        title = {
+            Text(
+                text = stringResource(R.string.setting_default_video_quality),
+                style = typography.cardTitle,
+                color = colors.primaryText
+            )
+        },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                VideoQuality.defaultQualityTiers.forEach { quality ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelect(quality) }
+                            .padding(vertical = dimensions.spaceSm),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(dimensions.spaceMd)
+                    ) {
+                        RadioButton(
+                            selected = currentQuality == quality,
+                            onClick = { onSelect(quality) },
+                            colors = RadioButtonDefaults.colors(
+                                selectedColor = colors.accent,
+                                unselectedColor = colors.secondaryText
+                            )
+                        )
+                        Text(quality.label, style = typography.body, color = colors.primaryText)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.action_close), color = colors.accent, style = typography.buttonLabel)
+            }
+        }
+    )
+}
+
+@Composable
 fun ClearDownloadsConfirmationDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit
@@ -328,7 +381,7 @@ fun ClearDownloadsConfirmationDialog(
                     onDismiss()
                 }
             ) {
-                Text(stringResource(R.string.action_clear), color = Color(0xFFE57373), style = typography.buttonLabel)
+                Text(stringResource(R.string.action_clear), color = colors.error, style = typography.buttonLabel)
             }
         },
         dismissButton = {
@@ -372,7 +425,7 @@ fun ClearHistoryConfirmationDialog(
                     onDismiss()
                 }
             ) {
-                Text(stringResource(R.string.action_clear), color = Color(0xFFE57373), style = typography.buttonLabel)
+                Text(stringResource(R.string.action_clear), color = colors.error, style = typography.buttonLabel)
             }
         },
         dismissButton = {
@@ -416,7 +469,7 @@ fun ResetSettingsConfirmationDialog(
                     onDismiss()
                 }
             ) {
-                Text(stringResource(R.string.action_reset), color = Color(0xFFE57373), style = typography.buttonLabel)
+                Text(stringResource(R.string.action_reset), color = colors.error, style = typography.buttonLabel)
             }
         },
         dismissButton = {

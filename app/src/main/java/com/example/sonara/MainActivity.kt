@@ -28,6 +28,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.sonara.domain.model.AppLanguage
+import com.example.sonara.domain.model.PlaybackOrigin
 import com.example.sonara.domain.model.ThemeMode
 import com.example.sonara.domain.model.Track
 import com.example.sonara.feature.home.HomeViewModel
@@ -39,6 +40,7 @@ import com.example.sonara.feature.playlist.PlaylistViewModel
 import com.example.sonara.feature.search.SearchViewModel
 import com.example.sonara.feature.settings.SettingsViewModel
 import com.example.sonara.feature.shell.SonaraAppRoot
+import com.example.sonara.feature.video.VideoPlaybackViewModel
 import com.example.sonara.playback.service.SonaraPlaybackService
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
@@ -50,6 +52,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var searchViewModel: SearchViewModel
     private lateinit var playerViewModel: PlayerViewModel
     private lateinit var lyricsViewModel: LyricsViewModel
+    private lateinit var videoPlaybackViewModel: VideoPlaybackViewModel
 
     private var expandPlayerTrigger by mutableLongStateOf(0L)
 
@@ -73,7 +76,6 @@ class MainActivity : ComponentActivity() {
                     downloadRepository = appContainer.downloadRepository,
                     settingsRepository = appContainer.settingsRepository,
                     audioOutputRepository = appContainer.audioOutputRepository,
-                    historyRepository = appContainer.historyRepository,
                     queueEngine = appContainer.playbackQueueEngine,
                     transitionManager = appContainer.transitionManager
                 ) as T
@@ -102,6 +104,20 @@ class MainActivity : ComponentActivity() {
                 ) as T
             }
         })[LyricsViewModel::class.java]
+
+        videoPlaybackViewModel = ViewModelProvider(this, object : ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : ViewModel> create(modelClass: Class<T>): T =
+                VideoPlaybackViewModel(
+                    backendClient = appContainer.backendClient,
+                    videoExtractor = appContainer.videoExtractor,
+                    mediaControllerClient = appContainer.mediaControllerClient,
+                    transitionManager = appContainer.transitionManager,
+                    settingsRepository = appContainer.settingsRepository,
+                    playbackRouteCoordinator = appContainer.playbackRouteCoordinator,
+                    highResRepository = appContainer.highResVideoRepository
+                ) as T
+        })[VideoPlaybackViewModel::class.java]
 
         setContent {
             val userPreferences by appContainer.settingsRepository.getUserPreferences()
@@ -180,7 +196,8 @@ class MainActivity : ComponentActivity() {
                     override fun <T : ViewModel> create(modelClass: Class<T>): T {
                         return LibraryViewModel(
                             libraryRepository = appContainer.libraryRepository,
-                            historyRepository = appContainer.historyRepository
+                            historyRepository = appContainer.historyRepository,
+                            downloadRepository = appContainer.downloadRepository
                         ) as T
                     }
                 }
@@ -253,10 +270,13 @@ class MainActivity : ComponentActivity() {
                     searchViewModel = searchViewModel,
                     homeViewModel = homeViewModel,
                     lyricsViewModel = lyricsViewModel,
+                    videoPlaybackViewModel = videoPlaybackViewModel,
                     playlistViewModel = playlistViewModel,
                     settingsViewModel = settingsViewModel,
+                    backendClient = appContainer.backendClient,
                     importViewModel = importViewModel,
                     themeMode = userPreferences.themeMode,
+                    selectedPalette = userPreferences.selectedPalette,
                     openExpandedPlayerTrigger = expandPlayerTrigger,
                     onToggleTheme = {
                         val nextMode = when (userPreferences.themeMode) {
@@ -270,13 +290,22 @@ class MainActivity : ComponentActivity() {
                     },
                     onPlayTrack = { track ->
                         handlePlayTrack(track)
-                    }
+                    },
+                    // Phase 2B: only the two eligible surfaces use this; every other
+                    // surface keeps the no-origin lambda above and stays ineligible.
+                     onPlayTrackWithOrigin = { track, origin ->
+                         handlePlayTrack(track, origin)
+                     },
+                     onPlayTrackWithContext = { track, origin, contextQueue ->
+                         handlePlayTrack(track, origin, contextQueue)
+                     }
                 )
             }
         }
 
-        // Start playback history coordinator and session checkpoint engine
-        appContainer.playbackHistoryCoordinator.start()
+        // Start the session checkpoint engine. The playback-history coordinator is NOT
+        // started here: it is owned and lifecycled by SonaraPlaybackService so it keeps
+        // measuring listening sessions when this Activity is gone.
         appContainer.playerCheckpointEngine.start()
 
         // Restore playback session snapshot if available and enabled
@@ -324,9 +353,15 @@ class MainActivity : ComponentActivity() {
         appContainer.audioOutputRepository.refreshDevices()
     }
 
+    override fun onStop() {
+        // Extracted video playback continues background audio via SonaraPlaybackService,
+        // mirroring native song playback. VideoMedia3Surface detaches from the player
+        // when the UI disappears and cleanly re-attaches on return without route downgrade.
+        super.onStop()
+    }
+
     override fun onDestroy() {
         super.onDestroy()
-        appContainer.playbackHistoryCoordinator.stop()
         appContainer.playerCheckpointEngine.stop()
     }
 
@@ -341,7 +376,11 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun handlePlayTrack(track: Track) {
+    private fun handlePlayTrack(
+        track: Track,
+        origin: PlaybackOrigin = PlaybackOrigin.LEGACY_UNKNOWN,
+        contextQueue: List<Track> = emptyList()
+    ) {
         lifecycleScope.launch {
             if (!this@MainActivity::searchViewModel.isInitialized || !this@MainActivity::playerViewModel.isInitialized) {
                 return@launch
@@ -349,11 +388,15 @@ class MainActivity : ComponentActivity() {
             // 1. Cache track metadata locally for offline library/history
             searchViewModel.cacheTrackMetadata(track)
 
-            // 2. Record immediately into history repository as most recent playback
-            appContainer.historyRepository.recordHistory(track, completed = false)
-
-            // 3. Delegate to PlayerViewModel (coordinates queue, stream resolution, and backstack)
-            playerViewModel.playTrack(track)
+            // 2. Delegate to PlayerViewModel (coordinates queue, stream resolution, and backstack).
+            //    Playback history is NOT written here: PlaybackHistoryCoordinator, owned by
+            //    SonaraPlaybackService, is the sole authoritative history writer and records a
+            //    session only once it actually qualifies.
+            //
+            //    `origin` is supplied by the initiating screen. The shared no-origin overload
+            //    stays LEGACY_UNKNOWN, so a surface that has not opted in cannot become
+            //    eligible by accident.
+            playerViewModel.playTrack(track, contextQueue = contextQueue, origin = origin)
         }
     }
 

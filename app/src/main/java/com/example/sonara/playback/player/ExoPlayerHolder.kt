@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
@@ -42,6 +43,10 @@ class ExoPlayerHolder(
             .setAudioAttributes(audioAttributes, true) // Handles Audio Focus automatically
             .setHandleAudioBecomingNoisy(true)        // Pauses on headset disconnect
             .setMediaSourceFactory(mediaSourceFactory)
+            .build()
+
+        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+            .setPreferredAudioRoleFlags(C.ROLE_FLAG_MAIN)
             .build()
 
         player.addAnalyticsListener(object : AnalyticsListener {

@@ -114,6 +114,9 @@ class PlaylistRepositoryImpl(
     }
 
     override suspend fun addTrackToPlaylist(playlistId: String, track: Track): Result<Unit> = withContext(Dispatchers.IO) {
+        if (track.id.isBlank()) {
+            return@withContext Result.failure(IllegalArgumentException("Track ID cannot be blank"))
+        }
         try {
             // Cache track first for foreign key integrity
             trackDao.insertTrack(TrackEntity.fromDomain(track))

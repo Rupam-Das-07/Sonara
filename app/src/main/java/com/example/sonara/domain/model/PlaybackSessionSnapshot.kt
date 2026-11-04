@@ -7,5 +7,7 @@ package com.example.sonara.domain.model
 data class PlaybackSessionSnapshot(
     val lastTrackId: String?,
     val lastPositionMs: Long = 0L,
-    val queueTrackIds: List<String> = emptyList()
+    val queueTrackIds: List<String> = emptyList(),
+    /** Stable identity for the active listen, absent in snapshots written before Phase 2B. */
+    val playbackSessionId: String? = null
 )

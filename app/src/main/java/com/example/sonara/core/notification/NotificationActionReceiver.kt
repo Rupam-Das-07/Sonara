@@ -66,10 +66,10 @@ class NotificationActionReceiver : BroadcastReceiver() {
     companion object {
         private const val TAG = "NotifActionReceiver"
 
-        const val ACTION_RETRY = "com.example.sonara.notification.action.RETRY"
-        const val ACTION_DISMISS = "com.example.sonara.notification.action.DISMISS"
-        const val EXTRA_TRACK_ID = "com.example.sonara.notification.extra.TRACK_ID"
-        const val EXTRA_NOTIFICATION_ID = "com.example.sonara.notification.extra.NOTIFICATION_ID"
+        const val ACTION_RETRY = "app.sonara.music.notification.action.RETRY"
+        const val ACTION_DISMISS = "app.sonara.music.notification.action.DISMISS"
+        const val EXTRA_TRACK_ID = "app.sonara.music.notification.extra.TRACK_ID"
+        const val EXTRA_NOTIFICATION_ID = "app.sonara.music.notification.extra.NOTIFICATION_ID"
 
         private const val INVALID_ID = -1
 

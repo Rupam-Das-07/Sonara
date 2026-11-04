@@ -1,5 +1,6 @@
 package com.example.sonara.feature.player
 
+import androidx.media3.common.MediaItem
 import com.example.sonara.domain.model.ArtistCatalog
 import com.example.sonara.domain.model.FeaturedArtist
 import com.example.sonara.domain.model.PlaylistDetail
@@ -11,6 +12,7 @@ import com.example.sonara.domain.repository.DiscoveryRepository
 import com.example.sonara.playback.client.MediaControllerClient
 import com.example.sonara.playback.client.MediaControllerState
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,6 +21,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -78,6 +81,145 @@ class PlayerViewModelTest {
     }
 
     @Test
+    fun `player state keeps raw title and exposes formatted display title`() = testScope.runTest {
+        val rawTitle = "Imagine Dragons - Believer (Official Music Video)"
+        val track = Track(id = "formatted", title = rawTitle, artist = "Imagine Dragons")
+        val viewModel = createViewModel()
+        backgroundScope.launch { viewModel.uiState.collect {} }
+
+        viewModel.playTrack(track)
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(rawTitle, state.trackTitle)
+        assertEquals("Believer", state.displayTitle)
+        assertEquals("Believer", state.effectiveTitle)
+    }
+
+    @Test
+    fun `shuffle toggle updates authoritative queue and projected player state`() = testScope.runTest {
+        val viewModel = createViewModel()
+        backgroundScope.launch { viewModel.uiState.collect {} }
+
+        assertFalse(viewModel.uiState.value.isShuffled)
+        viewModel.toggleShuffle()
+        runCurrent()
+
+        assertTrue(viewModel.queueEngine.isShuffled)
+        assertTrue(viewModel.uiState.value.isShuffled)
+    }
+
+    @Test
+    fun `repeat toggle cycles authoritative mode and projected player state`() = testScope.runTest {
+        val viewModel = createViewModel()
+        backgroundScope.launch { viewModel.uiState.collect {} }
+
+        viewModel.toggleRepeatMode()
+        runCurrent()
+        assertEquals(1, viewModel.queueEngine.repeatMode)
+        assertEquals(1, viewModel.uiState.value.repeatMode)
+
+        viewModel.toggleRepeatMode()
+        runCurrent()
+        assertEquals(2, viewModel.queueEngine.repeatMode)
+        assertEquals(2, viewModel.uiState.value.repeatMode)
+    }
+
+    @Test
+    fun `new selection pauses the old track before remote resolution completes`() = testScope.runTest {
+        val resolver = DeferredStreamResolver()
+        val viewModel = PlayerViewModel(
+            client = fakeClient,
+            discoveryRepository = fakeDiscoveryRepo,
+            streamResolverPort = resolver,
+            ioDispatcher = testDispatcher
+        )
+        backgroundScope.launch { viewModel.uiState.collect {} }
+
+        viewModel.playTrack(track1)
+        runCurrent()
+        resolver.complete(track1)
+        advanceUntilIdle()
+        assertEquals(track1, fakeClient.lastPlayedTrack)
+        assertTrue(fakeClient.isPlaying)
+
+        viewModel.playTrack(track2)
+        runCurrent()
+
+        assertFalse("old track must be paused while B resolves", fakeClient.isPlaying)
+        assertTrue("selection must issue a pause before resolution", fakeClient.pauseCount >= 2)
+        assertEquals(track1, fakeClient.lastPlayedTrack)
+
+        resolver.complete(track2)
+        advanceUntilIdle()
+        assertEquals(track2, fakeClient.lastPlayedTrack)
+        assertTrue(fakeClient.isPlaying)
+    }
+
+    @Test
+    fun `selection from the middle of a context preserves only following tracks`() = testScope.runTest {
+        val viewModel = createViewModel()
+        val context = listOf(track1, track2, rec1)
+
+        viewModel.playTrack(track2, contextQueue = context)
+        advanceUntilIdle()
+
+        assertEquals(track2, viewModel.queueEngine.currentTrack)
+        assertEquals(listOf(rec1), viewModel.queueEngine.upcomingQueue)
+    }
+
+    @Test
+    fun `matching controller request failure keeps the target retryable and reports the error`() = testScope.runTest {
+        val resolver = DeferredStreamResolver()
+        val viewModel = PlayerViewModel(
+            client = fakeClient,
+            discoveryRepository = fakeDiscoveryRepo,
+            streamResolverPort = resolver,
+            ioDispatcher = testDispatcher
+        )
+        backgroundScope.launch { viewModel.uiState.collect {} }
+
+        viewModel.playTrack(track1)
+        runCurrent()
+        fakeClient.publishRequestFailure(
+            generation = viewModel.transitionManager.currentGeneration(),
+            message = "Service rejected playback request"
+        )
+        runCurrent()
+
+        assertEquals(track1.id, viewModel.uiState.value.trackId)
+        assertEquals("Service rejected playback request", viewModel.uiState.value.errorMessage)
+        assertFalse(viewModel.uiState.value.isBuffering)
+    }
+
+    @Test
+    fun `stale controller failure cannot overwrite a newer selection`() = testScope.runTest {
+        val resolver = DeferredStreamResolver()
+        val viewModel = PlayerViewModel(
+            client = fakeClient,
+            discoveryRepository = fakeDiscoveryRepo,
+            streamResolverPort = resolver,
+            ioDispatcher = testDispatcher
+        )
+        backgroundScope.launch { viewModel.uiState.collect {} }
+
+        viewModel.playTrack(track1)
+        runCurrent()
+        viewModel.playTrack(track2)
+        runCurrent()
+
+        fakeClient.publishRequestFailure(generation = 1L, message = "stale failure")
+        runCurrent()
+
+        assertEquals(track2.id, viewModel.uiState.value.trackId)
+        assertTrue(viewModel.uiState.value.isBuffering)
+        assertEquals(null, viewModel.uiState.value.errorMessage)
+
+        resolver.complete(track2)
+        advanceUntilIdle()
+    }
+
+    @Test
     fun `skipToNext advances to queued track and plays it`() = testScope.runTest {
         val viewModel = createViewModel()
         viewModel.playTrack(track1, listOf(track1, track2))
@@ -107,22 +249,6 @@ class PlayerViewModelTest {
         assertEquals(listOf(track1), viewModel.queueEngine.sessionBackStack)
         assertEquals(rec1, fakeClient.lastPlayedTrack)
         assertEquals("https://stream/rec1", fakeClient.lastPlayedStreamUrl)
-    }
-
-    @Test
-    fun `onPlaybackEnded callback triggers identical advance pathway as skipToNext`() = testScope.runTest {
-        val viewModel = createViewModel()
-        viewModel.playTrack(track1, listOf(track1, track2))
-        advanceUntilIdle()
-
-        // Simulate ExoPlayer STATE_ENDED triggering onPlaybackEnded
-        fakeClient.onPlaybackEnded?.invoke()
-        advanceUntilIdle()
-
-        assertEquals(track2, viewModel.queueEngine.currentTrack)
-        assertEquals(listOf(track1), viewModel.queueEngine.sessionBackStack)
-        assertEquals(track2, fakeClient.lastPlayedTrack)
-        assertEquals("https://stream/v2", fakeClient.lastPlayedStreamUrl)
     }
 
     @Test
@@ -308,6 +434,8 @@ private class FakeMediaControllerClient : MediaControllerClient(null) {
     var lastPlayedStreamUrl: String? = null
     var lastSeekPosition: Long? = null
     var isPaused: Boolean = false
+    var pauseCount: Int = 0
+    val isPlaying: Boolean get() = _controllerState.value.isPlaying
 
     fun setTestPosition(posMs: Long) {
         _controllerState.value = _controllerState.value.copy(
@@ -320,6 +448,20 @@ private class FakeMediaControllerClient : MediaControllerClient(null) {
         lastPlayedTrack = track
         lastPlayedStreamUrl = streamUrl
         isPaused = false
+        _controllerState.value = _controllerState.value.copy(
+            isConnected = true,
+            isPlaying = true,
+            currentMediaItem = MediaItem.Builder()
+                .setMediaId(track.id)
+                .setMediaMetadata(
+                    androidx.media3.common.MediaMetadata.Builder()
+                        .setTitle(track.title)
+                        .setArtist(track.artist)
+                        .setAlbumTitle(track.album)
+                        .build()
+                )
+                .build()
+        )
     }
 
     override fun seekTo(positionMs: Long) {
@@ -327,12 +469,60 @@ private class FakeMediaControllerClient : MediaControllerClient(null) {
     }
 
     override fun pause() {
+        pauseCount++
         isPaused = true
+        _controllerState.value = _controllerState.value.copy(isPlaying = false)
     }
 
     override fun play() {
         isPaused = false
     }
+
+    fun publishRequestFailure(generation: Long, message: String) {
+        _controllerState.value = _controllerState.value.copy(
+            errorMessage = message,
+            requestFailureGeneration = generation,
+            isPlaying = false
+        )
+    }
+}
+
+private class DeferredStreamResolver : StreamResolverPort {
+    private val pending = mutableMapOf<String, CompletableDeferred<Result<StreamInfo>>>()
+
+    override fun clearCache() = Unit
+
+    override suspend fun resolveStream(
+        trackId: String,
+        quality: com.example.sonara.domain.model.AudioQuality
+    ): Result<StreamInfo> = resolve(trackId)
+
+    override suspend fun resolveStream(
+        trackId: String,
+        quality: com.example.sonara.domain.model.AudioQuality,
+        title: String,
+        artist: String,
+        durationSeconds: Int
+    ): Result<StreamInfo> = resolve(trackId)
+
+    private suspend fun resolve(trackId: String): Result<StreamInfo> {
+        val result = CompletableDeferred<Result<StreamInfo>>()
+        pending[trackId] = result
+        return result.await()
+    }
+
+    fun complete(track: Track) {
+        pending.remove(track.id)?.complete(
+            Result.success(
+                StreamInfo(
+                    trackId = track.id,
+                    streamUrl = "https://stream/${track.id}",
+                    format = "audio/webm"
+                )
+            )
+        )
+    }
+
 }
 
 private class FakeStreamResolver : StreamResolverPort {

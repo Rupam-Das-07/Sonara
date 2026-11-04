@@ -13,8 +13,86 @@ Responsibilities:
 import yt_dlp
 import gevent
 import json
+import re
+import time
+from urllib.parse import urlparse, parse_qs
 from gevent.event import AsyncResult
 from gevent.lock import Semaphore
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Preserve raw byte ranges (initRange and indexRange) for DASH SegmentBase
+# ─────────────────────────────────────────────────────────────────────────────
+_orig_extract_formats_and_subtitles = None
+try:
+    import yt_dlp.extractor.youtube as yt_extractor
+    _orig_extract_formats_and_subtitles = getattr(yt_extractor.YoutubeIE, "_extract_formats_and_subtitles", None)
+    if _orig_extract_formats_and_subtitles:
+        def _extract_formats_with_ranges(self, *args, **kwargs):
+            res = _orig_extract_formats_and_subtitles(self, *args, **kwargs)
+            try:
+                # player_responses is typically 2nd positional parameter or kwarg
+                player_responses = kwargs.get("player_responses")
+                if player_responses is None and len(args) >= 2:
+                    player_responses = args[1]
+                if player_responses and isinstance(player_responses, (list, tuple)):
+                    range_map = {}
+                    for pr in player_responses:
+                        if not isinstance(pr, dict):
+                            continue
+                        sd = pr.get("streamingData")
+                        if not isinstance(sd, dict):
+                            continue
+                        for fmt in sd.get("adaptiveFormats", []):
+                            if not isinstance(fmt, dict):
+                                continue
+                            itag = str(fmt.get("itag") or "")
+                            if itag:
+                                range_map[itag] = {
+                                    "initRange": fmt.get("initRange"),
+                                    "indexRange": fmt.get("indexRange"),
+                                }
+                    if range_map:
+                        def _attach_ranges(item):
+                            if isinstance(item, dict):
+                                fid = str(item.get("format_id", "")).split("-")[0].strip()
+                                if fid in range_map:
+                                    item["initRange"] = range_map[fid].get("initRange")
+                                    item["indexRange"] = range_map[fid].get("indexRange")
+
+                        if isinstance(res, (tuple, list)):
+                            # Check if res is (formats_list, subtitles_dict) or [fmt1, fmt2, ...]
+                            if len(res) == 2 and isinstance(res[0], (list, tuple)) and isinstance(res[1], dict):
+                                for f in res[0]:
+                                    _attach_ranges(f)
+                            else:
+                                for f in res:
+                                    _attach_ranges(f)
+                            return res
+                        elif hasattr(res, "__iter__"):
+                            def _wrap_gen():
+                                for item in res:
+                                    _attach_ranges(item)
+                                    yield item
+                            return _wrap_gen()
+            except Exception:
+                # Range hook failures must never disrupt extraction
+                pass
+            return res
+
+        yt_extractor.YoutubeIE._extract_formats_and_subtitles = _extract_formats_with_ranges
+except Exception:
+    pass
+
+
+def _restore_extract_formats_hook():
+    """Restore original yt-dlp extractor method if hooked."""
+    global _orig_extract_formats_and_subtitles
+    try:
+        import yt_dlp.extractor.youtube as yt_extractor
+        if _orig_extract_formats_and_subtitles:
+            yt_extractor.YoutubeIE._extract_formats_and_subtitles = _orig_extract_formats_and_subtitles
+    except Exception:
+        pass
 
 _in_flight_extractions = {}
 
@@ -214,10 +292,11 @@ def get_audio_info(url: str) -> dict:
         title = info.get("title") or "Unknown Title"
 
         video_id = info.get("id", "")
-        thumbnail = (
-            f"https://img.youtube.com/vi/{video_id}/maxresdefault.jpg"
-            if video_id
-            else info.get("thumbnail", "")
+        # Authoritative provider metadata outranks a constructed URL. yt-dlp already reports a
+        # thumbnail it resolved for this exact video; `maxresdefault.jpg` is only a guess and is
+        # absent for many videos, so it stays a fallback rather than the preference.
+        thumbnail = info.get("thumbnail") or (
+            f"https://img.youtube.com/vi/{video_id}/maxresdefault.jpg" if video_id else ""
         )
 
         # ── 4. Get the audio stream URL ──────────────────────────────────────────
@@ -279,10 +358,10 @@ def search_youtube(query: str, max_results: int = 10) -> list:
         results = []
         for entry in entries[:max_results]:
             video_id = entry.get("id", "")
-            thumbnail = (
-                f"https://img.youtube.com/vi/{video_id}/maxresdefault.jpg"
-                if video_id
-                else entry.get("thumbnail", "")
+            # Same rule as get_audio_info: the thumbnail the provider reported wins over a
+            # URL constructed from the id.
+            thumbnail = entry.get("thumbnail") or (
+                f"https://img.youtube.com/vi/{video_id}/maxresdefault.jpg" if video_id else ""
             )
 
             results.append({
@@ -296,3 +375,302 @@ def search_youtube(query: str, max_results: int = 10) -> list:
         return results
     except Exception as exc:
         raise RuntimeError(f"Search failed: {exc}") from exc
+
+
+def _parse_range(r):
+    """
+    Parse a byte range dict ({'start': ..., 'end': ...}).
+    Returns a normalized {'start': int, 'end': int} dict only if both start
+    and end are valid integers, start >= 0, and end > start.
+    Otherwise returns None.
+    """
+    if not isinstance(r, dict):
+        return None
+    try:
+        start = int(r["start"])
+        end = int(r["end"])
+        if start >= 0 and end > start:
+            return {"start": start, "end": end}
+    except (KeyError, ValueError, TypeError):
+        pass
+    return None
+
+
+def _validate_range_pair(init_range, index_range) -> bool:
+    """
+    Validates that both initRange and indexRange are valid and structurally sound
+    for DASH SegmentBase indexing.
+    """
+    if not init_range or not index_range:
+        return False
+    # In ISO-BMFF DASH SegmentBase, initialization box precedes index box
+    if index_range["start"] < init_range["end"]:
+        return False
+    return True
+
+
+def _extract_url_expire(url: str) -> int:
+    """
+    Extract unix expiration timestamp from googlevideo URL.
+    Returns 0 if missing, not numeric, or invalid. Never invents expiry.
+    """
+    if not url or not isinstance(url, str):
+        return 0
+    try:
+        parsed = urlparse(url)
+        qs = parse_qs(parsed.query)
+        exp_vals = qs.get("expire")
+        if exp_vals and exp_vals[0].isdigit():
+            return int(exp_vals[0])
+    except Exception:
+        pass
+    return 0
+
+
+def get_video_highres_info(video_id: str) -> dict:
+    """
+    Given an 11-character YouTube video ID, extract high-resolution (8K/4320p)
+    video and matching audio stream metadata using yt-dlp.
+
+    Returns:
+      {
+        "hasHighRes": True/False,
+        "videoId": video_id,
+        "extractedAt": int,
+        "expiresAt": int,
+        "video": dict or None,
+        "audio": dict or None,
+      }
+    """
+    if not video_id or not isinstance(video_id, str):
+        raise ValueError("video_id must be a non-empty string.")
+
+    video_id = video_id.strip()
+    if not re.fullmatch(r"[0-9A-Za-z_-]{11}", video_id):
+        raise ValueError(f"Invalid video_id format: '{video_id}'. Must be exactly 11 characters [0-9A-Za-z_-].")
+
+    url = f"https://www.youtube.com/watch?v={video_id}"
+    in_flight_key = f"highres:{video_id}"
+
+    # In-flight deduplication (gevent level)
+    if in_flight_key in _in_flight_extractions:
+        result_event = _in_flight_extractions[in_flight_key]
+        try:
+            return result_event.get(timeout=30)
+        except gevent.Timeout:
+            raise RuntimeError("Timed out waiting for shared in-flight highres extraction to complete")
+
+    result_event = AsyncResult()
+    _in_flight_extractions[in_flight_key] = result_event
+
+    try:
+        ydl_opts = {
+            "quiet": True,
+            "no_warnings": True,
+            "noplaylist": True,
+            "extract_flat": False,
+            "extractor_args": {
+                "youtube": {
+                    "player_client": ["visionos", "web", "android"]
+                }
+            },
+            "js_runtimes": {"node": {}},
+        }
+
+        try:
+            info = _extract_with_retry(ydl_opts, url)
+        except Exception as exc:
+            raise RuntimeError(f"Failed to extract high-resolution info: {exc}") from exc
+
+        if not info:
+            raise RuntimeError("yt-dlp returned no info for this video.")
+
+        formats = info.get("formats") or []
+        now = int(time.time())
+
+        # 1. Filter genuine 8K video candidates (strictly 7680x4320 AV1 MP4 with valid byte ranges)
+        candidates_8k = []
+        for f in formats:
+            try:
+                h = int(f.get("height") or 0)
+                w = int(f.get("width") or 0)
+            except (ValueError, TypeError):
+                continue
+            if h != 4320 or w != 7680:
+                continue
+
+            v_url = f.get("url")
+            if not v_url:
+                continue
+
+            vcodec = str(f.get("vcodec") or "")
+            if not vcodec.startswith("av01"):
+                continue
+
+            ext = str(f.get("ext") or "").lower()
+            container = str(f.get("container") or "").lower()
+            if ext != "mp4" and "mp4" not in container:
+                continue
+
+            init_r = _parse_range(f.get("initRange"))
+            index_r = _parse_range(f.get("indexRange"))
+            if not _validate_range_pair(init_r, index_r):
+                continue
+
+            candidates_8k.append({
+                "format": f,
+                "initRange": init_r,
+                "indexRange": index_r,
+            })
+
+        # 2. Filter matching audio candidates (ISO-BMFF audio compatible with MP4 video, with valid byte ranges)
+        audio_candidates = []
+        for f in formats:
+            if f.get("vcodec") != "none":
+                continue
+            acodec = str(f.get("acodec") or "")
+            if not acodec or acodec == "none":
+                continue
+            a_url = f.get("url")
+            if not a_url:
+                continue
+
+            ext = str(f.get("ext") or "").lower()
+            container = str(f.get("container") or "").lower()
+            is_mp4_audio = ext in ("m4a", "mp4") or "mp4" in container or acodec.startswith("mp4a")
+            if not is_mp4_audio:
+                continue
+
+            init_r = _parse_range(f.get("initRange"))
+            index_r = _parse_range(f.get("indexRange"))
+            if not _validate_range_pair(init_r, index_r):
+                continue
+
+            audio_candidates.append({
+                "format": f,
+                "initRange": init_r,
+                "indexRange": index_r,
+            })
+
+        # If either genuine 8K video or compatible audio is absent, negative discovery
+        if not candidates_8k or not audio_candidates:
+            result_dict = {
+                "hasHighRes": False,
+                "videoId": video_id,
+                "extractedAt": now,
+                "expiresAt": now + 7200,
+                "video": None,
+                "audio": None,
+            }
+            result_event.set(result_dict)
+            return result_dict
+
+        # Sort video: prefer SDR itag 571, then HDR itag 702, then highest bitrate
+        def _8k_sort_key(c):
+            f = c["format"]
+            fid = str(f.get("format_id", ""))
+            if fid == "571":
+                return (0, -(f.get("tbr") or 0))
+            if fid == "702":
+                return (1, -(f.get("tbr") or 0))
+            return (2, -(f.get("tbr") or 0))
+
+        candidates_8k.sort(key=_8k_sort_key)
+        best_v = candidates_8k[0]
+        v = best_v["format"]
+
+        # Sort audio: prefer itag 140 (AAC 128k), then highest abr
+        def _audio_sort_key(c):
+            f = c["format"]
+            fid = str(f.get("format_id", ""))
+            if fid == "140":
+                return (0, -(f.get("abr") or 0))
+            return (1, -(f.get("abr") or 0))
+
+        audio_candidates.sort(key=_audio_sort_key)
+        best_a = audio_candidates[0]
+        a = best_a["format"]
+
+        # 3. Check durations
+        duration = float(info.get("duration") or 0.0)
+        v_dur = float(v.get("approx_duration_ms") or 0.0) / 1000.0 if v.get("approx_duration_ms") else duration
+        a_dur = float(a.get("approx_duration_ms") or 0.0) / 1000.0 if a.get("approx_duration_ms") else duration
+
+        if v_dur > 0 and a_dur > 0 and abs(v_dur - a_dur) > max(10.0, 0.1 * v_dur):
+            # Significant duration mismatch indicates incompatible or damaged stream pairing
+            result_dict = {
+                "hasHighRes": False,
+                "videoId": video_id,
+                "extractedAt": now,
+                "expiresAt": now + 7200,
+                "video": None,
+                "audio": None,
+            }
+            result_event.set(result_dict)
+            return result_dict
+
+        # 4. Extract expiration conservative timestamps (earliest of video and audio)
+        v_exp = _extract_url_expire(v.get("url", ""))
+        a_exp = _extract_url_expire(a.get("url", ""))
+        if v_exp > 0 and a_exp > 0:
+            expires_at = min(v_exp, a_exp)
+        elif v_exp > 0:
+            expires_at = v_exp
+        else:
+            expires_at = 0
+
+        # Build video DTO
+        v_fps = v.get("fps") or 60
+        v_codec = v.get("vcodec") or "av01.0.17M.08"
+        v_ext = v.get("ext") or "mp4"
+        v_bitrate = int((v.get("vbr") or v.get("tbr") or 0) * 1000)
+        clean_v_mime = "video/mp4" if v_ext in ("mp4", "m4v") else f"video/{v_ext}"
+        video_dto = {
+            "itag": int(v.get("format_id", 571)),
+            "width": int(v.get("width", 7680)),
+            "height": int(v.get("height", 4320)),
+            "fps": int(v_fps),
+            "codec": v_codec,
+            "mimeType": clean_v_mime,
+            "bitrate": v_bitrate,
+            "duration": duration,
+            "initRange": best_v["initRange"],
+            "indexRange": best_v["indexRange"],
+            "streamUrl": v.get("url", ""),
+            "httpHeaders": v.get("http_headers") or info.get("http_headers") or {},
+        }
+
+        # Build audio DTO
+        a_codec = a.get("acodec") or "mp4a.40.2"
+        a_ext = a.get("ext") or "m4a"
+        a_bitrate = int((a.get("abr") or a.get("tbr") or 0) * 1000)
+        clean_a_mime = "audio/mp4" if a_ext in ("m4a", "mp4") or "mp4a" in a_codec else f"audio/{a_ext}"
+        audio_dto = {
+            "itag": int(a.get("format_id", 140)),
+            "codec": a_codec,
+            "mimeType": clean_a_mime,
+            "bitrate": a_bitrate,
+            "duration": duration,
+            "initRange": best_a["initRange"],
+            "indexRange": best_a["indexRange"],
+            "streamUrl": a.get("url", ""),
+            "httpHeaders": a.get("http_headers") or info.get("http_headers") or {},
+        }
+
+        result_dict = {
+            "hasHighRes": True,
+            "videoId": video_id,
+            "extractedAt": now,
+            "expiresAt": expires_at,
+            "video": video_dto,
+            "audio": audio_dto,
+        }
+
+        result_event.set(result_dict)
+        return result_dict
+
+    except Exception as exc:
+        result_event.set_exception(exc)
+        raise
+    finally:
+        _in_flight_extractions.pop(in_flight_key, None)

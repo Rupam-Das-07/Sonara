@@ -15,12 +15,13 @@
  *    - Defensive entity blacklist rejects non-performer lyricists (Sameer, Irshad Kamil)
  *      and record label / aggregator channels (T-Series, Zee Music, Saregama, etc.).
  *    - Rejects fan club, cover, and tribute channel patterns.
- *    - Deduplicates across both browseId and normalized slug.
+ *    - Deduplicates authoritative browseIds; disambiguates public slug collisions.
  *
  * 3. High-Resolution Square Artwork:
  *    Extracts the 1:1 square avatar portrait provided by the chart and deterministically
  *    upgrades the resolution parameter to '=w540-h540-p-l90-rj' via Google CDN.
- *    Non-destructive fallback preserves raw URL or yields null (client monogram).
+ *    Non-destructive fallback preserves a trusted raw URL; invalid or untrusted
+ *    artwork yields null (client monogram).
  *
  * 4. Resilient Stale-While-Revalidate (SWR) & Core Anchors:
  *    - 6 Core Editorial Anchors (Arijit Singh, Shreya Ghoshal, A.R. Rahman, Atif Aslam,
@@ -34,10 +35,15 @@
 
 const config = require('../config/env');
 const logger = require('../utils/logger');
+const { nameKey, slugify } = require('./artistIdentity');
 
 const ROSTER_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 const UPSTREAM_TIMEOUT_MS = 6000; // 6 seconds
 const TARGET_ROSTER_SIZE = 8;
+const ARTIST_IMAGE_CACHE_MAX = 256;
+const ARTIST_IMAGE_SUCCESS_TTL_MS = 5 * 60 * 1000;
+const ARTIST_IMAGE_NEGATIVE_TTL_MS = 15 * 1000;
+const ARTIST_IMAGE_NAME_MAX_LENGTH = 200;
 
 /**
  * 6 Core Editorial Anchors.
@@ -111,22 +117,6 @@ const FAN_PARODY_RE = /(?:fan\s*club|ka\s*fan|official\s*channel|tribute|covers?
 const BROWSE_ID_RE = /^UC[A-Za-z0-9_-]{22}$/;
 
 /**
- * Builds a stable, URL-safe identifier from an artist display name.
- * Uses Unicode NFKD normalization so accented characters (e.g. Beyoncé) produce clean slugs.
- *
- * @param {string} name
- * @returns {string}
- */
-function slugify(name) {
-  return String(name || '')
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-}
-
-/**
  * Non-destructively upgrades Google-hosted thumbnail URLs to high-resolution square avatars.
  *
  * @param {string} url
@@ -166,12 +156,111 @@ function buildDefaultRoster() {
   }));
 }
 
+/** Opaque upstream IDs are never normalized; malformed supplied IDs reject the row. */
+function isValidPublicId(id) {
+  return typeof id === 'string' && id.trim().length > 0
+    && !/[\p{Cc}\p{Cf}\p{Cs}]/u.test(id.replace(/[\u200c\u200d]/g, ''));
+}
+
+/**
+ * Reserve immutable IDs (including anchor IDs) before allocating generated ones.
+ * BrowseId is authoritative even when names or lossy public slugs are identical.
+ * Conflicting immutable IDs cannot safely represent two artists: reject those rows.
+ */
+function assignCandidateIds(candidates) {
+  const anchors = buildDefaultRoster();
+  const anchorOwners = new Map(anchors.map((anchor) => [anchor.id, anchor.browseId]));
+  const owners = new Map(anchors.map((anchor) => [anchor.id, new Set([anchor.browseId])]));
+  for (const candidate of candidates) {
+    if (!candidate.authoritativeId) continue;
+    const { id, browseId } = candidate.artist;
+    if (!owners.has(id)) owners.set(id, new Set());
+    owners.get(id).add(browseId);
+  }
+
+  const seenBrowseIds = new Set();
+  const accepted = candidates.filter((candidate) => {
+    const { id, browseId } = candidate.artist;
+    if (candidate.authoritativeId && owners.get(id).size > 1) {
+      logger.warn('[featuredArtists] Rejecting conflicting authoritative artist id');
+      return false;
+    }
+    if (seenBrowseIds.has(browseId)) return false;
+    seenBrowseIds.add(browseId);
+    return true;
+  });
+  const generated = accepted.filter((candidate) => !candidate.authoritativeId);
+  const slugCounts = new Map();
+  for (const { artist } of generated) {
+    slugCounts.set(artist.id, (slugCounts.get(artist.id) || 0) + 1);
+  }
+  const usedIds = new Set(owners.keys());
+  // Allocation is independent of chart order, while the response keeps chart order.
+  for (const { artist } of [...generated].sort((a, b) => (
+    a.artist.browseId < b.artist.browseId ? -1 : 1
+  ))) {
+    const slug = artist.id;
+    const ownAnchor = anchorOwners.get(slug) === artist.browseId;
+    if (!ownAnchor && (slugCounts.get(slug) > 1 || usedIds.has(slug))) {
+      artist.id = `${slug}--${artist.browseId}`;
+      // An arbitrary authoritative ID may itself equal a disambiguated slug.
+      while (usedIds.has(artist.id)) artist.id += `--${artist.browseId}`;
+    }
+    usedIds.add(artist.id);
+  }
+  return accepted.map((candidate) => candidate.artist);
+}
+
 // In-memory SWR cache state
 let _featuredCache = {
   timestamp: 0,
   data: buildDefaultRoster(),
 };
 let _refreshPromise = null;
+
+// Local-candidate image lookups are bounded and short-lived. A transient
+// upstream miss must not become a permanent process-lifetime miss.
+const _artistImageCache = new Map();
+const _artistImageFlights = new Map();
+
+function hasExplicitPort(value) {
+  const authority = value.trim().match(/^[a-z][a-z\d+.-]*:\/\/([^/?#]*)/i)?.[1] || '';
+  const hostPort = authority.slice(authority.lastIndexOf('@') + 1);
+  return hostPort.includes(':');
+}
+
+function isTrustedArtistImageUrl(value) {
+  if (typeof value !== 'string' || !value) return false;
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== 'https:' || parsed.username || parsed.password
+      || parsed.port || hasExplicitPort(value)) return false;
+    const host = parsed.hostname.toLowerCase();
+    return ['googleusercontent.com', 'ggpht.com'].some((suffix) => (
+      host === suffix || host.endsWith(`.${suffix}`)
+    ));
+  } catch (_) {
+    return false;
+  }
+}
+
+function readArtistImageCache(key) {
+  const entry = _artistImageCache.get(key);
+  if (!entry) return undefined;
+  if (entry.expiresAt <= Date.now()) {
+    _artistImageCache.delete(key);
+    return undefined;
+  }
+  return entry.value;
+}
+
+function writeArtistImageCache(key, value) {
+  const ttl = value ? ARTIST_IMAGE_SUCCESS_TTL_MS : ARTIST_IMAGE_NEGATIVE_TTL_MS;
+  _artistImageCache.set(key, { value, expiresAt: Date.now() + ttl });
+  while (_artistImageCache.size > ARTIST_IMAGE_CACHE_MAX) {
+    _artistImageCache.delete(_artistImageCache.keys().next().value);
+  }
+}
 
 /**
  * Resolves artist thumbnail via Python endpoint (kept for individual lookups).
@@ -180,20 +269,39 @@ let _refreshPromise = null;
  * @returns {Promise<string|null>}
  */
 async function resolveArtistImage(name) {
-  try {
-    const url = `${config.pythonYtmusicUrl}/api/artist-image?name=${encodeURIComponent(name)}`;
-    const res = await fetch(url, {
-      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
-      headers: { Accept: 'application/json' },
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    const image = typeof data?.image === 'string' && data.image.length > 0 ? data.image : null;
-    return upgradeAvatarResolution(image);
-  } catch (err) {
-    logger.warn(`[featuredArtists] resolveArtistImage failed for "${name}": ${err.message}`);
-    return null;
-  }
+  if (typeof name !== 'string' || name.length > ARTIST_IMAGE_NAME_MAX_LENGTH) return null;
+  const trimmedName = name.trim();
+  const key = nameKey(trimmedName);
+  if (key === null) return null;
+
+  const cached = readArtistImageCache(key);
+  if (cached !== undefined) return cached;
+  if (_artistImageFlights.has(key)) return _artistImageFlights.get(key);
+
+  const flight = (async () => {
+    let imageUrl = null;
+    try {
+      const url = `${config.pythonYtmusicUrl}/api/artist-image?name=${encodeURIComponent(trimmedName)}`;
+      const res = await fetch(url, {
+        signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+        headers: { Accept: 'application/json' },
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      const image = typeof data?.image === 'string' && data.image.length > 0 ? data.image : null;
+      if (!isTrustedArtistImageUrl(image)) return null;
+      imageUrl = upgradeAvatarResolution(image);
+      return isTrustedArtistImageUrl(imageUrl) ? imageUrl : null;
+    } catch (err) {
+      logger.warn(`[featuredArtists] resolveArtistImage failed for "${trimmedName}": ${err.message}`);
+      return null;
+    } finally {
+      writeArtistImageCache(key, imageUrl);
+      _artistImageFlights.delete(key);
+    }
+  })();
+  _artistImageFlights.set(key, flight);
+  return flight;
 }
 
 /**
@@ -207,7 +315,12 @@ function extractCandidateImage(candidate) {
   if (thumbs.length === 0) return null;
   const lastThumb = thumbs[thumbs.length - 1];
   const rawUrl = lastThumb?.url || (typeof lastThumb === 'string' ? lastThumb : null);
-  return upgradeAvatarResolution(rawUrl);
+  const upgradedUrl = upgradeAvatarResolution(rawUrl);
+  // Roster artwork follows the same narrow policy as local artist-image lookups:
+  // HTTPS Google image CDNs only, with no credentials or explicit port. A bad
+  // thumbnail degrades this artist to the Android monogram instead of dropping
+  // the artist or publishing an untrusted image URL.
+  return isTrustedArtistImageUrl(upgradedUrl) ? upgradedUrl : null;
 }
 
 /**
@@ -232,38 +345,33 @@ async function _doRefresh() {
     const rawCandidates = Array.isArray(json?.artists) ? json.artists : [];
 
     const validCandidates = [];
-    const seenBrowseIds = new Set();
-    const seenSlugs = new Set();
-
     for (const item of rawCandidates) {
       if (!item || typeof item !== 'object') continue;
 
-      const title = (item.title || item.name || '').trim();
-      const browseId = (item.browseId || '').trim();
-
-      if (!title || !browseId) continue;
-      if (!BROWSE_ID_RE.test(browseId)) continue;
-
-      const slug = slugify(title);
-      if (!slug) continue;
+      // Only an absent title falls back to name; invalid supplied values reject the row.
+      const rawTitle = item.title ?? item.name;
+      if (nameKey(rawTitle) === null) continue;
+      const title = rawTitle.trim();
+      const browseId = item.browseId;
+      if (typeof browseId !== 'string' || !BROWSE_ID_RE.test(browseId)) continue;
+      const authoritativeId = Object.prototype.hasOwnProperty.call(item, 'id');
+      if (authoritativeId && !isValidPublicId(item.id)) continue;
 
       const lowerTitle = title.toLowerCase();
       if (ENTITY_BLACKLIST.has(lowerTitle)) continue;
       if (FAN_PARODY_RE.test(title)) continue;
 
-      if (seenBrowseIds.has(browseId) || seenSlugs.has(slug)) continue;
-
-      seenBrowseIds.add(browseId);
-      seenSlugs.add(slug);
-
-      const imageUrl = extractCandidateImage(item);
+       const imageUrl = extractCandidateImage(item);
 
       validCandidates.push({
-        id: slug,
-        name: title,
-        browseId,
-        genre: '', // Dynamic chart candidates have honest empty genre
-        imageUrl,
+        authoritativeId,
+        artist: {
+          id: authoritativeId ? item.id : slugify(title),
+          name: title,
+          browseId,
+          genre: '', // Dynamic chart candidates have honest empty genre
+          imageUrl,
+        },
       });
     }
 
@@ -273,7 +381,7 @@ async function _doRefresh() {
     const rosterSlugs = new Set();
     const rosterBrowseIds = new Set();
 
-    for (const cand of validCandidates) {
+    for (const cand of assignCandidateIds(validCandidates)) {
       if (selected.length >= TARGET_ROSTER_SIZE) break;
       selected.push(cand);
       rosterSlugs.add(cand.id);
@@ -352,4 +460,9 @@ module.exports = {
   refreshWithLock,
   CORE_ANCHORS,
   FEATURED_ARTISTS,
+  isTrustedArtistImageUrl,
+  _clearArtistImageCache: () => {
+    _artistImageCache.clear();
+    _artistImageFlights.clear();
+  },
 };

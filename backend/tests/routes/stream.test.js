@@ -8,7 +8,19 @@
 
 const { test, describe, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
-const streamRouter = require('../../src/routes/stream');
+// Providers capture fetch at construction. Capture a dispatcher so per-test
+// mocks also cover /resolve; refuse an unstubbed call instead of using a network.
+const networkFetch = globalThis.fetch;
+globalThis.fetch = (...args) => {
+  assert.notEqual(globalThis.fetch, networkFetch, 'upstream fetch must be stubbed');
+  return globalThis.fetch(...args);
+};
+let streamRouter;
+try {
+  streamRouter = require('../../src/routes/stream');
+} finally {
+  globalThis.fetch = networkFetch;
+}
 
 describe('stream route — /resolve', () => {
   function getResolveHandler() {
@@ -40,7 +52,7 @@ describe('stream route — /resolve', () => {
       nextError = err;
     };
 
-    return { req, res, getStatus: () => statusCode, getData: () => responseData, getError: () => nextError };
+    return { req, res, next, getStatus: () => statusCode, getData: () => responseData, getError: () => nextError };
   }
 
   test('rejects missing URL and video_id with HTTP 400', async () => {
@@ -68,17 +80,23 @@ describe('stream route — /resolve', () => {
     assert.equal(getStatus(), 400);
   });
 
-  test('accepts valid 11-char video_id parameter', async () => {
+  test('accepts valid 11-char video_id parameter and reaches the provider', async (t) => {
     const handler = getResolveHandler();
-    const { req, res, getStatus, getData } = mockReqRes({
+    const { req, res, next, getStatus, getData, getError } = mockReqRes({
       video_id: 'dQw4w9WgXcQ',
       quality: 'STANDARD',
     });
 
-    // Will attempt to resolve via YouTube provider
-    await handler(req, res, () => {});
-    // If python service is offline in this test run, it calls next with streamUnavailable
-    // which confirms routing reached the resolver!
+    const fetchMock = t.mock.method(globalThis, 'fetch', async () => ({ ok: false, status: 503 }));
+    handler(req, res, next);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(fetchMock.mock.callCount(), 1);
+    const upstreamUrl = new URL(fetchMock.mock.calls[0].arguments[0]);
+    assert.equal(upstreamUrl.pathname, '/get-youtube-audio');
+    assert.equal(upstreamUrl.searchParams.get('url'), 'https://www.youtube.com/watch?v=dQw4w9WgXcQ');
+    assert.equal(getStatus(), 200, 'valid input must not be rejected with 400');
+    assert.equal(getData(), null);
+    assert.equal(getError().code, 'STREAM_UNAVAILABLE');
   });
 });
 
@@ -580,21 +598,21 @@ describe('stream route — /resolve (F-02)', () => {
   });
 
   // -------------------------------------------------------------------------
-  // F-02: Unexpected resolver rejection is caught by the existing catch block
-  // and forwarded via next().  asyncHandler must not interfere with this path.
+  // F-02: A provider fetch rejection becomes an unavailable stream and reaches
+  // next(). asyncHandler must not interfere with this path.
   // -------------------------------------------------------------------------
-  test('F-02: unexpected resolver rejection reaches next() as INTERNAL_ERROR', async () => {
+  test('F-02: provider fetch rejection reaches next() as STREAM_UNAVAILABLE', async (t) => {
     const handler = getResolveHandlerF02();
     const { req, res, next, getNextError } = mockResolveReqRes({ video_id: 'dQw4w9WgXcQ' });
 
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = async () => { throw new Error('unexpected resolver bug'); };
+    const fetchMock = t.mock.method(globalThis, 'fetch', async () => { throw new Error('unexpected resolver bug'); });
     handler(req, res, next);
     await flushMicrotasks();
-    globalThis.fetch = originalFetch;
 
     const err = getNextError();
+    assert.equal(fetchMock.mock.callCount(), 1);
     assert.ok(err, 'next() must be called when resolver rejects unexpectedly');
+    assert.equal(err.code, 'STREAM_UNAVAILABLE');
   });
 
   // -------------------------------------------------------------------------

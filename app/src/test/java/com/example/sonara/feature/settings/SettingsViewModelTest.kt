@@ -1,7 +1,9 @@
 package com.example.sonara.feature.settings
 
 import com.example.sonara.domain.model.AppLanguage
+import com.example.sonara.domain.model.ColorPalette
 import com.example.sonara.domain.model.HistoryItem
+import com.example.sonara.domain.model.PlaybackOrigin
 import com.example.sonara.domain.model.PlaybackSessionSnapshot
 import com.example.sonara.domain.model.SearchMode
 import com.example.sonara.domain.model.StreamInfo
@@ -37,6 +39,7 @@ class SettingsViewModelTest {
         val prefsFlow = MutableStateFlow(UserPreferences())
         override fun getUserPreferences(): Flow<UserPreferences> = prefsFlow
         override suspend fun setThemeMode(mode: ThemeMode) { prefsFlow.value = prefsFlow.value.copy(themeMode = mode) }
+        override suspend fun setSelectedPalette(palette: ColorPalette) { prefsFlow.value = prefsFlow.value.copy(selectedPalette = palette) }
         override suspend fun setShowRomanized(show: Boolean) { prefsFlow.value = prefsFlow.value.copy(showRomanized = show) }
         override suspend fun setRestorePlaybackSession(enabled: Boolean) { prefsFlow.value = prefsFlow.value.copy(restorePlaybackSession = enabled) }
         override suspend fun setDefaultSearchMode(mode: SearchMode) { prefsFlow.value = prefsFlow.value.copy(defaultSearchMode = mode) }
@@ -60,7 +63,14 @@ class SettingsViewModelTest {
     private class FakeHistoryRepository : HistoryRepository {
         var clearHistoryCalled = false
         override fun getRecentHistory(limit: Int): Flow<List<HistoryItem>> = flowOf(emptyList())
-        override suspend fun recordHistory(track: Track, completed: Boolean) {}
+        override suspend fun recordHistory(track: Track, completed: Boolean): Long = 0L
+        override suspend fun recordHistoryWithProvenance(
+            track: Track,
+            completed: Boolean,
+            sourceSection: PlaybackOrigin,
+            playbackSessionId: String
+        ): Long = 0L
+        override suspend fun markHistoryCompleted(historyId: Long) {}
         override suspend fun clearHistory() {
             clearHistoryCalled = true
         }
@@ -325,5 +335,51 @@ class SettingsViewModelTest {
         viewModel.setAppLanguage(AppLanguage.SYSTEM_DEFAULT)
         advanceUntilIdle()
         assertEquals(AppLanguage.SYSTEM_DEFAULT, settingsRepo.prefsFlow.value.appLanguage)
+    }
+
+    @Test
+    fun setSelectedPaletteUpdatesRepositoryAndDismissesDialog() = runTest {
+        viewModel.openDialog(SettingsDialog.ColorPaletteSelector)
+        assertEquals(SettingsDialog.ColorPaletteSelector, viewModel.uiState.value.activeDialog)
+
+        viewModel.setSelectedPalette(ColorPalette.OCEAN_BLUE)
+        advanceUntilIdle()
+
+        assertEquals(ColorPalette.OCEAN_BLUE, settingsRepo.prefsFlow.value.selectedPalette)
+        assertEquals(SettingsDialog.None, viewModel.uiState.value.activeDialog)
+    }
+
+    @Test
+    fun paletteSelectionPreservesThemeModeIndependently() = runTest {
+        // Initial state: ThemeMode.SYSTEM
+        assertEquals(ThemeMode.SYSTEM, settingsRepo.prefsFlow.value.themeMode)
+
+        // Set palette to FOREST_GREEN
+        viewModel.setSelectedPalette(ColorPalette.FOREST_GREEN)
+        advanceUntilIdle()
+        assertEquals(ColorPalette.FOREST_GREEN, settingsRepo.prefsFlow.value.selectedPalette)
+        assertEquals(ThemeMode.SYSTEM, settingsRepo.prefsFlow.value.themeMode)
+
+        // Set theme mode to DARK
+        viewModel.setThemeMode(ThemeMode.DARK)
+        advanceUntilIdle()
+        assertEquals(ThemeMode.DARK, settingsRepo.prefsFlow.value.themeMode)
+        assertEquals(ColorPalette.FOREST_GREEN, settingsRepo.prefsFlow.value.selectedPalette)
+
+        // Switch to DYNAMIC_WALLPAPER
+        viewModel.setSelectedPalette(ColorPalette.DYNAMIC_WALLPAPER)
+        advanceUntilIdle()
+        assertEquals(ColorPalette.DYNAMIC_WALLPAPER, settingsRepo.prefsFlow.value.selectedPalette)
+        assertEquals(ThemeMode.DARK, settingsRepo.prefsFlow.value.themeMode)
+    }
+
+    @Test
+    fun paletteResourceMappingsCoverAllEightPalettes() {
+        for (palette in ColorPalette.entries) {
+            val nameRes = com.example.sonara.feature.settings.components.getPaletteDisplayNameRes(palette)
+            val descRes = com.example.sonara.feature.settings.components.getPaletteDescriptionRes(palette)
+            assertTrue("Palette $palette must have a valid display name string resource", nameRes != 0)
+            assertTrue("Palette $palette must have a valid description string resource", descRes != 0)
+        }
     }
 }

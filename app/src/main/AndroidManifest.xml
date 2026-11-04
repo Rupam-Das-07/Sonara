@@ -35,7 +35,7 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
             <intent-filter>
-                <action android:name="com.example.sonara.ACTION_OPEN_EXPANDED_PLAYER" />
+                <action android:name="app.sonara.music.ACTION_OPEN_EXPANDED_PLAYER" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>

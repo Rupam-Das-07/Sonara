@@ -1,7 +1,9 @@
 package com.example.sonara.data.repository
 
 import android.util.Log
+import com.example.sonara.BuildConfig
 import com.example.sonara.data.remote.backend.SonaraBackendClient
+import com.example.sonara.domain.discovery.ArtistIdentity
 import com.example.sonara.domain.model.ArtistCatalog
 import com.example.sonara.domain.model.FeaturedArtist
 import com.example.sonara.domain.model.PlaylistDetail
@@ -25,7 +27,9 @@ class DiscoveryRepositoryImpl(
     private val backendClient: SonaraBackendClient = SonaraBackendClient(),
     private val defaultTtlMs: Long = 10 * 60 * 1000L, // 10 minutes default TTL
     private val catalogTtlMs: Long = 15 * 60 * 1000L, // 15 minutes for editorial catalog
-    private val maxCacheEntries: Int = 30
+    private val maxCacheEntries: Int = 30,
+    private val artistImageTtlMs: Long = 10 * 60 * 1000L,
+    private val artistImageMissTtlMs: Long = 30 * 1000L
 ) : DiscoveryRepository {
 
     companion object {
@@ -42,6 +46,7 @@ class DiscoveryRepositoryImpl(
     private val relatedTracksCache = ConcurrentHashMap<String, CacheEntry<List<Track>>>()
     private val playlistDetailCache = ConcurrentHashMap<String, CacheEntry<PlaylistDetail>>()
     private val artistCatalogCache = ConcurrentHashMap<String, CacheEntry<ArtistCatalog>>()
+    private val artistImageCache = ConcurrentHashMap<String, CacheEntry<String?>>()
 
     @Volatile
     private var featuredArtistsCache: CacheEntry<List<FeaturedArtist>>? = null
@@ -120,6 +125,38 @@ class DiscoveryRepositoryImpl(
             result.onSuccess { catalog ->
                 evictOldest(artistCatalogCache, maxCacheEntries)
                 artistCatalogCache[cleanKey] = CacheEntry(catalog, System.currentTimeMillis())
+            }
+            result
+        }
+    }
+
+    override suspend fun getArtistImage(artistName: String): Result<String?> = withContext(Dispatchers.IO) {
+        val cleanName = artistName.trim()
+        if (cleanName.isBlank()) return@withContext Result.success(null)
+        // Key on the app's identity authority, not on a bare lowercase string (FA-006). Portrait
+        // lookups are name-addressed, and `lowercase()` alone treats "Hans  Zimmer", a decomposed
+        // "Beyoncé", or "A.R. Rahman" vs "AR Rahman" as different artists — each costing an extra
+        // cache slot and an extra upstream request for ONE identity. [ArtistIdentity.nameKey] is
+        // the same canonicalisation the selector, the calculator and the backend already use, and
+        // it is deliberately NOT lossy (unlike `slugify`), so genuinely different artists such as
+        // "Beyoncé" and "Beyonce" keep separate entries. Names it cannot canonicalise — a credit
+        // with no letters or digits, e.g. the band "!!!" — fall back to today's key rather than
+        // being dropped. The request itself still carries the caller's original spelling.
+        val cacheKey = ArtistIdentity.nameKey(cleanName) ?: cleanName.lowercase()
+        val bypassPortraitCache = BuildConfig.VERIFY_PORTRAITS
+        val now = System.currentTimeMillis()
+        val cached = artistImageCache[cacheKey]
+        val cachedTtl = if (cached?.data == null) artistImageMissTtlMs else artistImageTtlMs
+        if (!bypassPortraitCache && cached != null && now - cached.timestamp < cachedTtl) {
+            Log.d(TAG, "Artist image cache hit for $cacheKey (0ms)")
+            return@withContext Result.success(cached.data)
+        }
+
+        executeDeduplicated("discovery:artist_image:$cacheKey") {
+            val result = backendClient.getArtistImage(cleanName)
+            if (!bypassPortraitCache) result.onSuccess { imageUrl ->
+                evictOldest(artistImageCache, maxCacheEntries)
+                artistImageCache[cacheKey] = CacheEntry(imageUrl, System.currentTimeMillis())
             }
             result
         }
@@ -216,6 +253,7 @@ class DiscoveryRepositoryImpl(
         relatedTracksCache.clear()
         playlistDetailCache.clear()
         artistCatalogCache.clear()
+        artistImageCache.clear()
         featuredArtistsCache = null
         playlistsCache = null
         quickPicksCache = null

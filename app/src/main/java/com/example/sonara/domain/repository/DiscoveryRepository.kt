@@ -30,6 +30,12 @@ interface DiscoveryRepository {
     /** Resolves catalog for a specific artist. */
     suspend fun getArtistCatalog(artistId: String, artistName: String): Result<ArtistCatalog>
 
+    /**
+     * Resolves a portrait for a locally derived artist. A miss is a successful null
+     * result so callers retain the intentional monogram fallback.
+     */
+    suspend fun getArtistImage(artistName: String): Result<String?> = Result.success(null)
+
     /** Curated playlist tiles (summaries only; tracks fetched on demand). */
     suspend fun getPlaylists(): Result<List<PlaylistSummary>>
 

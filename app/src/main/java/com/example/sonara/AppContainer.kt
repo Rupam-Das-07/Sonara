@@ -22,12 +22,24 @@ import com.example.sonara.domain.repository.HistoryRepository
 import com.example.sonara.domain.repository.LibraryRepository
 import com.example.sonara.domain.repository.LyricsRepository
 import com.example.sonara.data.remote.backend.SonaraBackendClient
+import com.example.sonara.data.remote.providers.LyricsProviderResolver
+import com.example.sonara.data.remote.providers.lrclib.LrclibLyricsProvider
+import com.example.sonara.data.remote.extractor.NewPipeDownloader
+import com.example.sonara.data.remote.extractor.NewPipeVideoExtractor
+import com.example.sonara.data.remote.extractor.SoundcloudSearchExtractorAdapter
+import com.example.sonara.data.remote.extractor.SoundcloudTrackExtractor
+import org.schabi.newpipe.extractor.downloader.Downloader
+import com.example.sonara.domain.ports.SoundcloudSearchPort
 import com.example.sonara.data.repository.ImportRepositoryImpl
+import com.example.sonara.domain.ports.SoundcloudTrackExtractionPort
+import com.example.sonara.domain.repository.HighResVideoRepository
+import com.example.sonara.data.repository.HighResVideoRepositoryImpl
 import com.example.sonara.domain.repository.ImportRepository
 import com.example.sonara.domain.repository.PlaylistRepository
 import com.example.sonara.domain.repository.SearchHistoryRepository
 import com.example.sonara.domain.repository.SearchRepository
 import com.example.sonara.domain.repository.SettingsRepository
+import com.example.sonara.domain.ports.VideoExtractionPort
 import com.example.sonara.playback.checkpoint.PlaybackCheckpointEngine
 import com.example.sonara.playback.client.MediaControllerClient
 import com.example.sonara.playback.controller.PlaybackQueueEngine
@@ -67,9 +79,21 @@ class AppContainer(context: Context) {
         )
     }
 
+    val newPipeDownloader: Downloader by lazy {
+        NewPipeDownloader()
+    }
+
+    val soundcloudSearchPort: SoundcloudSearchPort by lazy {
+        SoundcloudSearchExtractorAdapter(
+            downloader = newPipeDownloader
+        )
+    }
+
     val searchRepository: SearchRepository by lazy {
         SearchRepositoryImpl(
-            searchHistoryRepository = searchHistoryRepository
+            backendClient = backendClient,
+            searchHistoryRepository = searchHistoryRepository,
+            soundcloudSearchPort = soundcloudSearchPort
         )
     }
 
@@ -78,7 +102,11 @@ class AppContainer(context: Context) {
     }
 
     val lyricsRepository: LyricsRepository by lazy {
-        LyricsRepositoryImpl()
+        LyricsRepositoryImpl(
+            LyricsProviderResolver(
+                provider = LrclibLyricsProvider()
+            )
+        )
     }
 
     val playlistRepository: PlaylistRepository by lazy {
@@ -101,8 +129,24 @@ class AppContainer(context: Context) {
         )
     }
 
+    val soundcloudExtractor: SoundcloudTrackExtractionPort by lazy {
+        SoundcloudTrackExtractor(
+            downloader = newPipeDownloader
+        )
+    }
+
     val streamResolver: StreamResolverPort by lazy {
-        StreamResolverImpl()
+        StreamResolverImpl(soundcloudExtractor = soundcloudExtractor)
+    }
+
+    val videoExtractor: VideoExtractionPort by lazy {
+        NewPipeVideoExtractor(newPipeDownloader)
+    }
+
+    val highResVideoRepository: HighResVideoRepository by lazy {
+        HighResVideoRepositoryImpl(
+            backendClient = backendClient
+        )
     }
 
     val downloadEngine: DownloadEngine by lazy {
@@ -145,13 +189,6 @@ class AppContainer(context: Context) {
         )
     }
 
-    val playbackHistoryCoordinator: com.example.sonara.playback.checkpoint.PlaybackHistoryCoordinator by lazy {
-        com.example.sonara.playback.checkpoint.PlaybackHistoryCoordinator(
-            client = mediaControllerClient,
-            historyRepository = historyRepository
-        )
-    }
-
     val audioOutputRepository: com.example.sonara.domain.repository.AudioOutputRepository by lazy {
         com.example.sonara.data.repository.AudioOutputRepositoryImpl(
             context = context.applicationContext,
@@ -165,5 +202,9 @@ class AppContainer(context: Context) {
 
     val transitionManager: TransitionManager by lazy {
         TransitionManager()
+    }
+
+    val playbackRouteCoordinator: com.example.sonara.playback.controller.PlaybackRouteCoordinator by lazy {
+        com.example.sonara.playback.controller.PlaybackRouteCoordinator()
     }
 }

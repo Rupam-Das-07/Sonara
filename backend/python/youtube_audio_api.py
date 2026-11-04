@@ -3,7 +3,7 @@ youtube_audio_api.py
 --------------------
 Stand-alone Flask micro-server for YouTube audio extraction via yt-dlp.
 Runs on port 5001 — completely separate from the existing ytmusic_service.py
-(port 5000) and the Node.js backend (port 3001).
+(port 5000) and the Node.js backend (port 3002).
 
 Start this server independently:
   python youtube_audio_api.py
@@ -29,7 +29,7 @@ from flask import Flask, request, jsonify, Response, stream_with_context
 from flask_cors import CORS
 
 # Import only our new service — existing files are never touched
-from youtube_service import get_audio_info, search_youtube
+from youtube_service import get_audio_info, search_youtube, get_video_highres_info
 
 # Import URL encoding for proxy URL construction
 from urllib.parse import quote, urlparse, parse_qs, urljoin
@@ -53,9 +53,10 @@ class ThreadSafeTTLCache:
         self._cache = OrderedDict()
         self._lock = Lock()
 
-    def __setitem__(self, key: str, value: dict):
+    def set(self, key: str, value: dict, ttl: float = None):
         if not key:
             return
+        effective_ttl = self.ttl if ttl is None else float(ttl)
         with self._lock:
             now = time.time()
             # Clean expired first to control capacity
@@ -68,8 +69,11 @@ class ThreadSafeTTLCache:
                 oldest_key, _ = self._cache.popitem(last=False)
                 app.logger.info("[CacheEviction] Cache full. Evicted oldest entry: %s...", oldest_key[:50])
 
-            self._cache[key] = (value, now + self.ttl)
+            self._cache[key] = (value, now + effective_ttl)
             app.logger.info("[CacheInsert] Cached. Size: %d/%d", len(self._cache), self.maxsize)
+
+    def __setitem__(self, key: str, value: dict):
+        self.set(key, value)
 
     def get(self, key: str, default=None) -> dict:
         if not key:
@@ -116,6 +120,11 @@ _cache_metrics = {
 import threading
 _in_flight_cache_fills = {}
 _in_flight_lock = threading.Lock()
+
+# Phase 1: High-Resolution (8K) Stream Cache (Max 500 entries, default 2 hours TTL)
+_highres_cache = ThreadSafeTTLCache(maxsize=500, ttl_seconds=7200.0)
+_in_flight_highres_fills = {}
+_in_flight_highres_lock = threading.Lock()
 
 
 def _resolve_and_cache_stream(video_id: str) -> dict:
@@ -196,6 +205,7 @@ def root():
         "endpoints": [
             "/get-youtube-audio?url=<YOUTUBE_URL>",
             "/stream-youtube-audio?video_id=<ID>&audio_url=<DIRECT_STREAM_URL>  (proxy)",
+            "/get-youtube-video-highres?video_id=<ID>",
             "/search-youtube?q=<QUERY>&limit=10",
             "/api/debug/stream-cache"
         ],
@@ -275,6 +285,98 @@ def get_youtube_audio():
         with _in_flight_lock:
             if video_id in _in_flight_cache_fills:
                 del _in_flight_cache_fills[video_id]
+        event.set()
+
+
+# ── High-Resolution (8K) Endpoint (Phase 1) ─────────────────────────────────
+
+@app.get("/get-youtube-video-highres")
+def get_youtube_video_highres():
+    """
+    Extract high-resolution (8K/4320p) video and paired audio info for a YouTube video.
+    Returns hasHighRes: True with video/audio representation metadata if genuine 8K exists,
+    or hasHighRes: False if absent (cached negatively for 2 hours).
+    """
+    video_id = request.args.get("video_id", "").strip()
+    if not video_id:
+        url = request.args.get("url", "").strip()
+        if url:
+            video_id = extract_video_id(url) or ""
+
+    if not video_id or not re.fullmatch(r"[0-9A-Za-z_-]{11}", video_id):
+        return jsonify({
+            "error": "Missing or invalid required query param: video_id (must be an 11-character YouTube video ID)"
+        }), 400
+
+    # 1. Check Cache
+    cached = _highres_cache.get(video_id)
+    if cached is not None:
+        if cached.get("hasHighRes"):
+            now = time.time()
+            exp = float(cached.get("expiresAt", 0))
+            # Never serve an expired result (or one within the 600s safety margin)
+            if exp <= now + 600.0:
+                with _highres_cache._lock:
+                    _highres_cache._cache.pop(video_id, None)
+                cached = None
+        if cached is not None:
+            return jsonify(cached), 200
+
+    # 2. In-flight coalescing
+    with _in_flight_highres_lock:
+        if video_id in _in_flight_highres_fills:
+            event = _in_flight_highres_fills[video_id]
+            is_new = False
+        else:
+            event = threading.Event()
+            _in_flight_highres_fills[video_id] = event
+            is_new = True
+
+    if not is_new:
+        event.wait(timeout=35)
+        cached = _highres_cache.get(video_id)
+        if cached is not None:
+            if cached.get("hasHighRes"):
+                now = time.time()
+                exp = float(cached.get("expiresAt", 0))
+                if exp <= now + 600.0:
+                    with _highres_cache._lock:
+                        _highres_cache._cache.pop(video_id, None)
+                    cached = None
+            if cached is not None:
+                return jsonify(cached), 200
+        return jsonify({"error": "Concurrent high-resolution extraction failed."}), 500
+
+    # 3. Perform extraction
+    try:
+        data = get_video_highres_info(video_id)
+        now = time.time()
+        if data.get("hasHighRes"):
+            exp = float(data.get("expiresAt", 0))
+            if exp > now:
+                remaining = exp - now
+                ttl = remaining - 600.0  # 10-minute (600s) safety margin
+                if ttl > 7200.0:
+                    ttl = 7200.0
+                if ttl > 0.0:
+                    _highres_cache.set(video_id, data, ttl=ttl)
+            # If exp <= now, expiresAt is 0, or ttl <= 0: do NOT cache positive result
+        else:
+            # Negative cache for 2 hours (7200s)
+            _highres_cache.set(video_id, data, ttl=7200.0)
+
+        return jsonify(data), 200
+
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except RuntimeError as exc:
+        return jsonify({"error": str(exc)}), 422
+    except Exception as exc:
+        app.logger.exception("Unexpected error extracting high-res video for: %s", video_id)
+        return jsonify({"error": "An unexpected server error occurred.", "detail": str(exc)}), 500
+    finally:
+        with _in_flight_highres_lock:
+            _in_flight_highres_fills.pop(video_id, None)
         event.set()
 
 

@@ -1,6 +1,8 @@
 package com.example.sonara.playback.service
 
 import androidx.media3.common.Player
+import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaSession
 import androidx.media3.session.SessionCommand
@@ -14,7 +16,7 @@ import org.junit.Test
 @androidx.annotation.OptIn(UnstableApi::class)
 class SonaraPlaybackServiceSecurityTest {
 
-    private val sonaraPackage = "com.example.sonara"
+    private val sonaraPackage = "app.sonara.music"
     private val sonaraUid = 10250
     private val systemUiPackage = "com.android.systemui"
     private val systemUid = 1000
@@ -287,5 +289,108 @@ class SonaraPlaybackServiceSecurityTest {
             else -> SessionError.ERROR_NOT_SUPPORTED
         }
         assertEquals(SessionError.ERROR_NOT_SUPPORTED, result)
+    }
+
+    @Test
+    fun `extracted video media items are isolated from the native audio queue`() {
+        val extractedKind = MediaControllerClient.MEDIA_KIND_EXTRACTED_VIDEO
+
+        // 1. Extracted-video marker recognized across tag, metadata, and request channels
+        assertTrue(
+            SonaraPlaybackService.isExtractedVideoMarker(
+                tag = extractedKind,
+                metadataMediaKind = null,
+                requestMediaKind = null
+            )
+        )
+        assertTrue(
+            SonaraPlaybackService.isExtractedVideoMarker(
+                tag = null,
+                metadataMediaKind = extractedKind,
+                requestMediaKind = null
+            )
+        )
+        assertTrue(
+            SonaraPlaybackService.isExtractedVideoMarker(
+                tag = null,
+                metadataMediaKind = null,
+                requestMediaKind = extractedKind
+            )
+        )
+
+        // 2. Unmarked inputs and arbitrary strings remain unclassified
+        assertFalse(
+            SonaraPlaybackService.isExtractedVideoMarker(
+                tag = null,
+                metadataMediaKind = null,
+                requestMediaKind = null
+            )
+        )
+        assertFalse(
+            SonaraPlaybackService.isExtractedVideoMarker(
+                tag = "audio",
+                metadataMediaKind = "other",
+                requestMediaKind = "song"
+            )
+        )
+
+        // 3. MediaItem adapter boundary classifies native items and null as non-video
+        val nativeAudio = MediaItem.Builder()
+            .setMediaId("song-id")
+            .build()
+        assertFalse(SonaraPlaybackService.isExtractedVideoMediaItem(nativeAudio))
+        assertFalse(SonaraPlaybackService.isExtractedVideoMediaItem(null))
+
+        // 4. Extracted videos do not advance queue, enter history, or trigger track transition
+        val isExtracted = SonaraPlaybackService.isExtractedVideoMarker(
+            tag = extractedKind,
+            metadataMediaKind = null,
+            requestMediaKind = null
+        )
+        assertFalse(SonaraPlaybackService.shouldAdvanceQueueOnEnded(isExtracted))
+        assertFalse(
+            SonaraPlaybackService.shouldRecordAutoTransitionHistory(
+                reason = Player.MEDIA_ITEM_TRANSITION_REASON_AUTO,
+                isExtractedVideo = isExtracted
+            )
+        )
+        assertFalse(SonaraPlaybackService.shouldHandleNativeTrackTransition(isExtracted))
+
+        // 5. Native audio items continue to advance queue, enter history, and handle transition
+        val isNative = SonaraPlaybackService.isExtractedVideoMediaItem(nativeAudio)
+        assertTrue(SonaraPlaybackService.shouldAdvanceQueueOnEnded(isNative))
+        assertTrue(
+            SonaraPlaybackService.shouldRecordAutoTransitionHistory(
+                reason = Player.MEDIA_ITEM_TRANSITION_REASON_AUTO,
+                isExtractedVideo = isNative
+            )
+        )
+        assertTrue(SonaraPlaybackService.shouldHandleNativeTrackTransition(isNative))
+
+        // An empty timeline or paused item is not evidence of natural native completion.
+        assertFalse(
+            SonaraPlaybackService.shouldAdvanceQueueOnEnded(
+                isExtractedVideo = false,
+                hasCurrentMediaItem = false,
+                mediaItemCount = 0,
+                playWhenReady = false
+            )
+        )
+        assertFalse(
+            SonaraPlaybackService.shouldAdvanceQueueOnEnded(
+                isExtractedVideo = false,
+                hasCurrentMediaItem = true,
+                mediaItemCount = 1,
+                playWhenReady = false
+            )
+        )
+        assertTrue(
+            SonaraPlaybackService.shouldAdvanceQueueOnEnded(
+                isExtractedVideo = false,
+                hasCurrentMediaItem = true,
+                mediaItemCount = 1,
+                playWhenReady = true
+            )
+        )
     }
 }

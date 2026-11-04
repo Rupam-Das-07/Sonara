@@ -10,8 +10,9 @@ import com.example.sonara.BuildConfig
  * Injected at build time via BuildConfig.BASE_URL.
  *
  * Development topology:
- *   Android Emulator → 10.0.2.2:3002 (host machine loopback alias)
- *   Physical device  → host machine's LAN IP (e.g. http://192.168.x.x:3002)
+ *   Android Emulator → http://10.0.2.2:3002, or adb reverse with 127.0.0.1
+ *   Physical device  → adb reverse tcp:3002 tcp:3002 with 127.0.0.1, or an
+ *                      explicit SONARA_DEBUG_BACKEND_URL LAN origin
  *
  * Production topology:
  *   Android Client   → https://<production-endpoint> (Nginx reverse proxy with TLS)
@@ -51,4 +52,3 @@ object SonaraBackendConfig {
      */
     const val DISCOVERY_TIMEOUT_MS = 20_000
 }
-

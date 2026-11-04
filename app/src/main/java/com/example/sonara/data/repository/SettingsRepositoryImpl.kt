@@ -3,12 +3,14 @@ package com.example.sonara.data.repository
 import com.example.sonara.data.local.preferences.UserPreferencesDataStore
 import com.example.sonara.domain.model.AppLanguage
 import com.example.sonara.domain.model.AudioQuality
+import com.example.sonara.domain.model.ColorPalette
 import com.example.sonara.domain.model.DownloadFileFormat
 import com.example.sonara.domain.model.DownloadLocationMode
 import com.example.sonara.domain.model.PlaybackSessionSnapshot
 import com.example.sonara.domain.model.SearchMode
 import com.example.sonara.domain.model.ThemeMode
 import com.example.sonara.domain.model.UserPreferences
+import com.example.sonara.domain.model.video.VideoQuality
 import com.example.sonara.domain.repository.SettingsRepository
 import kotlinx.coroutines.flow.Flow
 
@@ -23,6 +25,9 @@ class SettingsRepositoryImpl(
 
     override suspend fun setThemeMode(mode: ThemeMode) =
         preferencesDataStore.setThemeMode(mode)
+
+    override suspend fun setSelectedPalette(palette: ColorPalette) =
+        preferencesDataStore.setSelectedPalette(palette)
 
     override suspend fun setShowRomanized(show: Boolean) =
         preferencesDataStore.setShowRomanized(show)
@@ -44,6 +49,9 @@ class SettingsRepositoryImpl(
 
     override suspend fun setDownloadOverWifiOnly(wifiOnly: Boolean) =
         preferencesDataStore.setDownloadOverWifiOnly(wifiOnly)
+
+    override suspend fun setDefaultVideoQuality(quality: VideoQuality) =
+        preferencesDataStore.setDefaultVideoQuality(quality)
 
     override suspend fun resetSettings() =
         preferencesDataStore.resetSettings()

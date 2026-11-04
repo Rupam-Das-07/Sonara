@@ -34,13 +34,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -74,7 +74,6 @@ import com.example.sonara.core.ui.components.PlayPauseMorph
 import com.example.sonara.core.ui.components.SonaraIconButton
 import com.example.sonara.core.ui.components.SonaraIconButtonVariant
 import com.example.sonara.core.ui.components.SonaraLoadingIndicator
-import com.example.sonara.core.ui.theme.SonaraPalette
 import com.example.sonara.core.ui.theme.SonaraTheme
 import com.example.sonara.feature.player.PlayerUiState
 
@@ -112,6 +111,8 @@ fun MiniPlayer(
     onPrevious: () -> Unit,
     onSeek: (Float) -> Unit,
     onClickBody: () -> Unit,
+    onToggleShuffle: () -> Unit,
+    onToggleRepeat: () -> Unit,
     audioOutputState: com.example.sonara.domain.model.AudioOutputState = com.example.sonara.domain.model.AudioOutputState(),
     onOpenAudioOutputSelector: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -152,6 +153,8 @@ fun MiniPlayer(
                 onPrevious                = onPrevious,
                 onSeek                    = onSeek,
                 onClickBody               = onClickBody,
+                onToggleShuffle           = onToggleShuffle,
+                onToggleRepeat            = onToggleRepeat,
                 audioOutputState          = audioOutputState,
                 onOpenAudioOutputSelector = onOpenAudioOutputSelector
             )
@@ -177,19 +180,17 @@ private fun MiniPlayerCard(
     onPrevious: () -> Unit,
     onSeek: (Float) -> Unit,
     onClickBody: () -> Unit,
+    onToggleShuffle: () -> Unit,
+    onToggleRepeat: () -> Unit,
     audioOutputState: com.example.sonara.domain.model.AudioOutputState = com.example.sonara.domain.model.AudioOutputState(),
     onOpenAudioOutputSelector: () -> Unit = {}
 ) {
     val colors = SonaraTheme.colors
     val materials = SonaraTheme.materials
 
-    // Local shuffle and repeat states
-    var isShuffled by remember { mutableStateOf(false) }
-    var repeatMode by remember { mutableIntStateOf(0) } // 0 = off, 1 = repeat all, 2 = repeat one
-
     // Smooth liquid progress animation synchronized with actual playback position (FROZEN)
     val liquidProgress by animateFloatAsState(
-        targetValue = state.progress,
+        targetValue = if (state.isLive && !state.isUpcoming) 1f else state.progress,
         animationSpec = if (state.isPlaying) {
             tween(durationMillis = 500, easing = LinearEasing)
         } else {
@@ -204,13 +205,13 @@ private fun MiniPlayerCard(
     val isDark = colors.isDark
 
     val capsuleBackground = materials.player
-    val capsuleBorder = if (isDark) Color(0xFF264043).copy(alpha = 0.60f) else SonaraPalette.BoneBorder.copy(alpha = 0.85f)
-    val shadowSpot = if (isDark) Color.Black.copy(alpha = 0.45f) else Color(0xFF2E1C15).copy(alpha = 0.16f)
-    val shadowAmbient = if (isDark) Color.Black.copy(alpha = 0.25f) else Color(0xFF2E1C15).copy(alpha = 0.08f)
-    val timestampColor = if (isDark) Color(0xFFA8A297) else SonaraPalette.DarkSecondaryText
-    val titleColor = if (isDark) Color(0xFFF6F2EA) else SonaraPalette.DarkPrimaryText
-    val subtitleColor = if (isDark) Color(0xFFA8A297) else SonaraPalette.DarkSecondaryText
-    val transportIconColor = if (isDark) Color.White.copy(alpha = 0.90f) else SonaraPalette.DarkPrimaryText.copy(alpha = 0.90f)
+    val capsuleBorder = colors.divider
+    val shadowSpot = if (isDark) Color.Black.copy(alpha = 0.45f) else Color.Black.copy(alpha = 0.16f)
+    val shadowAmbient = if (isDark) Color.Black.copy(alpha = 0.25f) else Color.Black.copy(alpha = 0.08f)
+    val timestampColor = colors.secondaryText
+    val titleColor = colors.primaryText
+    val subtitleColor = colors.secondaryText
+    val transportIconColor = colors.primaryText.copy(alpha = 0.90f)
 
     Box(
         modifier = Modifier
@@ -237,7 +238,7 @@ private fun MiniPlayerCard(
                 .background(
                     Brush.radialGradient(
                         colors = listOf(
-                            SonaraPalette.OxideAccent.copy(alpha = if (isDark) 0.08f else 0.04f),
+                            colors.accent.copy(alpha = if (isDark) 0.08f else 0.04f),
                             Color.Transparent
                         ),
                         radius = 650f,
@@ -263,7 +264,11 @@ private fun MiniPlayerCard(
             ) {
                 // Elapsed timestamp (FROZEN: 13.5sp SemiBold, 36dp width)
                 Text(
-                    text       = formatTime(state.currentPositionMs / 1000L),
+                    text       = if (state.isPositionAvailable) {
+                        formatTime(state.currentPositionMs / 1000L)
+                    } else {
+                        "--:--"
+                    },
                     fontSize   = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                     color      = timestampColor,
@@ -283,12 +288,12 @@ private fun MiniPlayerCard(
 
                 // Duration timestamp (FROZEN: 13.5sp SemiBold, 36dp width)
                 Text(
-                    text       = if (state.durationMs > 0L) formatTime(state.durationMs / 1000L) else "--:--",
+                    text       = if (state.isLive) "LIVE" else if (state.durationMs > 0L) formatTime(state.durationMs / 1000L) else "--:--",
                     fontSize   = 13.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color      = timestampColor,
+                    color      = if (state.isLive) colors.accent else timestampColor,
                     textAlign  = TextAlign.Start,
-                    modifier   = Modifier.width(36.dp)
+                    modifier   = Modifier.widthIn(min = 36.dp)
                 )
             }
 
@@ -319,11 +324,11 @@ private fun MiniPlayerCard(
                                 elevation    = 6.dp,
                                 shape        = RoundedCornerShape(8.dp),
                                 clip         = false,
-                                spotColor    = if (isDark) Color.Black.copy(alpha = 0.55f) else Color(0xFF2E1C15).copy(alpha = 0.20f),
-                                ambientColor = if (isDark) Color.Black.copy(alpha = 0.25f) else Color(0xFF2E1C15).copy(alpha = 0.10f)
+                                spotColor    = if (isDark) Color.Black.copy(alpha = 0.55f) else Color.Black.copy(alpha = 0.20f),
+                                ambientColor = if (isDark) Color.Black.copy(alpha = 0.25f) else Color.Black.copy(alpha = 0.10f)
                             )
                             .clip(RoundedCornerShape(8.dp))
-                            .background(if (isDark) Color(0xFF132B2D) else SonaraPalette.BoneSecondarySurface)
+                            .background(colors.surfaceVariant)
                             .border(0.75.dp, if (isDark) Color.White.copy(alpha = 0.16f) else Color.Black.copy(alpha = 0.08f), RoundedCornerShape(8.dp)),
                         contentAlignment = Alignment.Center
                     ) {
@@ -333,7 +338,7 @@ private fun MiniPlayerCard(
                                     .data(state.artworkUrl)
                                     .crossfade(250)
                                     .build(),
-                                contentDescription = "${state.trackTitle} artwork",
+                                contentDescription = "${state.effectiveTitle} artwork",
                                 contentScale       = ContentScale.Crop,
                                 modifier           = Modifier.fillMaxSize()
                             )
@@ -342,14 +347,14 @@ private fun MiniPlayerCard(
                                 text       = "♪",
                                 fontSize   = 18.sp,
                                 fontWeight = FontWeight.Bold,
-                                color      = SonaraPalette.OxideAccent
+                                color      = colors.accent
                             )
                         }
                     }
 
                     // Metadata Column: Optically Centered with Artwork with Smooth Crossfade
                     AnimatedContent(
-                        targetState = state.trackTitle to (state.artistName to state.albumTitle),
+                        targetState = state.effectiveTitle to (state.artistName to state.albumTitle),
                         transitionSpec = {
                             fadeIn(animationSpec = tween(200)) togetherWith fadeOut(animationSpec = tween(150))
                         },
@@ -409,7 +414,7 @@ private fun MiniPlayerCard(
                     androidx.compose.material3.Icon(
                         imageVector = getDeviceIcon(audioOutputState.activeDevice.type),
                         contentDescription = outputDesc,
-                        tint = if (isExternal) SonaraPalette.OxideAccent else transportIconColor.copy(alpha = 0.65f),
+                        tint = if (isExternal) colors.accent else transportIconColor.copy(alpha = 0.65f),
                         modifier = Modifier.size(17.dp)
                     )
                 }
@@ -430,15 +435,15 @@ private fun MiniPlayerCard(
                 ) {
                     // Left Secondary Flank: Shuffle Icon
                     SonaraIconButton(
-                        onClick            = { isShuffled = !isShuffled },
-                        contentDescription = if (isShuffled) "Disable shuffle" else "Enable shuffle",
+                        onClick            = onToggleShuffle,
+                        contentDescription = if (state.isShuffled) "Disable shuffle" else "Enable shuffle",
                         variant            = SonaraIconButtonVariant.Ghost,
                         size               = 36.dp
                     ) {
                         Icon(
                             imageVector        = PhosphorIcons.Shuffle,
-                            contentDescription = if (isShuffled) "Disable shuffle" else "Enable shuffle",
-                            tint               = if (isShuffled) SonaraPalette.OxideAccent else transportIconColor.copy(alpha = 0.80f),
+                            contentDescription = if (state.isShuffled) "Disable shuffle" else "Enable shuffle",
+                            tint               = if (state.isShuffled) colors.accent else transportIconColor.copy(alpha = 0.80f),
                             modifier           = Modifier.size(21.dp)
                         )
                     }
@@ -480,7 +485,7 @@ private fun MiniPlayerCard(
                                 PlayPauseMorph(
                                     isPlaying = state.isPlaying,
                                     size      = 26.dp,
-                                    color     = Color.White
+                                    color     = colors.onAccent
                                 )
                             }
                         }
@@ -501,12 +506,10 @@ private fun MiniPlayerCard(
                     }
 
                     // Right Secondary Flank: Repeat Icon
-                    val repeatIcon = if (repeatMode == 2) PhosphorIcons.RepeatOnce else PhosphorIcons.Repeat
+                    val repeatIcon = if (state.repeatMode == 2) PhosphorIcons.RepeatOnce else PhosphorIcons.Repeat
                     SonaraIconButton(
-                        onClick = {
-                            repeatMode = (repeatMode + 1) % 3
-                        },
-                        contentDescription = when (repeatMode) {
+                        onClick = onToggleRepeat,
+                        contentDescription = when (state.repeatMode) {
                             1 -> "Repeat all"
                             2 -> "Repeat one"
                             else -> "Repeat off"
@@ -516,12 +519,12 @@ private fun MiniPlayerCard(
                     ) {
                         Icon(
                             imageVector        = repeatIcon,
-                            contentDescription = when (repeatMode) {
+                            contentDescription = when (state.repeatMode) {
                                 1 -> "Repeat all"
                                 2 -> "Repeat one"
                                 else -> "Repeat off"
                             },
-                            tint               = if (repeatMode > 0) SonaraPalette.OxideAccent else transportIconColor.copy(alpha = 0.80f),
+                            tint               = if (state.repeatMode > 0) colors.accent else transportIconColor.copy(alpha = 0.80f),
                             modifier           = Modifier.size(21.dp)
                         )
                     }
@@ -542,8 +545,9 @@ private fun LiquidSegmentedProgressRail(
     isDark: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val activeColor = Color(0xFFB85D38) // Crisp Oxide Accent
-    val inactiveColor = if (isDark) Color.White.copy(alpha = 0.14f) else Color(0xFF1B1F1E).copy(alpha = 0.15f)
+    val colors = SonaraTheme.colors
+    val activeColor = colors.playbackActive
+    val inactiveColor = colors.surfaceVariant
 
     val currentOnSeek by rememberUpdatedState(onSeek)
     var isDragging by remember { mutableStateOf(false) }
@@ -663,11 +667,18 @@ private fun PlayIcon(modifier: Modifier = Modifier, color: Color = Color.White) 
     }
 }
 
-/** Format seconds to mm:ss string, matching Web Desktop PlaybackProgress formatTime() (FROZEN) */
+/** Format seconds to mm:ss or hh:mm:ss string, matching Web Desktop PlaybackProgress formatTime() (FROZEN) */
 private fun formatTime(totalSeconds: Long): String {
     if (totalSeconds <= 0L) return "0:00"
-    val m = totalSeconds / 60L
-    val s = totalSeconds % 60L
+    val hours = totalSeconds / 3600L
+    val remainderSeconds = totalSeconds % 3600L
+    val m = remainderSeconds / 60L
+    val s = remainderSeconds % 60L
     val sStr = if (s < 10L) "0$s" else "$s"
-    return "$m:$sStr"
+    return if (hours > 0L) {
+        val mStr = if (m < 10L) "0$m" else "$m"
+        "$hours:$mStr:$sStr"
+    } else {
+        "$m:$sStr"
+    }
 }

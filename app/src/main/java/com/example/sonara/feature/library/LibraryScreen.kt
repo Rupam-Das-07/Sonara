@@ -18,20 +18,27 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import com.example.sonara.R
+import com.example.sonara.core.ui.components.PhosphorIcons
 import com.example.sonara.core.ui.components.SonaraButton
 import com.example.sonara.core.ui.components.SonaraButtonVariant
 import com.example.sonara.core.ui.components.SonaraEmptyState
+import com.example.sonara.core.ui.components.SonaraIconButton
+import com.example.sonara.core.ui.components.SonaraIconButtonVariant
 import com.example.sonara.core.ui.motion.LocalReduceMotion
 import com.example.sonara.core.ui.motion.SonaraMotion
 import com.example.sonara.core.ui.theme.SonaraTheme
+import com.example.sonara.domain.model.PlaybackOrigin
 import com.example.sonara.domain.model.Track
 import kotlin.math.roundToInt
 
@@ -44,7 +51,17 @@ fun LibraryScreen(
     state: LibraryUiState,
     onSelectTab: (LibraryTab) -> Unit,
     onPlayTrack: (Track) -> Unit,
+    /**
+     * Phase 2B: play intent carrying this surface's provenance. Only the Liked Songs tab
+     * is eligible ([PlaybackOrigin.LIKED_SONGS]); replaying from the History tab is
+     * explicitly [PlaybackOrigin.OTHER], so history cannot bootstrap its own eligibility.
+     */
+    onPlayTrackWithOrigin: (Track, PlaybackOrigin) -> Unit = { track, _ -> onPlayTrack(track) },
+    onPlayTrackWithContext: (Track, PlaybackOrigin, List<Track>) -> Unit = { track, origin, _ ->
+        onPlayTrackWithOrigin(track, origin)
+    },
     onToggleLike: (Track, Boolean) -> Unit,
+    onRemoveDownload: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val dimensions = SonaraTheme.dimensions
@@ -52,6 +69,7 @@ fun LibraryScreen(
 
     // Hoist list states so switching tabs preserves scroll position
     val likedSongsListState = rememberLazyListState()
+    val downloadedListState = rememberLazyListState()
     val historyListState = rememberLazyListState()
 
     Column(
@@ -61,7 +79,7 @@ fun LibraryScreen(
     ) {
         Spacer(modifier = Modifier.height(dimensions.spaceSm))
 
-        // Tab Row: Liked Songs | History
+        // Tab Row: Liked Songs | Downloads | History
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(dimensions.spaceXs)
@@ -70,6 +88,12 @@ fun LibraryScreen(
                 text = "${stringResource(R.string.tab_liked_songs)} (${state.likedSongs.size})",
                 onClick = { onSelectTab(LibraryTab.LIKED_SONGS) },
                 variant = if (state.selectedTab == LibraryTab.LIKED_SONGS) SonaraButtonVariant.Primary else SonaraButtonVariant.Secondary,
+                modifier = Modifier.weight(1f)
+            )
+            SonaraButton(
+                text = "${stringResource(R.string.tab_downloads)} (${state.downloads.size})",
+                onClick = { onSelectTab(LibraryTab.DOWNLOADS) },
+                variant = if (state.selectedTab == LibraryTab.DOWNLOADS) SonaraButtonVariant.Primary else SonaraButtonVariant.Secondary,
                 modifier = Modifier.weight(1f)
             )
             SonaraButton(
@@ -157,8 +181,48 @@ fun LibraryScreen(
                                 TrackRowItem(
                                     track = track,
                                     isLiked = true,
-                                    onPlay = { onPlayTrack(track) },
+                                     onPlay = { onPlayTrackWithContext(track, PlaybackOrigin.LIKED_SONGS, state.likedSongs) },
                                     onToggleLike = { onToggleLike(track, true) }
+                                )
+                            }
+                        }
+                    }
+                }
+                LibraryTab.DOWNLOADS -> {
+                    if (state.downloads.isEmpty()) {
+                        SonaraEmptyState(
+                            title = stringResource(R.string.library_downloads_empty_title),
+                            message = stringResource(R.string.library_downloads_empty_message)
+                        )
+                    } else {
+                        LazyColumn(
+                            state = downloadedListState,
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.spacedBy(dimensions.spaceSm)
+                        ) {
+                            items(state.downloads, key = { it.id }) { track ->
+                                TrackRowItem(
+                                    track = track,
+                                    isLiked = state.likedSongs.any { it.id == track.id },
+                                     onPlay = { onPlayTrackWithContext(track, PlaybackOrigin.OTHER, state.downloads) },
+                                    onToggleLike = { isLiked -> onToggleLike(track, isLiked) },
+                                    trailingContent = if (onRemoveDownload != null) {
+                                        {
+                                            SonaraIconButton(
+                                                onClick = { onRemoveDownload(track.id) },
+                                                contentDescription = "Remove download ${track.title}",
+                                                variant = SonaraIconButtonVariant.Ghost,
+                                                size = dimensions.minTouchTarget
+                                            ) {
+                                                Icon(
+                                                    imageVector = PhosphorIcons.Trash,
+                                                    contentDescription = "Remove download",
+                                                    tint = SonaraTheme.colors.secondaryText,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            }
+                                        }
+                                    } else null
                                 )
                             }
                         }
@@ -180,7 +244,7 @@ fun LibraryScreen(
                                 TrackRowItem(
                                     track = item.track,
                                     isLiked = state.likedSongs.any { it.id == item.track.id },
-                                    onPlay = { onPlayTrack(item.track) },
+                                     onPlay = { onPlayTrackWithContext(item.track, PlaybackOrigin.OTHER, state.history.map { it.track }) },
                                     onToggleLike = { isLiked -> onToggleLike(item.track, isLiked) }
                                 )
                             }
@@ -199,7 +263,9 @@ fun TrackRowItem(
     onPlay: () -> Unit,
     onToggleLike: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
-    onLongClick: (() -> Unit)? = null
+    onLongClick: (() -> Unit)? = null,
+    trailingContent: (@Composable () -> Unit)? = null,
+    isVideo: Boolean = false
 ) {
     com.example.sonara.core.ui.components.TrackRow(
         track = track,
@@ -207,6 +273,8 @@ fun TrackRowItem(
         onPlay = onPlay,
         onToggleLike = onToggleLike,
         modifier = modifier,
-        onLongClick = onLongClick
+        onLongClick = onLongClick,
+        trailingContent = trailingContent,
+        isVideo = isVideo
     )
 }

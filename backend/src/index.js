@@ -37,6 +37,7 @@ const identityRoutes = require('./routes/identity');
 const trendingRoutes = require('./routes/trending');
 const quickPicksRoutes = require('./routes/quickpicks');
 const importRoutes = require('./routes/import');
+const videoRoutes = require('./routes/videos');
 const { identityStore } = require('./identity/IdentityStore');
 const { checkHealth, STATUS } = require('./operations/healthChecker');
 
@@ -112,6 +113,7 @@ app.use('/api/v1/identity', identityRoutes);
 app.use('/api/v1/trending', trendingRoutes);
 app.use('/api/v1/quickpicks', quickPicksRoutes);
 app.use('/api/v1/import', importRoutes);
+app.use('/api/v1/videos', videoRoutes);
 
 // Compatibility aliases
 app.use('/api/search', searchRoutes);

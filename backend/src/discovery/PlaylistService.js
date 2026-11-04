@@ -18,11 +18,65 @@
 const ytmusic = require('../search/ytmusicProvider');
 const { getDefinitionById } = require('./PlaylistDefinitions');
 const { isEligible } = require('./EligibilityEngine');
+const { shouldRefresh, resolveIntervalDays } = require('./PlaylistRefreshPolicy');
+const { DiscoveryFeedService } = require('./discoveryFeedService');
 const BoundedCache = require('../utils/BoundedCache');
+const config = require('../config/env');
 const logger = require('../utils/logger');
 
 const _playlistCache = new BoundedCache({ maxSize: 50, ttlMs: 60 * 60 * 1000 }); // 1 hour
 const _coverCache = new BoundedCache({ maxSize: 100, ttlMs: 24 * 60 * 60 * 1000 }); // 24 hours
+
+// Last-known-good generated content per playlist, retained independently of
+// `_playlistCache`. Two product requirements need exactly this and cannot be served
+// by the cache alone:
+//   1. serving a playlist for its whole declared cadence — the cache's own 1-hour TTL
+//      would otherwise evict it long before a 2/7/14-day cadence elapses;
+//   2. "a failed refresh must never destroy a healthy playlist" — after eviction there
+//      would be no healthy result left to fall back to.
+// Bounded by the number of definitions (30), so this cannot grow without limit.
+const _playlistSnapshot = new Map();
+const _playlistGeneratedAt = new Map();
+// One generation/commit per playlist; unrelated definitions progress independently.
+const _playlistInFlight = new Map();
+
+// Negative-result backoff.
+//
+// Some playlists can legitimately resolve to NOTHING on a given catalogue: the
+// era-gated ones (`retro_bollywood` requires 1980–2000, `golden_bollywood` requires
+// pre-1985) reject every modern candidate, and an inherently thin query set can
+// under-produce. Because an empty result is deliberately never cached (so it can
+// never replace a healthy playlist), such a playlist was previously retried on EVERY
+// single request, forever — measured at 1,443 regeneration attempts / 4,329 upstream
+// search calls in one simulated day of traffic for a single playlist.
+//
+// This records "do not re-attempt before" for those candidates. The window is the
+// playlist's own declared cadence, floored at [EMPTY_RETRY_FLOOR_MS] so a playlist
+// that is empty for an unrelated transient reason still recovers promptly rather than
+// being wedged for a fortnight. A cached healthy snapshot, when one exists, is always
+// preferred over this path, so this can never mask a good playlist.
+const _playlistEmptyUntil = new Map();
+// A non-empty but under-filled generation is retryable only when at least one
+// attempted source failed. Successful sources may legitimately yield fewer tracks
+// than the editorial target, so those results remain cacheable.
+const _playlistRetryUntil = new Map();
+const EMPTY_RETRY_FLOOR_MS = 60 * 60 * 1000; // 1 hour
+
+/**
+ * How long to wait before re-attempting a playlist whose generation produced nothing.
+ *
+ * The playlist's own declared cadence, floored at [EMPTY_RETRY_FLOOR_MS] so a playlist
+ * that is temporarily empty still recovers promptly rather than being wedged for a
+ * fortnight. A cadence is always >= 1 day, so in practice this is the cadence; the
+ * floor only matters if that guarantee ever changes.
+ *
+ * @param {object} definition
+ * @returns {number} milliseconds
+ */
+function emptyBackoffMs(definition) {
+  const cadenceMs = resolveIntervalDays(definition) * 24 * 60 * 60 * 1000;
+  return Math.max(EMPTY_RETRY_FLOOR_MS, cadenceMs);
+}
 
 // Known creative duos and composer partnerships that must not be split
 const CREATIVE_DUOS = [
@@ -86,8 +140,10 @@ function bestArtwork(track) {
  */
 function cleanArtistString(raw) {
   return (raw || '')
+    .normalize('NFC')
     .toLowerCase()
-    .replace(/[^\w\s-]/g, '')
+    .normalize('NFC')
+    .replace(/[^\p{L}\p{M}\p{N}_\s-]/gu, '')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -204,7 +260,7 @@ function extractAllContributors(track) {
  * @returns {string} Canonical deduplication key
  */
 function getCanonicalTrackKey(track, allowRemix = false, allowAcoustic = false) {
-  let title = (track.title || '').toLowerCase();
+  let title = (track.title || '').normalize('NFC').toLowerCase().normalize('NFC');
 
   // Extract intentional version marker before stripping noise
   let versionTag = '';
@@ -229,7 +285,7 @@ function getCanonicalTrackKey(track, allowRemix = false, allowAcoustic = false) 
   title = title.replace(/\[[^\]]*\]/g, '');
   // Strip packaging noise words outside parens if any
   title = title.replace(/\b(official\s+(audio|video|lyric|lyrics|video\s*song)|full\s*(song|video|audio)|video\s*song|lyric\s*video)\b/gi, '');
-  title = title.replace(/[^\w\s]/g, '');
+  title = title.replace(/[^\p{L}\p{M}\p{N}_\s]/gu, '');
   title = title.replace(/\s+/g, ' ').trim();
 
   const primary = normalizePrimaryArtist(track);
@@ -288,13 +344,114 @@ function toPlaylistTrackDTO(track, videoId) {
 }
 
 /**
- * Resolves the raw candidate pool for a definition.
+ * How long a playlist waits for the OPTIONAL native feed before serving the
+ * candidates it already has.
+ *
+ * The native path is bounded at one shelf call plus ceil(10/4) = 3 waves of album
+ * lookups, so its worst case is FOUR sequential upstream timeouts. Measured against a
+ * 200ms stub the whole path cost ~805ms (4 waves) even though the search queries had
+ * already returned enough eligible tracks at ~20ms; at the production timeout that
+ * shape extrapolates to ~4 x ytmusicTimeoutMs. One timeout unit is therefore the
+ * budget: it comfortably clears a healthy native fetch (~130ms measured) while
+ * capping a stalled one at a single wave instead of four.
+ */
+const NATIVE_ENRICHMENT_BUDGET_MS = config.ytmusicTimeoutMs || 8000;
+
+/**
+ * Resolves with `promise`'s value, or with [] once `budgetMs` elapses.
+ *
+ * Work left running past the budget is bounded and self-cleaning, so nothing is
+ * orphaned in a harmful sense: it is capped at <= 10 album lookups with concurrency 4
+ * and per-request abort timeouts, it cannot reject (getNewReleaseTracks swallows its
+ * own errors), and it removes its own in-flight entry in a finally block. The timer is
+ * unref'd and always cleared, so it can neither hold the event loop open nor
+ * accumulate.
+ *
+ * COST OF A TRIP — do not overstate this. The abandoned work does write its result
+ * into the feed cache when it finishes, but that cache has a 6h TTL while a playlist's
+ * cadence and its empty-result backoff can be as long as 48h (fresh_releases:
+ * updateIntervalDays 2, and emptyBackoffMs = max(1h, cadence)). When the next
+ * regeneration is further away than 6h the entry has already expired, so that late
+ * result is NOT generally available to the following refresh, and both caches live in
+ * the same process memory so a restart clears them together. In other words a trip can
+ * leave this playlist without native enrichment for the whole next refresh window,
+ * serving search-only results until then.
+ *
+ * That is a deliberate trade, not a free lunch: the alternative is making a user wait
+ * for up to four sequential upstream timeouts. It is also not an inevitable one — a
+ * trip only happens when the native path actually overruns the budget, a healthy
+ * fetch (measured ~130ms against stubs) finishes far inside it and contributes
+ * normally, and a refresh that does land within 6h of the cached entry still uses it.
+ *
+ * @param {Promise<object[]>} promise
+ * @param {number} budgetMs
+ * @param {string} playlistId - for the log line only
+ * @returns {Promise<object[]>}
+ */
+function withEnrichmentBudget(promise, budgetMs, playlistId) {
+  let timer = null;
+
+  const budgetExpired = new Promise((resolve) => {
+    timer = setTimeout(() => {
+      logger.warn(`[PlaylistService] Native feed exceeded its ${budgetMs}ms enrichment budget for "${playlistId}"; serving the candidates already resolved`);
+      resolve([]);
+    }, budgetMs);
+    if (timer && typeof timer.unref === 'function') timer.unref();
+  });
+
+  return Promise.race([promise, budgetExpired]).finally(() => clearTimeout(timer));
+}
+
+/**
+ * Resolves and selects the candidate pool for a definition.
  * Queries run concurrently via Promise.allSettled and results are interleaved round-robin.
  *
  * @param {object} definition
- * @returns {Promise<object[]>} CanonicalTrack[]
+ * @returns {Promise<{finalTracks: object[], rejections: object, candidatesEvaluated: number}>}
  */
 async function resolveCandidatePool(definition) {
+  const sourceHealth = { attempted: [], failed: [] };
+  // Stage 1B: Native Chart Feed Candidate Resolution
+  if (definition && (definition.candidateSource === 'chart' || definition.chartConfig)) {
+    let chartTracks;
+    try {
+      const chartConfig = definition.chartConfig || {};
+      chartTracks = await DiscoveryFeedService.getChartTracks(chartConfig);
+      sourceHealth.attempted.push('chart');
+      if (chartTracks?.sourceFailed) sourceHealth.failed.push('chart');
+      if (!Array.isArray(chartTracks) || chartTracks.length === 0) {
+        logger.warn(`[PlaylistService] Native chart source returned 0 candidates for "${definition.id}"; falling back to search queries`);
+      }
+    } catch (err) {
+      sourceHealth.attempted.push('chart');
+      sourceHealth.failed.push('chart');
+      logger.warn(`[PlaylistService] Native chart source failed for "${definition.id}": ${err.message}; falling back to search queries`);
+    }
+    if (Array.isArray(chartTracks) && chartTracks.length > 0) {
+      return { ...selectPlaylistTracks(chartTracks, definition), sourceHealth };
+    }
+  }
+
+  // Stage 1C: Native New-Releases feeder — ADDITIVE, never a replacement.
+  // Started here rather than awaited so it overlaps the search queries below. The
+  // search queries always still run and contribute. A slow native path can be
+  // abandoned only when search can fill the playlist after selection. Freshness
+  // from this source is an editorial approximation (shelf
+  // membership + container type), NOT a verified release date.
+  let readyNativePool;
+  let nativeFeedFailed = false;
+  const nativeFeedPromise = definition && definition.nativeFeed === 'new_releases'
+    ? DiscoveryFeedService.getNewReleaseTracks().catch((err) => {
+      nativeFeedFailed = true;
+      logger.warn(`[PlaylistService] Native new-releases feed failed for "${definition.id}": ${err.message}; using search candidates only`);
+      return [];
+    }).then((tracks) => {
+      readyNativePool = Array.isArray(tracks) ? tracks : [];
+      if (readyNativePool.sourceFailed) nativeFeedFailed = true;
+      return readyNativePool;
+    })
+    : null;
+
   let queries = definition.candidateQueries || [];
 
   // If candidateQueries is empty, fallback to artistName or name
@@ -313,6 +470,8 @@ async function resolveCandidatePool(definition) {
   queries = queries.map((q) => q.replace(/\{year\}/g, String(currentYear)));
 
   const settled = await Promise.allSettled(queries.map((q) => ytmusic.searchSongs(q)));
+  sourceHealth.attempted.push('search');
+  if (settled.some((outcome) => outcome.status === 'rejected')) sourceHealth.failed.push('search');
 
 
   const queryResults = [];
@@ -324,7 +483,44 @@ async function resolveCandidatePool(definition) {
     }
   });
 
-  return interleaveQueries(queryResults);
+  const searchPool = interleaveQueries(queryResults);
+
+  // If native is already healthy, select the hybrid directly: search sufficiency
+  // must never suppress native-first round robin or add a needless search-only pass.
+  if (readyNativePool?.length > 0) {
+    sourceHealth.attempted.push('native');
+    if (nativeFeedFailed) sourceHealth.failed.push('native');
+    return { ...selectPlaylistTracks(interleaveQueries([readyNativePool, searchPool]), definition), sourceHealth };
+  }
+
+  const searchSelection = selectPlaylistTracks(searchPool, definition);
+  if (!nativeFeedPromise) return { ...searchSelection, sourceHealth };
+
+  // Count actual final slots, including dedup, eligibility, the hard primary cap
+  // and soft-contributor fallback. Raw results can greatly overstate usable tracks.
+  // A full search selection gets one timeout unit of OPTIONAL enrichment wait.
+  // A short selection waits for the existing bounded native path: one shelf call
+  // plus ceil(10 containers / 4 concurrent lookups) = three album waves, each with
+  // its existing per-call abort. No new freshness, cadence or backoff policy.
+  const searchCanStandAlone = searchSelection.finalTracks.length >= definition.size;
+  const nativePool = searchCanStandAlone
+    ? await withEnrichmentBudget(nativeFeedPromise, NATIVE_ENRICHMENT_BUDGET_MS, definition.id)
+    : await nativeFeedPromise;
+
+  if (!Array.isArray(nativePool) || nativePool.length === 0) {
+    sourceHealth.attempted.push('native');
+    if (nativeFeedFailed) sourceHealth.failed.push('native');
+    logger.warn(`[PlaylistService] Native new-releases feed contributed 0 candidates for "${definition.id}"; using search candidates only`);
+    return { ...searchSelection, sourceHealth };
+  }
+
+  // Native arrived during the wait: select the hybrid anew because native-first
+  // competition can change dedup winners, artist caps and deferred contributors.
+  // Appending selected search DTOs would lose that information. The selection is
+  // pure; only this final result is logged and committed by the generator.
+  sourceHealth.attempted.push('native');
+  if (nativeFeedFailed) sourceHealth.failed.push('native');
+  return { ...selectPlaylistTracks(interleaveQueries([nativePool, searchPool]), definition), sourceHealth };
 }
 
 /**
@@ -426,6 +622,134 @@ function declusterArtists(tracks) {
 }
 
 
+/**
+ * Pure selection shared by the search sufficiency decision and final generation.
+ * Keeps the three passes and DTO ordering identical; diagnostics are returned,
+ * never logged here, and no cache/cadence state or input candidate is mutated.
+ */
+function selectPlaylistTracks(pool, definition) {
+  const eligibility = definition.eligibility || {};
+  const maxArtistTracks = Number.isFinite(eligibility.maxArtistTracks)
+    ? eligibility.maxArtistTracks
+    : Number.POSITIVE_INFINITY;
+
+  const eligibleTracks = [];
+  const deferredTracks = [];
+  const seenVideoIds = new Set();
+  const seenCanonicalKeys = new Set();
+  const primaryCounts = new Map();
+  const contributorCounts = new Map();
+  const rejections = Object.create(null);
+
+  const note = (reason) => {
+    rejections[reason] = (rejections[reason] || 0) + 1;
+  };
+
+  // ── PASS 1: Strict Quality & Primary Diversity Selection ─────────────────
+  for (const rawTrack of pool) {
+    if (eligibleTracks.length >= definition.size) break;
+
+    const videoId = rawTrack.videoId || rawTrack.id;
+    if (!videoId) {
+      note('missing_video_id');
+      continue;
+    }
+    if (seenVideoIds.has(videoId)) {
+      note('duplicate_video_id');
+      continue;
+    }
+
+    // Canonical deduplication (packaging noise stripped)
+    const canonicalKey = getCanonicalTrackKey(
+      rawTrack,
+      Boolean(eligibility.allowRemix),
+      definition.id === 'acoustic_unplugged'
+    );
+    if (seenCanonicalKeys.has(canonicalKey)) {
+      note('duplicate_canonical');
+      continue;
+    }
+
+    // Stateless hard eligibility gate
+    const { eligible, reason } = isEligible(rawTrack, eligibility);
+    if (!eligible) {
+      note(reason);
+      continue;
+    }
+
+    // Robust primary artist extraction
+    const primaryArtist = normalizePrimaryArtist(rawTrack);
+    const currentPrimaryCount = primaryCounts.get(primaryArtist) || 0;
+
+    // Primary Artist Cap (HARD)
+    if (currentPrimaryCount >= maxArtistTracks) {
+      note('max_artist_tracks');
+      continue;
+    }
+
+    // Contributor Repetition (SOFT)
+    const contributors = extractAllContributors(rawTrack);
+
+    // Phase 6 / Stage 5C: Target Artist Performer Membership Gate
+    // For performer-oriented artist playlists, the target artist must be present in
+    // the provider's credited performer metadata. Solos, duets, and featured collaborations
+    // are all valid and accepted. Unrelated tracks and covers are rejected.
+    if (definition.artistName && definition.artistRole !== 'composer') {
+      if (!hasTargetPerformer(contributors, definition.artistName)) {
+        note('target_performer_missing');
+        continue;
+      }
+    }
+
+    const isFrequentContributor = contributors.some(
+      (c) => c !== primaryArtist && (contributorCounts.get(c) || 0) >= maxArtistTracks
+    );
+
+    if (isFrequentContributor && definition.artistStrategy !== 'top_tracks') {
+      // Defer track to Pass 2 rather than rejecting
+      deferredTracks.push({ rawTrack, videoId, primaryArtist, contributors, canonicalKey });
+      note('contributor_deferred');
+      continue;
+    }
+
+    // Accept track
+    seenVideoIds.add(videoId);
+    seenCanonicalKeys.add(canonicalKey);
+    primaryCounts.set(primaryArtist, currentPrimaryCount + 1);
+    for (const c of contributors) {
+      contributorCounts.set(c, (contributorCounts.get(c) || 0) + 1);
+    }
+    eligibleTracks.push(toPlaylistTrackDTO(rawTrack, videoId));
+  }
+
+  // ── PASS 2: Controlled Fallback for Deferred Contributor Tracks ───────────
+  if (eligibleTracks.length < definition.size && deferredTracks.length > 0) {
+    for (const item of deferredTracks) {
+      if (eligibleTracks.length >= definition.size) break;
+
+      const currentPrimaryCount = primaryCounts.get(item.primaryArtist) || 0;
+      // F-03: Check both videoId AND canonicalKey to prevent deferred duplicates.
+      // Deferred tracks were not added to seenCanonicalKeys in Pass 1, so two different
+      // uploads of the same song (official audio vs lyrical) could both survive to Pass 2.
+      if (currentPrimaryCount < maxArtistTracks &&
+          !seenVideoIds.has(item.videoId) &&
+          !seenCanonicalKeys.has(item.canonicalKey)) {
+        seenVideoIds.add(item.videoId);
+        seenCanonicalKeys.add(item.canonicalKey);
+        primaryCounts.set(item.primaryArtist, currentPrimaryCount + 1);
+        for (const c of item.contributors) {
+          contributorCounts.set(c, (contributorCounts.get(c) || 0) + 1);
+        }
+        eligibleTracks.push(toPlaylistTrackDTO(item.rawTrack, item.videoId));
+        note('contributor_deferred_accepted');
+      }
+    }
+  }
+
+  // ── PASS 3: Minimal Deterministic Artist De-clustering ───────────────────
+  return { finalTracks: declusterArtists(eligibleTracks), rejections, candidatesEvaluated: pool.length };
+}
+
 class PlaylistService {
   /**
    * Generates a curated playlist using the V2 Data Quality Engine.
@@ -434,136 +758,59 @@ class PlaylistService {
    * @returns {Promise<object[]>} Outbound track DTOs
    */
   static async generateCuratedPlaylist(playlistId) {
-    const cached = _playlistCache.get(playlistId);
-    if (cached) return cached;
+    const existing = _playlistInFlight.get(playlistId);
+    if (existing) return existing;
 
+    // Defer execution until the entry is registered, including synchronous failure
+    // paths. Store/return the finally promise itself so rejection cleanup cannot
+    // create an unobserved secondary rejection.
+    const flight = Promise.resolve()
+      .then(() => PlaylistService.#generateCuratedPlaylist(playlistId))
+      .finally(() => _playlistInFlight.delete(playlistId));
+    _playlistInFlight.set(playlistId, flight);
+    return flight;
+  }
+
+  static async #generateCuratedPlaylist(playlistId) {
     const definition = getDefinitionById(playlistId);
     if (!definition) {
       throw new Error(`Playlist definition not found: ${playlistId}`);
     }
 
-    const pool = await resolveCandidatePool(definition);
-    const eligibility = definition.eligibility || {};
-    const maxArtistTracks = Number.isFinite(eligibility.maxArtistTracks)
-      ? eligibility.maxArtistTracks
-      : Number.POSITIVE_INFINITY;
+    // Honour the definition's declared cadence. Within the window we serve the stable
+    // snapshot (which outlives the cache's shorter memory TTL) without touching upstream.
+    const refresh = shouldRefresh({
+      definition,
+      generatedAtMs: _playlistGeneratedAt.get(playlistId),
+      nowMs: Date.now(),
+    });
 
-    const eligibleTracks = [];
-    const deferredTracks = [];
-    const seenVideoIds = new Set();
-    const seenCanonicalKeys = new Set();
-    const primaryCounts = new Map();
-    const contributorCounts = new Map();
-    const rejections = Object.create(null);
+    const healthy = _playlistSnapshot.get(playlistId);
 
-    const note = (reason) => {
-      rejections[reason] = (rejections[reason] || 0) + 1;
-    };
-
-    // ── PASS 1: Strict Quality & Primary Diversity Selection ─────────────────
-    for (const rawTrack of pool) {
-      if (eligibleTracks.length >= definition.size) break;
-
-      const videoId = rawTrack.videoId || rawTrack.id;
-      if (!videoId) {
-        note('missing_video_id');
-        continue;
-      }
-      if (seenVideoIds.has(videoId)) {
-        note('duplicate_video_id');
-        continue;
-      }
-
-      // Canonical deduplication (packaging noise stripped)
-      const canonicalKey = getCanonicalTrackKey(
-        rawTrack,
-        Boolean(eligibility.allowRemix),
-        definition.id === 'acoustic_unplugged'
-      );
-      if (seenCanonicalKeys.has(canonicalKey)) {
-        note('duplicate_canonical');
-        continue;
-      }
-
-      // Stateless hard eligibility gate
-      const { eligible, reason } = isEligible(rawTrack, eligibility);
-      if (!eligible) {
-        note(reason);
-        continue;
-      }
-
-      // Robust primary artist extraction
-      const primaryArtist = normalizePrimaryArtist(rawTrack);
-      const currentPrimaryCount = primaryCounts.get(primaryArtist) || 0;
-
-      // Primary Artist Cap (HARD)
-      if (currentPrimaryCount >= maxArtistTracks) {
-        note('max_artist_tracks');
-        continue;
-      }
-
-      // Contributor Repetition (SOFT)
-      const contributors = extractAllContributors(rawTrack);
-
-      // Phase 6 / Stage 5C: Target Artist Performer Membership Gate
-      // For performer-oriented artist playlists, the target artist must be present in
-      // the provider's credited performer metadata. Solos, duets, and featured collaborations
-      // are all valid and accepted. Unrelated tracks and covers are rejected.
-      if (definition.artistName && definition.artistRole !== 'composer') {
-        if (!hasTargetPerformer(contributors, definition.artistName)) {
-          note('target_performer_missing');
-          continue;
-        }
-      }
-
-      const isFrequentContributor = contributors.some(
-        (c) => c !== primaryArtist && (contributorCounts.get(c) || 0) >= maxArtistTracks
-      );
-
-      if (isFrequentContributor && definition.artistStrategy !== 'top_tracks') {
-        // Defer track to Pass 2 rather than rejecting
-        deferredTracks.push({ rawTrack, videoId, primaryArtist, contributors, canonicalKey });
-        note('contributor_deferred');
-        continue;
-      }
-
-      // Accept track
-      seenVideoIds.add(videoId);
-      seenCanonicalKeys.add(canonicalKey);
-      primaryCounts.set(primaryArtist, currentPrimaryCount + 1);
-      for (const c of contributors) {
-        contributorCounts.set(c, (contributorCounts.get(c) || 0) + 1);
-      }
-      eligibleTracks.push(toPlaylistTrackDTO(rawTrack, videoId));
+    // A recent attempt already told us upstream has nothing usable. Do not hammer it
+    // again until the window expires — and this is checked BEFORE the snapshot so the
+    // rule holds identically whether or not a healthy result exists to serve.
+    //
+    // Review finding: applying this only on the no-snapshot path left a second storm.
+    // A playlist with a healthy snapshot whose cadence had elapsed re-attempted
+    // generation on EVERY request while upstream kept returning empty (measured: 3
+    // upstream calls per request, indefinitely), because a served fallback does not
+    // advance the cadence stamp. Every request did a full upstream round trip.
+    const emptyUntil = _playlistEmptyUntil.get(playlistId);
+    if (emptyUntil && Date.now() < emptyUntil) {
+      return healthy || [];
+    }
+    const retryUntil = _playlistRetryUntil.get(playlistId);
+    if (retryUntil && Date.now() < retryUntil) {
+      return healthy || [];
     }
 
-    // ── PASS 2: Controlled Fallback for Deferred Contributor Tracks ───────────
-    if (eligibleTracks.length < definition.size && deferredTracks.length > 0) {
-      for (const item of deferredTracks) {
-        if (eligibleTracks.length >= definition.size) break;
-
-        const currentPrimaryCount = primaryCounts.get(item.primaryArtist) || 0;
-        // F-03: Check both videoId AND canonicalKey to prevent deferred duplicates.
-        // Deferred tracks were not added to seenCanonicalKeys in Pass 1, so two different
-        // uploads of the same song (official audio vs lyrical) could both survive to Pass 2.
-        if (currentPrimaryCount < maxArtistTracks &&
-            !seenVideoIds.has(item.videoId) &&
-            !seenCanonicalKeys.has(item.canonicalKey)) {
-          seenVideoIds.add(item.videoId);
-          seenCanonicalKeys.add(item.canonicalKey);
-          primaryCounts.set(item.primaryArtist, currentPrimaryCount + 1);
-          for (const c of item.contributors) {
-            contributorCounts.set(c, (contributorCounts.get(c) || 0) + 1);
-          }
-          eligibleTracks.push(toPlaylistTrackDTO(item.rawTrack, item.videoId));
-          note('contributor_deferred_accepted');
-        }
-      }
+    if (healthy && !refresh.due) {
+      _playlistCache.set(playlistId, healthy);   // keep the fast path warm
+      return healthy;
     }
 
-
-    // ── PASS 3: Minimal Deterministic Artist De-clustering ───────────────────
-    const finalTracks = declusterArtists(eligibleTracks);
+    const { finalTracks, rejections, candidatesEvaluated, sourceHealth } = await resolveCandidatePool(definition);
 
     // ── POST-GENERATION QA HEALTH METRICS (Diagnostics only) ─────────────────
     const uniquePrimaryArtists = new Set(finalTracks.map((t) => normalizePrimaryArtist(t))).size;
@@ -575,7 +822,7 @@ class PlaylistService {
       resolvedCount: finalTracks.length,
       fillPercentage: `${fillPercentage}%`,
       uniquePrimaryArtists,
-      candidatesEvaluated: pool.length,
+      candidatesEvaluated,
       rejections,
     };
 
@@ -585,8 +832,40 @@ class PlaylistService {
       logger.info(`[PlaylistService:QA] Playlist "${playlistId}" filled`, qaMetrics);
     }
 
-    if (finalTracks.length > 0) {
+    const underfilled = finalTracks.length > 0 && finalTracks.length < definition.size;
+    const unusablePartial = underfilled && sourceHealth.failed.length > 0;
+
+    if (finalTracks.length > 0 && !unusablePartial) {
       _playlistCache.set(playlistId, finalTracks);
+      _playlistSnapshot.set(playlistId, finalTracks);
+      _playlistGeneratedAt.set(playlistId, Date.now());
+      _playlistEmptyUntil.delete(playlistId);
+      _playlistRetryUntil.delete(playlistId);
+    } else if (unusablePartial && healthy) {
+      const retryMs = emptyBackoffMs(definition);
+      _playlistRetryUntil.set(playlistId, Date.now() + retryMs);
+      logger.warn(`[PlaylistService] Unusable partial regeneration for "${playlistId}"; serving previous healthy result (${healthy.length} tracks)`);
+      _playlistCache.set(playlistId, healthy);
+      return healthy;
+    } else if (unusablePartial) {
+      const retryMs = emptyBackoffMs(definition);
+      _playlistRetryUntil.set(playlistId, Date.now() + retryMs);
+      logger.warn(`[PlaylistService] Unusable partial generation for "${playlistId}"; backing off ${Math.round(retryMs / 60000)}min`);
+      return finalTracks;
+    } else if (healthy) {
+      // A refresh produced nothing usable. NEVER let that replace a healthy playlist:
+      // serve the previous good result, leave its cadence stamp untouched, AND record
+      // the backoff so the next request does not immediately repeat this round trip.
+      _playlistEmptyUntil.set(playlistId, Date.now() + emptyBackoffMs(definition));
+      logger.warn(`[PlaylistService] Empty regeneration for "${playlistId}"; serving previous healthy result (${healthy.length} tracks)`);
+      _playlistCache.set(playlistId, healthy);
+      return healthy;
+    } else {
+      // Nothing healthy to fall back to. Back off before retrying so a playlist that
+      // cannot currently fill does not re-issue its queries on every request.
+      const backoffMs = emptyBackoffMs(definition);
+      _playlistEmptyUntil.set(playlistId, Date.now() + backoffMs);
+      logger.warn(`[PlaylistService] Empty generation for "${playlistId}"; backing off ${Math.round(backoffMs / 60000)}min`);
     }
     return finalTracks;
   }
@@ -667,5 +946,6 @@ PlaylistService.getCanonicalTrackKey = getCanonicalTrackKey;
 PlaylistService.declusterArtists = declusterArtists;
 PlaylistService.cleanArtistString = cleanArtistString;
 PlaylistService.hasTargetPerformer = hasTargetPerformer;
+PlaylistService.emptyBackoffMs = emptyBackoffMs;
 
 module.exports = PlaylistService;

@@ -66,6 +66,7 @@ fun CuratedPlaylistDetailScreen(
     detailModule: HomeModule<PlaylistDetail>,
     onBack: () -> Unit,
     onPlayTrack: (Track) -> Unit,
+    onPlayTrackWithContext: (Track, List<Track>) -> Unit = { track, _ -> onPlayTrack(track) },
     onToggleLike: (Track, Boolean) -> Unit,
     isLiked: (String) -> Boolean,
     modifier: Modifier = Modifier
@@ -196,7 +197,7 @@ fun CuratedPlaylistDetailScreen(
                     Spacer(modifier = Modifier.height(dimensions.spaceXs))
                     SonaraButton(
                         text = "Play All",
-                        onClick = { onPlayTrack(tracks.first()) },
+                        onClick = { onPlayTrackWithContext(tracks.first(), tracks) },
                         variant = SonaraButtonVariant.Primary,
                         leadingIcon = {
                             Icon(
@@ -261,7 +262,7 @@ fun CuratedPlaylistDetailScreen(
                             TrackRow(
                                 track = track,
                                 isLiked = isLiked(track.id),
-                                onPlay = { onPlayTrack(track) },
+                                 onPlay = { onPlayTrackWithContext(track, tracks) },
                                 onToggleLike = { liked -> onToggleLike(track, liked) }
                             )
                         }

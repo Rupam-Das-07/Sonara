@@ -13,6 +13,7 @@ import com.example.sonara.core.ui.motion.LocalReduceMotion
 import com.example.sonara.core.ui.motion.SonaraMotion
 import com.example.sonara.core.ui.theme.SonaraTheme
 import com.example.sonara.domain.model.FeaturedArtist
+import com.example.sonara.domain.model.PlaybackOrigin
 import com.example.sonara.domain.model.PlaylistSummary
 import com.example.sonara.domain.model.Track
 import com.example.sonara.feature.home.components.HomeGreeting
@@ -69,6 +70,10 @@ fun HomeScreen(
     onBackFromArtistsCatalog: () -> Unit = {},
     onRefreshQuickPicks: () -> Unit,
     onPlayTrack: (Track) -> Unit,
+    onPlayTrackWithOrigin: (Track, PlaybackOrigin) -> Unit = { track, _ -> onPlayTrack(track) },
+    onPlayTrackWithContext: (Track, PlaybackOrigin, List<Track>) -> Unit = { track, origin, _ ->
+        onPlayTrackWithOrigin(track, origin)
+    },
     onToggleLike: (Track, Boolean) -> Unit,
     isLiked: (String) -> Boolean,
     contentPadding: PaddingValues = PaddingValues(),
@@ -106,6 +111,10 @@ fun HomeScreen(
                     onSeeAllArtists = onSeeAllArtists,
                     onRefreshQuickPicks = onRefreshQuickPicks,
                     onPlayTrack = onPlayTrack,
+                    onPlayTrackWithOrigin = onPlayTrackWithOrigin,
+                    onPlayTrackWithContext = { track, context ->
+                        onPlayTrackWithContext(track, PlaybackOrigin.HOME, context)
+                    },
                     onToggleLike = onToggleLike,
                     isLiked = isLiked,
                     contentPadding = contentPadding
@@ -136,7 +145,10 @@ fun HomeScreen(
                     tracksModule = state.artistDetailTracks,
                     playlistsModule = state.artistDetailPlaylists,
                     onBack = onBackFromDetail,
-                    onPlayTrack = onPlayTrack,
+                    onPlayTrack = { track -> onPlayTrackWithOrigin(track, PlaybackOrigin.HOME) },
+                    onPlayTrackWithContext = { track, context ->
+                        onPlayTrackWithContext(track, PlaybackOrigin.HOME, context)
+                    },
                     onPlaylistClick = onPlaylistClick,
                     onToggleLike = onToggleLike,
                     isLiked = isLiked,
@@ -149,7 +161,10 @@ fun HomeScreen(
                     playlist = mode.playlist,
                     detailModule = state.selectedPlaylistDetail,
                     onBack = onBackFromDetail,
-                    onPlayTrack = onPlayTrack,
+                    onPlayTrack = { track -> onPlayTrackWithOrigin(track, PlaybackOrigin.PLAYLIST) },
+                    onPlayTrackWithContext = { track, context ->
+                        onPlayTrackWithContext(track, PlaybackOrigin.PLAYLIST, context)
+                    },
                     onToggleLike = onToggleLike,
                     isLiked = isLiked,
                     modifier = Modifier.padding(contentPadding)
@@ -169,6 +184,8 @@ private fun HomeFeed(
     onSeeAllArtists: () -> Unit = {},
     onRefreshQuickPicks: () -> Unit,
     onPlayTrack: (Track) -> Unit,
+    onPlayTrackWithOrigin: (Track, PlaybackOrigin) -> Unit = { track, _ -> onPlayTrack(track) },
+    onPlayTrackWithContext: (Track, List<Track>) -> Unit = { track, _ -> onPlayTrack(track) },
     onToggleLike: (Track, Boolean) -> Unit,
     isLiked: (String) -> Boolean,
     contentPadding: PaddingValues = PaddingValues(),
@@ -209,7 +226,10 @@ private fun HomeFeed(
         // 4. Quick Picks (56dp compact vertical list)
         quickPicksModule(
             module = state.quickPicks,
-            onPlayTrack = onPlayTrack,
+            onPlayTrack = { track -> onPlayTrackWithOrigin(track, PlaybackOrigin.HOME) },
+            onPlayTrackWithContext = { track, context ->
+                onPlayTrackWithContext(track, context)
+            },
             onToggleLike = onToggleLike,
             isLiked = isLiked,
             onRefresh = onRefreshQuickPicks
@@ -218,7 +238,10 @@ private fun HomeFeed(
         // 5. Because You Listen To…
         becauseYouListenedModule(
             module = state.becauseYouListened,
-            onPlayTrack = onPlayTrack,
+            onPlayTrack = { track -> onPlayTrackWithOrigin(track, PlaybackOrigin.HOME) },
+            onPlayTrackWithContext = { track, context ->
+                onPlayTrackWithContext(track, context)
+            },
             onToggleLike = onToggleLike,
             isLiked = isLiked
         )

@@ -212,6 +212,29 @@ describe('probeHttp', () => {
     assert.equal(r.httpStatus, null);
     assert.equal(r.errorCode, 'ECONNREFUSED');
   });
+
+  it('bounds a slow dependency probe and reports TIMEOUT', async () => {
+    const fetchImpl = async () => {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      throw Object.assign(new Error('slow'), { name: 'TimeoutError' });
+    };
+    const r = await hc.probeHttp({ url: 'http://slow/health', timeoutMs: 1, fetchImpl, now: NOW });
+    assert.equal(r.ok, false);
+    assert.equal(r.errorCode, 'TIMEOUT');
+  });
+
+  it('recovers on a later health probe after a transient service failure', async () => {
+    let attempts = 0;
+    const fetchImpl = async () => {
+      attempts++;
+      if (attempts === 1) throw Object.assign(new Error('booting'), { code: 'ECONNREFUSED' });
+      return { ok: true, status: 200, async text() { return ''; } };
+    };
+    const first = await hc.probeHttp({ url: 'http://service/health', timeoutMs: 100, fetchImpl, now: NOW });
+    const second = await hc.probeHttp({ url: 'http://service/health', timeoutMs: 100, fetchImpl, now: NOW });
+    assert.equal(first.ok, false);
+    assert.equal(second.ok, true);
+  });
 });
 
 describe('classifyLoopback / classifyExternal', () => {
@@ -447,4 +470,3 @@ describe('checkHealth ({ skipGateway: true })', () => {
     assert.equal(reportExplicitFalse.status, STATUS.HEALTHY);
   });
 });
-

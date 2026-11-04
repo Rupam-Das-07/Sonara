@@ -2,12 +2,14 @@ package com.example.sonara.domain.repository
 
 import com.example.sonara.domain.model.AppLanguage
 import com.example.sonara.domain.model.AudioQuality
+import com.example.sonara.domain.model.ColorPalette
 import com.example.sonara.domain.model.DownloadFileFormat
 import com.example.sonara.domain.model.DownloadLocationMode
 import com.example.sonara.domain.model.PlaybackSessionSnapshot
 import com.example.sonara.domain.model.SearchMode
 import com.example.sonara.domain.model.ThemeMode
 import com.example.sonara.domain.model.UserPreferences
+import com.example.sonara.domain.model.video.VideoQuality
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -18,6 +20,7 @@ interface SettingsRepository {
 
     // ─── Existing setters ─────────────────────────────────────────────────────
     suspend fun setThemeMode(mode: ThemeMode)
+    suspend fun setSelectedPalette(palette: ColorPalette) { }
     suspend fun setShowRomanized(show: Boolean)
     suspend fun setRestorePlaybackSession(enabled: Boolean)
     suspend fun setDefaultSearchMode(mode: SearchMode)
@@ -25,6 +28,7 @@ interface SettingsRepository {
     suspend fun setStreamingQuality(quality: AudioQuality)
     suspend fun setDownloadQuality(quality: AudioQuality)
     suspend fun setDownloadOverWifiOnly(wifiOnly: Boolean)
+    suspend fun setDefaultVideoQuality(quality: VideoQuality) { }
     suspend fun resetSettings()
 
     // ─── Phase 1 additions ────────────────────────────────────────────────────
@@ -72,4 +76,3 @@ interface SettingsRepository {
     suspend fun savePlaybackSession(snapshot: PlaybackSessionSnapshot)
     suspend fun getPlaybackSession(): PlaybackSessionSnapshot?
 }
-

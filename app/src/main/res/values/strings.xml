@@ -27,6 +27,26 @@
     <string name="theme_system">System Default</string>
     <string name="theme_dark">Dark (Mineral Petrol)</string>
     <string name="theme_light">Light (Bone Canvas)</string>
+    <string name="setting_color_palette">Colour Theme</string>
+    <string name="setting_color_palette_desc">Choose your preferred Sonara colour palette.</string>
+    <string name="palette_sonara_classic">Sonara Classic</string>
+    <string name="palette_sonara_classic_desc">Editorial mineral petrol and burnt oxide</string>
+    <string name="palette_ocean_blue">Ocean Blue</string>
+    <string name="palette_ocean_blue_desc">Deep maritime navy with cyan energy</string>
+    <string name="palette_rose">Rose</string>
+    <string name="palette_rose_desc">Velvet crimson with warm coral bloom</string>
+    <string name="palette_forest_green">Forest Green</string>
+    <string name="palette_forest_green_desc">Nordic pine with vibrant emerald highlights</string>
+    <string name="palette_lavender">Lavender</string>
+    <string name="palette_lavender_desc">Muted twilight purple with lilac accents</string>
+    <string name="palette_midnight">Midnight</string>
+    <string name="palette_midnight_desc">Deep obsidian night with electric indigo</string>
+    <string name="palette_amoled_black">AMOLED Black</string>
+    <string name="palette_amoled_black_desc">True pitch black for OLED battery efficiency</string>
+    <string name="palette_dynamic_wallpaper">Dynamic Wallpaper</string>
+    <string name="palette_dynamic_wallpaper_desc">Material You colours derived from your device wallpaper.</string>
+    <string name="palette_dynamic_wallpaper_unsupported">Requires Android 12+ (defaults to Sonara Classic)</string>
+    <string name="palette_dynamic_wallpaper_monet_active">Monet Active</string>
     <string name="language_system_default">System Default</string>
 
     <string name="setting_app_language">App Language</string>
@@ -36,6 +56,8 @@
     <string name="setting_reduce_motion_desc">Reduce the animated theme transition</string>
 
     <string name="setting_streaming_quality">Streaming Quality</string>
+    <string name="setting_default_video_quality">Default Video Quality</string>
+    <string name="setting_default_video_quality_desc">Quality used when a new extracted video starts.</string>
 
     <string name="setting_equalizer">Equalizer</string>
     <string name="setting_equalizer_desc">5-band hardware DSP audio processor</string>
@@ -145,9 +167,12 @@
     <!-- Library & Playlists -->
     <string name="library_title">Your Library</string>
     <string name="tab_liked_songs">Liked Songs</string>
+    <string name="tab_downloads">Downloads</string>
     <string name="tab_playback_history">History</string>
     <string name="library_liked_empty_title">No Liked Songs Yet</string>
     <string name="library_liked_empty_message">Tap the heart icon on any track to add it to your personal collection.</string>
+    <string name="library_downloads_empty_title">No Downloaded Songs</string>
+    <string name="library_downloads_empty_message">Downloaded songs will appear here for offline playback.</string>
     <string name="library_history_empty_title">No Playback History</string>
     <string name="library_history_empty_message">Tracks you play will appear here for easy resumption.</string>
     <string name="playlists_title">Your Playlists</string>
@@ -239,4 +264,18 @@
     <string name="action_add_to_playlist">Add to Playlist</string>
     <string name="action_create_playlist_with_song">Create Playlist with this Song</string>
     <string name="toast_added_to_play_next">Added to Play Next</string>
+
+    <!-- Video Quality & Video Actions -->
+    <string name="video_quality_title">Video quality</string>
+    <string name="video_quality_subtitle">Select resolution and streaming performance</string>
+    <string name="video_quality_auto_desc">Adjusts to your connection</string>
+    <string name="video_quality_preparing">Quality</string>
+    <string name="video_quality_unsupported_device">Unsupported by device</string>
+    <string name="action_download">Download</string>
+    <string name="action_downloaded">Downloaded</string>
+    <string name="action_downloading">Downloading…</string>
+    <!-- Source Attribution Badges -->
+    <string name="source_soundcloud">SoundCloud</string>
+    <string name="source_youtube_music">YouTube Music</string>
+    <string name="download_unsupported_soundcloud">Offline downloading is not supported for SoundCloud tracks</string>
 </resources>

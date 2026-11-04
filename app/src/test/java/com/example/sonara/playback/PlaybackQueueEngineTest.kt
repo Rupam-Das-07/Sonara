@@ -1,5 +1,6 @@
 package com.example.sonara.playback
 
+import com.example.sonara.domain.model.PlaybackOrigin
 import com.example.sonara.domain.model.Track
 import com.example.sonara.playback.controller.NextTrackDecision
 import com.example.sonara.playback.controller.PlaybackQueueEngine
@@ -51,12 +52,13 @@ class PlaybackQueueEngineTest {
     @Test
     fun `advance when queue is empty returns NeedRecommendations with seed videoId`() {
         val engine = PlaybackQueueEngine()
-        engine.setContext(track1, listOf(track1))
+        engine.setContext(track1, listOf(track1), origin = PlaybackOrigin.LIKED_SONGS)
 
         val decision = engine.advance()
         assertTrue(decision is NextTrackDecision.NeedRecommendations)
         assertEquals("v1", (decision as NextTrackDecision.NeedRecommendations).seedTrackId)
-        assertEquals(listOf(track1), engine.sessionBackStack)
+        assertTrue(engine.sessionBackStack.isEmpty())
+        assertEquals(PlaybackOrigin.LIKED_SONGS, engine.originFor(track1.id))
     }
 
     @Test
@@ -118,6 +120,19 @@ class PlaybackQueueEngineTest {
         val decision = engine.previous(currentPositionMs = 500L)
         assertEquals(PreviousTrackDecision.SeekToStart, decision)
         assertEquals(track1, engine.currentTrack)
+    }
+
+    @Test
+    fun `previous restores provenance from the prior session entry across contexts`() {
+        val engine = PlaybackQueueEngine()
+        engine.setContext(track1, origin = PlaybackOrigin.SEARCH_SONGS)
+        engine.setContext(track2, origin = PlaybackOrigin.HOME)
+
+        val decision = engine.previous(currentPositionMs = 0L)
+
+        assertEquals(PreviousTrackDecision.PlayTrack(track1), decision)
+        assertEquals(track1, engine.currentTrack)
+        assertEquals(PlaybackOrigin.SEARCH_SONGS, engine.originFor(track1.id))
     }
 
     @Test
@@ -199,6 +214,23 @@ class PlaybackQueueEngineTest {
     }
 
     @Test
+    fun `service and controller terminal callbacks advance once and the next end remains valid`() {
+        val engine = PlaybackQueueEngine()
+        engine.setContext(track1, listOf(track1, track2, track3))
+
+        // The service is authoritative and advances A -> B. A controller-side terminal
+        // callback for the same ended A must be idempotent rather than advancing B -> C.
+        assertEquals(NextTrackDecision.PlayTrack(track2), engine.advance(fromTrackId = track1.id))
+        assertEquals(NextTrackDecision.PlayTrack(track2), engine.advance(fromTrackId = track1.id))
+        assertEquals(track2, engine.currentTrack)
+        assertEquals(listOf(track3), engine.upcomingQueue)
+
+        // A later, legitimate terminal event for B still advances normally.
+        assertEquals(NextTrackDecision.PlayTrack(track3), engine.advance(fromTrackId = track2.id))
+        assertEquals(track3, engine.currentTrack)
+    }
+
+    @Test
     fun `sequential advance with updated fromTrackId advances sequentially`() {
         val engine = PlaybackQueueEngine()
         engine.setContext(track1, listOf(track1, track2, track3))
@@ -228,6 +260,18 @@ class PlaybackQueueEngineTest {
 
         assertEquals(track1, engine.currentTrack)
         assertEquals(listOf(track2), engine.upcomingQueue)
+    }
+
+    @Test
+    fun `playNext keeps its explicit origin instead of inheriting active context`() {
+        val engine = PlaybackQueueEngine()
+        engine.setContext(track1, origin = PlaybackOrigin.SEARCH_SONGS)
+
+        engine.playNext(track2, origin = PlaybackOrigin.PLAYLIST)
+        val decision = engine.advance(fromTrackId = track1.id)
+
+        assertEquals(NextTrackDecision.PlayTrack(track2), decision)
+        assertEquals(PlaybackOrigin.PLAYLIST, engine.originFor(track2.id))
     }
 
     @Test

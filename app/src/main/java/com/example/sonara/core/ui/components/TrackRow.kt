@@ -25,8 +25,16 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+import com.example.sonara.R
 import com.example.sonara.core.ui.theme.SonaraTheme
+import com.example.sonara.core.ui.theme.SourceBadgeTheme
+import com.example.sonara.core.util.MediaTitleFormatter
 import com.example.sonara.domain.model.Track
+import com.example.sonara.domain.model.TrackSource
+import com.example.sonara.domain.model.soundcloud.SoundcloudSourceIdentity
 
 /**
  * Shared TrackRow component for Sonara Android.
@@ -42,11 +50,13 @@ fun TrackRow(
     onToggleLike: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
     onLongClick: (() -> Unit)? = null,
-    trailingContent: (@Composable () -> Unit)? = null
+    trailingContent: (@Composable () -> Unit)? = null,
+    isVideo: Boolean = false
 ) {
     val colors = SonaraTheme.colors
     val typography = SonaraTheme.typography
     val dimensions = SonaraTheme.dimensions
+    val displayTitle = MediaTitleFormatter.format(track.title, track.artist)
 
     Row(
         modifier = modifier
@@ -90,20 +100,30 @@ fun TrackRow(
             verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             Text(
-                text = track.title,
+                text = displayTitle,
                 style = typography.trackTitle,
                 color = colors.primaryText,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
             val subtitle = if (track.album.isNotBlank()) "${track.artist} • ${track.album}" else track.artist
-            Text(
-                text = subtitle,
-                style = typography.artistMetadata,
-                color = colors.secondaryText,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                val source = TrackSource.fromTrack(track)
+                if (source != null && (!isVideo || source != TrackSource.YOUTUBE_MUSIC)) {
+                    TrackSourceBadge(source = source)
+                }
+                Text(
+                    text = subtitle,
+                    style = typography.artistMetadata,
+                    color = colors.secondaryText,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+            }
         }
 
         // Like Toggle Button
@@ -136,11 +156,13 @@ fun CompactTrackRow(
     onPlay: () -> Unit,
     modifier: Modifier = Modifier,
     isLiked: Boolean = false,
-    onToggleLike: ((Boolean) -> Unit)? = null
+    onToggleLike: ((Boolean) -> Unit)? = null,
+    isVideo: Boolean = false
 ) {
     val colors = SonaraTheme.colors
     val typography = SonaraTheme.typography
     val dimensions = SonaraTheme.dimensions
+    val displayTitle = MediaTitleFormatter.format(track.title, track.artist)
 
     Row(
         modifier = modifier
@@ -178,19 +200,29 @@ fun CompactTrackRow(
             verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             Text(
-                text = track.title,
+                text = displayTitle,
                 style = typography.trackTitle,
                 color = colors.primaryText,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            Text(
-                text = track.artist,
-                style = typography.caption,
-                color = colors.secondaryText,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                val source = TrackSource.fromTrack(track)
+                if (source != null && (!isVideo || source != TrackSource.YOUTUBE_MUSIC)) {
+                    TrackSourceBadge(source = source)
+                }
+                Text(
+                    text = track.artist,
+                    style = typography.caption,
+                    color = colors.secondaryText,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+            }
         }
         if (onToggleLike != null) {
             SonaraIconButton(
@@ -208,4 +240,45 @@ fun CompactTrackRow(
             }
         }
     }
+}
+
+/**
+ * Visual provider attribution badge for music tracks.
+ * Applies source-specific color styling while keeping geometry and typography identical.
+ */
+@Composable
+fun TrackSourceBadge(
+    source: TrackSource,
+    modifier: Modifier = Modifier
+) {
+    val colors = SonaraTheme.colors
+    val typography = SonaraTheme.typography
+    val badgeColors = SourceBadgeTheme.colorsFor(source, colors.isDark)
+    val label = when (source) {
+        TrackSource.YOUTUBE_MUSIC -> stringResource(R.string.source_youtube_music)
+        TrackSource.SOUNDCLOUD -> stringResource(R.string.source_soundcloud)
+    }
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(4.dp))
+            .background(badgeColors.container)
+            .padding(horizontal = 5.dp, vertical = 1.5.dp)
+    ) {
+        Text(
+            text = label,
+            style = typography.caption.copy(
+                fontSize = 10.sp,
+                fontWeight = FontWeight.SemiBold
+            ),
+            color = badgeColors.text
+        )
+    }
+}
+
+/**
+ * Backward-compatible alias for the SoundCloud source badge.
+ */
+@Composable
+fun SoundcloudSourceBadge(modifier: Modifier = Modifier) {
+    TrackSourceBadge(source = TrackSource.SOUNDCLOUD, modifier = modifier)
 }

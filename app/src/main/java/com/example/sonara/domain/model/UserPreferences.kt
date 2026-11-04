@@ -1,9 +1,38 @@
 package com.example.sonara.domain.model
 
+import com.example.sonara.domain.model.video.VideoQuality
+
 enum class ThemeMode {
     SYSTEM,
     DARK,
     LIGHT
+}
+
+/**
+ * Curated color palettes available for user selection.
+ * Stable enum identifiers used for DataStore persistence and theme resolution.
+ * Contains no Compose UI or Android color API dependencies.
+ */
+enum class ColorPalette {
+    SONARA_CLASSIC,
+    OCEAN_BLUE,
+    ROSE,
+    FOREST_GREEN,
+    LAVENDER,
+    MIDNIGHT,
+    AMOLED_BLACK,
+    DYNAMIC_WALLPAPER;
+
+    companion object {
+        fun fromName(name: String?): ColorPalette {
+            if (name == null) return SONARA_CLASSIC
+            return try {
+                valueOf(name)
+            } catch (_: IllegalArgumentException) {
+                SONARA_CLASSIC
+            }
+        }
+    }
 }
 
 /**
@@ -43,6 +72,7 @@ enum class ThemeMode {
  */
 data class UserPreferences(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
+    val selectedPalette: ColorPalette = ColorPalette.SONARA_CLASSIC,
     val showRomanized: Boolean = true,
     val restorePlaybackSession: Boolean = true,
     val defaultSearchMode: SearchMode = SearchMode.SONGS,
@@ -50,6 +80,7 @@ data class UserPreferences(
     val streamingQuality: AudioQuality = AudioQuality.AUTO,
     val downloadQuality: AudioQuality = AudioQuality.VERY_HIGH,
     val downloadOverWifiOnly: Boolean = false,
+    val defaultVideoQuality: VideoQuality = VideoQuality.AUTO,
 
     // ─── Phase 1 additions ────────────────────────────────────────────────────
     val appLanguage: AppLanguage = AppLanguage.SYSTEM_DEFAULT,

@@ -1,6 +1,7 @@
 package com.example.sonara.playback
 
 import com.example.sonara.domain.model.HistoryItem
+import com.example.sonara.domain.model.PlaybackOrigin
 import com.example.sonara.domain.model.Track
 import com.example.sonara.domain.repository.HistoryRepository
 import kotlinx.coroutines.flow.Flow
@@ -18,15 +19,35 @@ class PlaybackHistoryQualificationTest {
 
         override fun getRecentHistory(limit: Int): Flow<List<HistoryItem>> = historyFlow
 
-        override suspend fun recordHistory(track: Track, completed: Boolean) {
+        override suspend fun recordHistory(track: Track, completed: Boolean): Long =
+            recordHistoryWithProvenance(track, completed, PlaybackOrigin.LEGACY_UNKNOWN, "")
+
+        override suspend fun recordHistoryWithProvenance(
+            track: Track,
+            completed: Boolean,
+            sourceSection: PlaybackOrigin,
+            playbackSessionId: String
+        ): Long {
+            val id = recordedHistory.size + 1L
             val item = HistoryItem(
-                id = recordedHistory.size + 1L,
+                id = id,
                 track = track,
                 listenedAt = System.currentTimeMillis(),
-                completed = completed
+                completed = completed,
+                sourceSection = sourceSection,
+                playbackSessionId = playbackSessionId
             )
             recordedHistory.add(item)
             historyFlow.value = recordedHistory.toList()
+            return id
+        }
+
+        override suspend fun markHistoryCompleted(historyId: Long) {
+            val index = recordedHistory.indexOfFirst { it.id == historyId }
+            if (index >= 0) {
+                recordedHistory[index] = recordedHistory[index].copy(completed = true)
+                historyFlow.value = recordedHistory.toList()
+            }
         }
 
         override suspend fun clearHistory() {

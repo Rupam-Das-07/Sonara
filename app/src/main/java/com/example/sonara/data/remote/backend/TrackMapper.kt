@@ -1,6 +1,7 @@
 package com.example.sonara.data.remote.backend
 
 import com.example.sonara.data.remote.mapper.ArtworkUrlUpgrader
+import com.example.sonara.domain.model.ArtistCredit
 import com.example.sonara.domain.model.Track
 
 /**
@@ -21,6 +22,11 @@ internal object TrackMapper {
      * @param album      Album name (may be empty).
      * @param durationSec Duration in seconds (as returned by the server). 0 if unknown.
      * @param rawArtworkUrl Raw artwork URL before CDN upgrading (nullable).
+     * @param artists    Structured credits from TrackDTO.artists. Defaults to empty so
+     *                   callers and sources that supply no structured credits keep
+     *                   today's behaviour exactly. Entries are sanitised here — blank
+     *                   names are dropped and both fields trimmed — so a malformed
+     *                   payload can never introduce a blank identity downstream.
      */
     fun map(
         videoId: String?,
@@ -28,7 +34,8 @@ internal object TrackMapper {
         artist: String?,
         album: String?,
         durationSec: Int,
-        rawArtworkUrl: String?
+        rawArtworkUrl: String?,
+        artists: List<ArtistCredit> = emptyList()
     ): Track? {
         val id = videoId.takeIf { !it.isNullOrBlank() } ?: return null
         return Track(
@@ -37,7 +44,10 @@ internal object TrackMapper {
             artist = artist.takeIf { !it.isNullOrBlank() } ?: "Unknown Artist",
             album = album.orEmpty(),
             durationMs = if (durationSec > 0) durationSec * 1000L else 0L,
-            artworkUrl = ArtworkUrlUpgrader.upgrade(rawArtworkUrl)
+            artworkUrl = ArtworkUrlUpgrader.upgrade(rawArtworkUrl),
+            artists = artists
+                .map { ArtistCredit(name = it.name.trim(), id = it.id.trim()) }
+                .filter { it.name.isNotEmpty() }
         )
     }
 }

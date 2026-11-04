@@ -97,6 +97,22 @@ describe('Stage 0 — artist catalog cleaning', () => {
     assert.equal(normalizeTitle('Kesariya (From "Brahmastra")'), normalizeTitle('Kesariya'));
   });
 
+  it('preserves Unicode titles for discovery deduplication', () => {
+    assert.equal(normalizeTitle('तुम ही हो'), 'तुमहीहो');
+    assert.equal(normalizeTitle('東京ラブストーリー'), '東京ラブストーリー');
+    assert.equal(normalizeTitle('한국어 제목'), '한국어제목');
+    assert.equal(normalizeTitle('Créole'), normalizeTitle('Créole'));
+    assert.notEqual(normalizeTitle('José'), normalizeTitle('Jose'),
+      'accented and unaccented titles must remain distinct');
+    assert.equal(normalizeTitle('तुम ही हो (Lyrical)'), normalizeTitle('तुम ही हो'));
+  });
+
+  it('does not turn malformed or empty titles into a usable dedupe key', () => {
+    for (const value of ['', '   ', '---', '()', '[]', null, undefined, 42, {}]) {
+      assert.equal(normalizeTitle(value), '', `invalid title ${JSON.stringify(value)} must stay empty`);
+    }
+  });
+
   it('flags karaoke, 8D and cover uploads as junk', () => {
     assert.equal(isJunkVariant('Song - Karaoke'), true);
     assert.equal(isJunkVariant('Song 8D Audio'), true);
@@ -109,6 +125,7 @@ describe('Stage 0 — artist catalog cleaning', () => {
     assert.equal(isJunkVariant('Kesariya'), false);
   });
 });
+
 
 describe('Stage 0 — trending videoId resolution', () => {
   // Every trending item previously shipped with videoId: null, so the whole
@@ -458,4 +475,3 @@ describe('Phase 6 — Artist Role Semantics & Performer Membership', () => {
     assert.equal(PlaylistService.hasTargetPerformer(cover, 'Arijit Singh'), false);
   });
 });
-

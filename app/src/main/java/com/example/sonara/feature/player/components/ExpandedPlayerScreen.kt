@@ -4,7 +4,6 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutLinearInEasing
@@ -14,6 +13,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.updateTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -52,6 +52,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.systemGestures
 import androidx.compose.foundation.lazy.LazyColumn
@@ -61,6 +62,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Forward10
+import androidx.compose.material.icons.rounded.Replay10
+import kotlin.math.abs
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -84,18 +89,27 @@ import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
+import java.util.Locale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import com.example.sonara.core.ui.motion.LocalReduceMotion
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -112,10 +126,26 @@ import com.example.sonara.core.ui.components.SonaraEmptyState
 import com.example.sonara.core.ui.components.SonaraIconButton
 import com.example.sonara.core.ui.components.SonaraIconButtonVariant
 import com.example.sonara.core.ui.components.SonaraLoadingIndicator
-import com.example.sonara.core.ui.theme.SonaraPalette
 import com.example.sonara.core.ui.theme.SonaraTheme
 import com.example.sonara.feature.lyrics.LyricsUiState
 import com.example.sonara.feature.player.PlayerUiState
+import com.example.sonara.feature.video.VideoQualityUiState
+import com.example.sonara.feature.video.VideoLayoutCalculator
+import com.example.sonara.core.util.MediaTitleFormatter
+import androidx.media3.common.VideoSize
+import com.example.sonara.domain.model.video.VideoQuality
+import com.example.sonara.domain.model.video.VideoQualityOption
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.Surface
+import androidx.compose.ui.res.stringResource
+import com.example.sonara.R
 
 // ── Web Transition Baseline Spec ──
 // Web Entrance: translateY(60%) -> translateY(0) + opacity (0 -> 1) in 450ms (cubic-bezier(0.2, 0.8, 0.2, 1))
@@ -135,11 +165,21 @@ private data class TrackTransitionSnapshot(
     val trackId: String?,
     val title: String,
     val artist: String,
-    val artworkUrl: String?
+    val artworkUrl: String?,
+    val formattedViewCount: String? = null
 )
 
-private fun Track.toTransitionSnapshot(): TrackTransitionSnapshot =
-    TrackTransitionSnapshot(trackId = id, title = title, artist = artist, artworkUrl = artworkUrl)
+private fun Track.toTransitionSnapshot(
+    formattedViewCount: String? = null,
+    isVideo: Boolean = false
+): TrackTransitionSnapshot =
+    TrackTransitionSnapshot(
+        trackId = id,
+        title = MediaTitleFormatter.format(title, artist),
+        artist = artist,
+        artworkUrl = artworkUrl,
+        formattedViewCount = formattedViewCount
+    )
 
 /** Outcome of a released swipe: commit forward (next), commit backward (previous), or snap back. */
 private enum class SkipIntent { NEXT, PREVIOUS, CANCEL }
@@ -331,14 +371,14 @@ private fun ArtworkCard(
                 elevation = if (isPlaying) 28.dp else 12.dp,
                 shape = RoundedCornerShape(16.dp),
                 clip = false,
-                spotColor = if (isPlaying) SonaraPalette.OxideAccent.copy(alpha = breatheGlow * 1.5f) else Color.Black.copy(alpha = 0.40f),
-                ambientColor = if (isPlaying) SonaraPalette.OxideAccent.copy(alpha = breatheGlow) else Color.Black.copy(alpha = 0.20f)
+                spotColor = if (isPlaying) colors.accent.copy(alpha = breatheGlow * 1.5f) else Color.Black.copy(alpha = 0.40f),
+                ambientColor = if (isPlaying) colors.accent.copy(alpha = breatheGlow) else Color.Black.copy(alpha = 0.20f)
             )
             .clip(RoundedCornerShape(16.dp))
             .background(colors.surfaceVariant)
             .border(
                 width = 1.dp,
-                color = if (isDark) Color(0xFF264043).copy(alpha = 0.60f) else SonaraPalette.BoneBorder.copy(alpha = 0.85f),
+                color = colors.divider,
                 shape = RoundedCornerShape(16.dp)
             )
     ) {
@@ -367,6 +407,64 @@ private fun ArtworkCard(
     }
 }
 
+internal fun formatTrackTitleWithViewCount(
+    title: String,
+    formattedCount: String?,
+    primaryColor: Color,
+    secondaryColor: Color
+): AnnotatedString {
+    val hasTitle = title.isNotBlank()
+    val hasCount = !formattedCount.isNullOrBlank()
+    return when {
+        hasTitle && hasCount -> buildAnnotatedString {
+            withStyle(
+                SpanStyle(
+                    color = primaryColor,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            ) {
+                append(title)
+            }
+            withStyle(
+                SpanStyle(
+                    color = secondaryColor.copy(alpha = 0.85f),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Normal
+                )
+            ) {
+                append(" · ")
+                append(formattedCount)
+            }
+        }
+        hasCount -> buildAnnotatedString {
+            withStyle(
+                SpanStyle(
+                    color = secondaryColor.copy(alpha = 0.85f),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Normal
+                )
+            ) {
+                append(formattedCount)
+            }
+        }
+        else -> AnnotatedString(title)
+    }
+}
+
+internal fun formatArtistWithViewCount(
+    artist: String,
+    formattedCount: String?
+): String {
+    val hasArtist = artist.isNotBlank()
+    val hasCount = !formattedCount.isNullOrBlank()
+    return when {
+        hasArtist && hasCount -> "$artist · $formattedCount"
+        hasCount -> formattedCount!!
+        else -> artist
+    }
+}
+
 /**
  * Title + artist for one song identity, at the Expanded Player's usual metadata typography. Rendered
  * once per visible transition layer so the metadata always belongs to the SAME song as the artwork it
@@ -375,11 +473,14 @@ private fun ArtworkCard(
 @Composable
 private fun TrackMetadata(
     snapshot: TrackTransitionSnapshot,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isVideo: Boolean = false
 ) {
     val colors = SonaraTheme.colors
     val typography = SonaraTheme.typography
-    Column(modifier = modifier) {
+    val formattedCount = snapshot.formattedViewCount.takeIf { isVideo && !it.isNullOrBlank() }
+
+    Column(modifier = modifier.fillMaxWidth()) {
         Text(
             text = snapshot.title,
             style = typography.display.copy(
@@ -392,17 +493,124 @@ private fun TrackMetadata(
             overflow = TextOverflow.Ellipsis
         )
         Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = snapshot.artist,
-            style = typography.artistMetadata.copy(
-                fontSize = 16.sp,
-                lineHeight = 22.sp,
-                fontWeight = FontWeight.Medium
-            ),
-            color = colors.secondaryText,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
+        if (isVideo) {
+            // Video Mode: Adaptive layout - display channel and views on one line if they fit,
+            // or channel on line 1 and views on line 2 if they do not fit.
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                val textMeasurer = rememberTextMeasurer()
+                val artistStyle = typography.artistMetadata.copy(
+                    fontSize = 16.sp,
+                    lineHeight = 22.sp,
+                    fontWeight = FontWeight.Medium
+                )
+                val countStyle = typography.artistMetadata.copy(
+                    fontSize = 14.sp,
+                    lineHeight = 18.sp,
+                    fontWeight = FontWeight.Medium
+                )
+
+                if (formattedCount.isNullOrBlank()) {
+                    if (snapshot.artist.isNotBlank()) {
+                        Text(
+                            text = snapshot.artist,
+                            style = artistStyle,
+                            color = colors.secondaryText,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                } else {
+                    val inlineCountText = " · $formattedCount"
+                    val maxAvailableWidthPx = constraints.maxWidth
+
+                    val artistWidthPx = if (snapshot.artist.isNotBlank()) {
+                        textMeasurer.measure(
+                            text = AnnotatedString(snapshot.artist),
+                            style = artistStyle,
+                            maxLines = 1
+                        ).size.width
+                    } else 0
+
+                    val countWidthPx = textMeasurer.measure(
+                        text = AnnotatedString(inlineCountText),
+                        style = artistStyle,
+                        maxLines = 1
+                    ).size.width
+
+                    val canFitInline = (artistWidthPx + countWidthPx) <= maxAvailableWidthPx
+
+                    if (canFitInline) {
+                        // When both fit: display together on a single line with separator dot
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (snapshot.artist.isNotBlank()) {
+                                Text(
+                                    text = snapshot.artist,
+                                    style = artistStyle,
+                                    color = colors.secondaryText,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false)
+                                )
+                            }
+                            Text(
+                                text = inlineCountText,
+                                style = artistStyle,
+                                color = colors.secondaryText.copy(alpha = 0.85f),
+                                maxLines = 1,
+                                modifier = Modifier.wrapContentWidth()
+                            )
+                        }
+                    } else {
+                        // When they do not fit: display complete channel name on line 1, view count on line 2
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            if (snapshot.artist.isNotBlank()) {
+                                Text(
+                                    text = snapshot.artist,
+                                    style = artistStyle,
+                                    color = colors.secondaryText,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                            Text(
+                                text = formattedCount,
+                                style = countStyle,
+                                color = colors.secondaryText.copy(alpha = 0.85f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+                }
+            }
+        } else {
+            // Audio Mode: Original inline layout
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (snapshot.artist.isNotBlank()) {
+                    Text(
+                        text = snapshot.artist,
+                        style = typography.artistMetadata.copy(
+                            fontSize = 16.sp,
+                            lineHeight = 22.sp,
+                            fontWeight = FontWeight.Medium
+                        ),
+                        color = colors.secondaryText,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -426,6 +634,8 @@ fun ExpandedPlayerScreen(
     peekNextTrack: () -> Track? = { null },
     peekPreviousTrack: () -> Track? = { null },
     onSeek: (Float) -> Unit,
+    onSeekBackward10: () -> Unit = {},
+    onSeekForward10: () -> Unit = {},
     onToggleShuffle: () -> Unit,
     onToggleRepeat: () -> Unit,
     onToggleFavorite: () -> Unit,
@@ -438,6 +648,11 @@ fun ExpandedPlayerScreen(
     onToggleDownload: () -> Unit = {},
     audioOutputState: com.example.sonara.domain.model.AudioOutputState = com.example.sonara.domain.model.AudioOutputState(),
     onOpenAudioOutputSelector: () -> Unit = {},
+    mediaContent: (@Composable (Modifier) -> Unit)? = null,
+    videoQualityState: VideoQualityUiState? = null,
+    onSelectVideoQuality: (VideoQuality) -> Unit = {},
+    onOpenVideoQualitySelector: () -> Unit = {},
+    videoSize: VideoSize = VideoSize.UNKNOWN,
     modifier: Modifier = Modifier
 ) {
     // Intercept system back button
@@ -445,17 +660,34 @@ fun ExpandedPlayerScreen(
         onCollapse()
     }
 
-    AnimatedVisibility(
-        visible = isExpanded,
-        enter = slideInVertically(animationSpec = WebEnterSlide) { fullHeight -> (fullHeight * 0.60f).toInt() } +
-                fadeIn(animationSpec = WebEnterFade),
-        exit = slideOutVertically(animationSpec = WebExitSlide) { fullHeight -> (fullHeight * 0.60f).toInt() } +
-               fadeOut(animationSpec = WebExitFade),
-        modifier = modifier.fillMaxSize()
+    // Keep the content tree mounted while collapsed so a video WebView remains the same player
+    // instance. The transition only changes its presentation; explicit close removes the session
+    // from the caller and triggers normal WebView disposal.
+    val visibilityTransition = updateTransition(
+        targetState = isExpanded,
+        label = "ExpandedPlayerVisibility"
+    )
+    val contentAlpha by visibilityTransition.animateFloat(
+        transitionSpec = {
+            if (targetState) WebEnterFade else WebExitFade
+        },
+        label = "ExpandedPlayerAlpha"
+    ) { expanded -> if (expanded) 1f else 0f }
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .zIndex(if (isExpanded) 1f else -1f)
+            .graphicsLayer {
+                alpha = contentAlpha
+                translationY = if (contentAlpha < 1f) size.height * 0.60f * (1f - contentAlpha) else 0f
+            }
+            .then(if (isExpanded) Modifier else Modifier.clearAndSetSemantics { })
     ) {
         ExpandedPlayerContent(
             playerState = playerState,
             lyricsState = lyricsState,
+            isExpanded = isExpanded,
             onCollapse = onCollapse,
             onPlay = onPlay,
             onPause = onPause,
@@ -464,6 +696,8 @@ fun ExpandedPlayerScreen(
             peekNextTrack = peekNextTrack,
             peekPreviousTrack = peekPreviousTrack,
             onSeek = onSeek,
+            onSeekBackward10 = onSeekBackward10,
+            onSeekForward10 = onSeekForward10,
             onToggleShuffle = onToggleShuffle,
             onToggleRepeat = onToggleRepeat,
             onToggleFavorite = onToggleFavorite,
@@ -475,7 +709,12 @@ fun ExpandedPlayerScreen(
             isDownloading = isDownloading,
             onToggleDownload = onToggleDownload,
             audioOutputState = audioOutputState,
-            onOpenAudioOutputSelector = onOpenAudioOutputSelector
+            onOpenAudioOutputSelector = onOpenAudioOutputSelector,
+            mediaContent = mediaContent,
+            videoQualityState = videoQualityState,
+            onSelectVideoQuality = onSelectVideoQuality,
+            onOpenVideoQualitySelector = onOpenVideoQualitySelector,
+            videoSize = videoSize
         )
     }
 }
@@ -484,6 +723,7 @@ fun ExpandedPlayerScreen(
 private fun ExpandedPlayerContent(
     playerState: PlayerUiState,
     lyricsState: LyricsUiState,
+    isExpanded: Boolean,
     onCollapse: () -> Unit,
     onPlay: () -> Unit,
     onPause: () -> Unit,
@@ -492,6 +732,8 @@ private fun ExpandedPlayerContent(
     peekNextTrack: () -> Track? = { null },
     peekPreviousTrack: () -> Track? = { null },
     onSeek: (Float) -> Unit,
+    onSeekBackward10: () -> Unit = {},
+    onSeekForward10: () -> Unit = {},
     onToggleShuffle: () -> Unit,
     onToggleRepeat: () -> Unit,
     onToggleFavorite: () -> Unit,
@@ -503,7 +745,12 @@ private fun ExpandedPlayerContent(
     isDownloading: Boolean = false,
     onToggleDownload: () -> Unit = {},
     audioOutputState: com.example.sonara.domain.model.AudioOutputState = com.example.sonara.domain.model.AudioOutputState(),
-    onOpenAudioOutputSelector: () -> Unit = {}
+    onOpenAudioOutputSelector: () -> Unit = {},
+    mediaContent: (@Composable (Modifier) -> Unit)? = null,
+    videoQualityState: VideoQualityUiState? = null,
+    onSelectVideoQuality: (VideoQuality) -> Unit = {},
+    onOpenVideoQualitySelector: () -> Unit = {},
+    videoSize: VideoSize = VideoSize.UNKNOWN
 ) {
     val context = LocalContext.current
     val colors = SonaraTheme.colors
@@ -511,10 +758,23 @@ private fun ExpandedPlayerContent(
     val isDark = colors.isDark
 
     var viewMode by remember { mutableStateOf(ExpandedPlayerViewMode.PLAYER) }
+    var showQualitySheet by remember { mutableStateOf(false) }
+    val isVideo = mediaContent != null
 
-    // Reset to PLAYER view on track change
+    LaunchedEffect(showQualitySheet) {
+        if (showQualitySheet) {
+            onOpenVideoQualitySelector()
+        }
+    }
+
+    // Reset to PLAYER view on track change or when video mode is active
     LaunchedEffect(playerState.trackId) {
         viewMode = ExpandedPlayerViewMode.PLAYER
+    }
+    LaunchedEffect(isVideo) {
+        if (isVideo && viewMode == ExpandedPlayerViewMode.LYRICS) {
+            viewMode = ExpandedPlayerViewMode.PLAYER
+        }
     }
 
     // Breathing glow animation when playing
@@ -529,14 +789,15 @@ private fun ExpandedPlayerContent(
         label = "BreatheGlowAlpha"
     )
 
-    val surfaceColor = if (isDark) Color(0xFF071A1C) else SonaraPalette.BoneCanvas
-    val auroraColor = if (isDark) Color(0xFF0D282B) else SonaraPalette.BoneElevatedSurface
+    val surfaceColor = colors.background
+    val auroraColor = colors.surface
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(surfaceColor)
-            .pointerInput(Unit) {
+            .pointerInput(isExpanded) {
+                if (!isExpanded) return@pointerInput
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
                     down.consume()
@@ -588,7 +849,7 @@ private fun ExpandedPlayerContent(
                     .background(
                         Brush.radialGradient(
                             colors = listOf(
-                                SonaraPalette.OxideAccent.copy(alpha = if (isDark) 0.10f else 0.05f),
+                                colors.accent.copy(alpha = if (isDark) 0.10f else 0.05f),
                                 Color.Transparent
                             ),
                             radius = 900f
@@ -642,52 +903,57 @@ private fun ExpandedPlayerContent(
                 )
 
                 // Right Actions (Romanize toggle + Lyrics/Player toggle)
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (viewMode == ExpandedPlayerViewMode.LYRICS) {
-                        val isRomanized = when (lyricsState) {
-                            is LyricsUiState.Synced -> lyricsState.isRomanized
-                            is LyricsUiState.Plain -> lyricsState.isRomanized
-                            else -> false
+                if (isVideo) {
+                    // Placeholder to preserve symmetrical layout and keep NOW PLAYING centered
+                    Spacer(modifier = Modifier.size(42.dp))
+                } else {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (viewMode == ExpandedPlayerViewMode.LYRICS) {
+                            val isRomanized = when (lyricsState) {
+                                is LyricsUiState.Synced -> lyricsState.isRomanized
+                                is LyricsUiState.Plain -> lyricsState.isRomanized
+                                else -> false
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(if (isRomanized) colors.accent else colors.surfaceVariant)
+                                    .clickable(onClick = onToggleRomanization),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "aA",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isRomanized) colors.onAccent else colors.primaryText
+                                )
+                            }
                         }
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(if (isRomanized) SonaraPalette.OxideAccent else colors.surfaceVariant)
-                                .clickable(onClick = onToggleRomanization),
-                            contentAlignment = Alignment.Center
+
+                        // View Mode Switcher Button
+                        SonaraIconButton(
+                            onClick = {
+                                viewMode = if (viewMode == ExpandedPlayerViewMode.PLAYER) {
+                                    ExpandedPlayerViewMode.LYRICS
+                                } else {
+                                    ExpandedPlayerViewMode.PLAYER
+                                }
+                            },
+                            contentDescription = if (viewMode == ExpandedPlayerViewMode.PLAYER) "Show Lyrics" else "Show Player",
+                            variant = SonaraIconButtonVariant.Ghost,
+                            size = 42.dp
                         ) {
-                            Text(
-                                text = "aA",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (isRomanized) Color.White else colors.primaryText
+                            Icon(
+                                imageVector = if (viewMode == ExpandedPlayerViewMode.PLAYER) PhosphorIcons.TextAa else PhosphorIcons.MusicNote,
+                                contentDescription = if (viewMode == ExpandedPlayerViewMode.PLAYER) "Show Lyrics" else "Show Player",
+                                tint = colors.primaryText,
+                                modifier = Modifier.size(22.dp)
                             )
                         }
-                    }
-
-                    // View Mode Switcher Button
-                    SonaraIconButton(
-                        onClick = {
-                            viewMode = if (viewMode == ExpandedPlayerViewMode.PLAYER) {
-                                ExpandedPlayerViewMode.LYRICS
-                            } else {
-                                ExpandedPlayerViewMode.PLAYER
-                            }
-                        },
-                        contentDescription = if (viewMode == ExpandedPlayerViewMode.PLAYER) "Show Lyrics" else "Show Player",
-                        variant = SonaraIconButtonVariant.Ghost,
-                        size = 42.dp
-                    ) {
-                        Icon(
-                            imageVector = if (viewMode == ExpandedPlayerViewMode.PLAYER) PhosphorIcons.TextAa else PhosphorIcons.MusicNote,
-                            contentDescription = if (viewMode == ExpandedPlayerViewMode.PLAYER) "Show Lyrics" else "Show Player",
-                            tint = colors.primaryText,
-                            modifier = Modifier.size(22.dp)
-                        )
                     }
                 }
             }
@@ -717,6 +983,8 @@ private fun ExpandedPlayerContent(
                             peekNextTrack = peekNextTrack,
                             peekPreviousTrack = peekPreviousTrack,
                             onSeek = onSeek,
+                            onSeekBackward10 = onSeekBackward10,
+                            onSeekForward10 = onSeekForward10,
                             onToggleShuffle = onToggleShuffle,
                             onToggleRepeat = onToggleRepeat,
                             onToggleFavorite = onToggleFavorite,
@@ -727,7 +995,14 @@ private fun ExpandedPlayerContent(
                             isDownloading = isDownloading,
                             onToggleDownload = onToggleDownload,
                             audioOutputState = audioOutputState,
-                            onOpenAudioOutputSelector = onOpenAudioOutputSelector
+                            onOpenAudioOutputSelector = onOpenAudioOutputSelector,
+                            mediaContent = mediaContent,
+                            videoSize = videoSize,
+                            videoQualityState = videoQualityState,
+                            onOpenQualitySheet = {
+                                showQualitySheet = true
+                                onOpenVideoQualitySelector()
+                            }
                         )
                     }
                     ExpandedPlayerViewMode.LYRICS -> {
@@ -740,6 +1015,14 @@ private fun ExpandedPlayerContent(
                 }
             }
         }
+
+        if (showQualitySheet && videoQualityState != null) {
+            VideoQualityBottomSheet(
+                state = videoQualityState,
+                onSelect = onSelectVideoQuality,
+                onDismiss = { showQualitySheet = false }
+            )
+        }
     }
 }
 
@@ -750,6 +1033,520 @@ private data class ExpandedLayoutMetrics(
     val progressToTransportGap: Dp,
     val transportToVolumeGap: Dp
 )
+
+/**
+ * Video Action Controls: Symmetrical Download & Quality pill controls placed side by side.
+ */
+@Composable
+private fun VideoActionControlsRow(
+    isDownloaded: Boolean,
+    isDownloading: Boolean,
+    onToggleDownload: () -> Unit,
+    qualityState: VideoQualityUiState,
+    onOpenQualitySheet: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        VideoDownloadButton(
+            isDownloaded = isDownloaded,
+            isDownloading = isDownloading,
+            onClick = onToggleDownload,
+            modifier = Modifier.weight(1f, fill = false)
+        )
+        VideoQualitySelectorButton(
+            state = qualityState,
+            onClick = onOpenQualitySheet,
+            modifier = Modifier.weight(1f, fill = false)
+        )
+    }
+}
+
+@Composable
+private fun VideoDownloadButton(
+    isDownloaded: Boolean,
+    isDownloading: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val colors = SonaraTheme.colors
+    val typography = SonaraTheme.typography
+    val label = when {
+        isDownloading -> stringResource(R.string.action_downloading)
+        isDownloaded -> stringResource(R.string.action_downloaded)
+        else -> stringResource(R.string.action_download)
+    }
+
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(10.dp),
+        color = if (isDownloaded) colors.accent.copy(alpha = 0.15f) else colors.surfaceVariant.copy(alpha = 0.65f),
+        border = BorderStroke(1.dp, if (isDownloaded) colors.accent.copy(alpha = 0.35f) else colors.surfaceVariant),
+        modifier = modifier.height(36.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            if (isDownloading) {
+                SonaraLoadingIndicator(
+                    size = 14.dp,
+                    color = colors.accent
+                )
+            } else {
+                Icon(
+                    imageVector = if (isDownloaded) PhosphorIcons.CheckCircle else PhosphorIcons.DownloadSimple,
+                    contentDescription = null,
+                    tint = if (isDownloaded) colors.accent else colors.primaryText,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+            Text(
+                text = label,
+                style = typography.caption.copy(
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold
+                ),
+                color = if (isDownloaded) colors.accent else colors.primaryText,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+private fun VideoQualitySelectorButton(
+    state: VideoQualityUiState,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val colors = SonaraTheme.colors
+    val typography = SonaraTheme.typography
+    val availableOptions = remember(state.availableQualityOptions, state.availableQualities, state.availableHeights) {
+        if (state.availableQualityOptions.isNotEmpty()) {
+            state.availableQualityOptions.map { it.quality }.filter { it != VideoQuality.AUTO }.distinct()
+        } else {
+            val raw = if (state.availableQualities.isNotEmpty()) {
+                state.availableQualities
+            } else {
+                state.availableHeights.mapNotNull { height ->
+                    VideoQuality.of(height, null)
+                }
+            }
+            raw.filter { it != VideoQuality.AUTO }.distinct()
+        }
+    }
+    val canOpen = !state.isPreparing && (availableOptions.size > 1 || state.availableHeights.size > 1)
+    val label = when {
+        state.isPreparing -> stringResource(R.string.video_quality_preparing)
+        state.actualQuality != null -> state.actualQuality.label
+        state.actualHeight != null -> "${state.actualHeight}p"
+        availableOptions.size == 1 -> availableOptions.single().label
+        state.availableHeights.size == 1 -> "${state.availableHeights.single()}p"
+        else -> state.requestedQuality.label
+    }
+
+    Surface(
+        onClick = onClick,
+        enabled = canOpen,
+        shape = RoundedCornerShape(10.dp),
+        color = colors.surfaceVariant.copy(alpha = 0.65f),
+        border = BorderStroke(1.dp, colors.surfaceVariant),
+        modifier = modifier.height(36.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Icon(
+                imageVector = PhosphorIcons.SlidersHorizontal,
+                contentDescription = null,
+                tint = colors.primaryText.copy(alpha = if (canOpen) 1f else 0.5f),
+                modifier = Modifier.size(16.dp)
+            )
+            Text(
+                text = label,
+                style = typography.caption.copy(
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold
+                ),
+                color = colors.primaryText.copy(alpha = if (canOpen) 1f else 0.5f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun VideoQualityBottomSheet(
+    state: VideoQualityUiState,
+    onSelect: (VideoQuality) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val colors = SonaraTheme.colors
+    val typography = SonaraTheme.typography
+    val configuration = LocalConfiguration.current
+    val maxSheetHeight = configuration.screenHeightDp.dp * 0.55f
+
+    val availableOptions: List<VideoQualityOption> = remember(
+        state.availableQualityOptions,
+        state.availableQualities,
+        state.availableHeights
+    ) {
+        if (state.availableQualityOptions.isNotEmpty()) {
+            state.availableQualityOptions
+                .filter { it.quality != VideoQuality.AUTO }
+                .distinctBy { it.quality }
+                .sortedWith(
+                    compareByDescending<VideoQualityOption> { it.quality.requestedHeight ?: 0 }
+                        .thenByDescending { it.quality.targetFps ?: 0 }
+                )
+        } else {
+            val raw = if (state.availableQualities.isNotEmpty()) {
+                state.availableQualities
+            } else {
+                state.availableHeights.mapNotNull { height ->
+                    VideoQuality.of(height, null)
+                }
+            }
+            raw.filter { it != VideoQuality.AUTO }
+                .distinct()
+                .sortedWith(
+                    compareByDescending<VideoQuality> { it.requestedHeight ?: 0 }
+                        .thenByDescending { it.targetFps ?: 0 }
+                )
+                .map { VideoQualityOption(it, isSupported = true) }
+        }
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = colors.surface,
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+        dragHandle = {
+            BottomSheetDefaults.DragHandle(
+                color = colors.secondaryText.copy(alpha = 0.40f)
+            )
+        }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = maxSheetHeight)
+                .padding(horizontal = 20.dp)
+                .navigationBarsPadding()
+                .padding(bottom = 16.dp)
+        ) {
+            // Header
+            Text(
+                text = stringResource(R.string.video_quality_title),
+                style = typography.cardTitle.copy(
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold
+                ),
+                color = colors.primaryText
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = stringResource(R.string.video_quality_subtitle),
+                style = typography.caption.copy(
+                    fontSize = 12.5.sp
+                ),
+                color = colors.secondaryText
+            )
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Auto Selection Card
+            val isAutoSelected = state.requestedQuality == VideoQuality.AUTO
+            val currentStreamingText = remember(isAutoSelected, state.actualHeight, state.actualQuality) {
+                if (isAutoSelected && state.actualHeight != null) {
+                    val heightStr = "${state.actualHeight}p"
+                    val fps = state.actualQuality?.targetFps
+                    if (fps != null && fps >= 50) {
+                        "Currently streaming in $heightStr · $fps FPS"
+                    } else {
+                        "Currently streaming in $heightStr"
+                    }
+                } else {
+                    null
+                }
+            }
+
+            AutoQualityCard(
+                isSelected = isAutoSelected,
+                streamingInfo = currentStreamingText,
+                onClick = {
+                    onSelect(VideoQuality.AUTO)
+                    onDismiss()
+                }
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Scrollable Manual Resolution List
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f, fill = false)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                availableOptions.forEach { option ->
+                    val quality = option.quality
+                    val isSelected = !isAutoSelected && (
+                        quality == state.actualQuality ||
+                        (state.actualQuality == null && quality == state.requestedQuality)
+                    )
+                    VideoQualityOptionRow(
+                        option = option,
+                        isSelected = isSelected,
+                        onClick = {
+                            if (option.isSupported) {
+                                onSelect(quality)
+                                onDismiss()
+                            }
+                        }
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun AutoQualityCard(
+    isSelected: Boolean,
+    streamingInfo: String?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val colors = SonaraTheme.colors
+    val typography = SonaraTheme.typography
+
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(14.dp),
+        color = if (isSelected) colors.accent.copy(alpha = 0.12f) else colors.surfaceVariant.copy(alpha = 0.50f),
+        border = BorderStroke(
+            width = 1.dp,
+            color = if (isSelected) colors.accent.copy(alpha = 0.40f) else colors.surfaceVariant.copy(alpha = 0.60f)
+        ),
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 11.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(
+                modifier = Modifier.weight(1f, fill = false),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text(
+                    text = "Auto (Recommended)",
+                    style = typography.body.copy(
+                        fontSize = 14.5.sp,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold
+                    ),
+                    color = if (isSelected) colors.accent else colors.primaryText
+                )
+                Text(
+                    text = stringResource(R.string.video_quality_auto_desc),
+                    style = typography.caption.copy(fontSize = 12.sp),
+                    color = colors.secondaryText
+                )
+                if (isSelected && !streamingInfo.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.height(1.dp))
+                    Text(
+                        text = streamingInfo,
+                        style = typography.caption.copy(
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.SemiBold
+                        ),
+                        color = colors.accent
+                    )
+                }
+            }
+
+            if (isSelected) {
+                Icon(
+                    imageVector = PhosphorIcons.Check,
+                    contentDescription = "Selected",
+                    tint = colors.accent,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun VideoQualityOptionRow(
+    option: VideoQualityOption,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val quality = option.quality
+    val isSupported = option.isSupported
+    val colors = SonaraTheme.colors
+    val typography = SonaraTheme.typography
+
+    Surface(
+        onClick = onClick,
+        enabled = isSupported,
+        shape = RoundedCornerShape(10.dp),
+        color = if (isSelected) colors.accent.copy(alpha = 0.12f) else Color.Transparent,
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = 44.dp, max = 52.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                val height = quality.requestedHeight ?: 0
+                val resolutionText = if (height > 0) "${height}p" else quality.label
+                val textColor = when {
+                    isSelected -> colors.accent
+                    !isSupported -> colors.secondaryText.copy(alpha = 0.45f)
+                    else -> colors.primaryText
+                }
+
+                Column(
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = resolutionText,
+                            style = typography.body.copy(
+                                fontSize = 14.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold
+                            ),
+                            color = textColor
+                        )
+
+                        // Resolution Badge: 8K for 4320p, 4K for 2160p, 2K for 1440p, FHD for 1080p, HD for 720p
+                        val qualityBadgeText = when (height) {
+                            4320 -> "8K"
+                            2160 -> "4K"
+                            1440 -> "2K"
+                            1080 -> "FHD"
+                            720 -> "HD"
+                            else -> null
+                        }
+                        if (qualityBadgeText != null) {
+                            val badgeColor = when {
+                                isSelected -> colors.accent
+                                !isSupported -> colors.secondaryText.copy(alpha = 0.45f)
+                                else -> colors.secondaryText
+                            }
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = if (isSelected) colors.accent.copy(alpha = 0.22f) else colors.surfaceVariant.copy(alpha = if (isSupported) 1f else 0.5f),
+                                modifier = Modifier.padding(vertical = 1.dp)
+                            ) {
+                                Text(
+                                    text = qualityBadgeText,
+                                    style = typography.caption.copy(
+                                        fontSize = 10.5.sp,
+                                        fontWeight = FontWeight.Bold
+                                    ),
+                                    color = badgeColor,
+                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp)
+                                )
+                            }
+                        }
+
+                        // Distinctive frame-rate badge: only show 60 FPS (or >= 50 FPS) when genuinely available.
+                        // Redundant 30 FPS badges are omitted.
+                        if (quality.targetFps != null && quality.targetFps >= 50) {
+                            val badgeColor = when {
+                                isSelected -> colors.accent
+                                !isSupported -> colors.secondaryText.copy(alpha = 0.45f)
+                                else -> colors.secondaryText
+                            }
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = if (isSelected) colors.accent.copy(alpha = 0.22f) else colors.surfaceVariant.copy(alpha = if (isSupported) 1f else 0.5f),
+                                modifier = Modifier.padding(vertical = 1.dp)
+                            ) {
+                                Text(
+                                    text = "${quality.targetFps} FPS",
+                                    style = typography.caption.copy(
+                                        fontSize = 10.5.sp,
+                                        fontWeight = FontWeight.Bold
+                                    ),
+                                    color = badgeColor,
+                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    if (!isSupported) {
+                        val reasonText = option.unsupportedReason ?: stringResource(R.string.video_quality_unsupported_device)
+                        Text(
+                            text = reasonText,
+                            style = typography.caption.copy(
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Normal
+                            ),
+                            color = colors.secondaryText.copy(alpha = 0.55f)
+                        )
+                    }
+                }
+            }
+
+            if (isSelected) {
+                Icon(
+                    imageVector = PhosphorIcons.Check,
+                    contentDescription = "Selected",
+                    tint = colors.accent,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun VideoQualityOptionRow(
+    quality: VideoQuality,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    VideoQualityOptionRow(
+        option = VideoQualityOption(quality = quality, isSupported = true),
+        isSelected = isSelected,
+        onClick = onClick,
+        modifier = modifier
+    )
+}
 
 /**
  * Main Player View: Centered Composition with Dominant Artwork, Clear Controls Hierarchy & Volume Row.
@@ -767,6 +1564,8 @@ private fun PlayerViewContent(
     peekNextTrack: () -> Track? = { null },
     peekPreviousTrack: () -> Track? = { null },
     onSeek: (Float) -> Unit,
+    onSeekBackward10: () -> Unit = {},
+    onSeekForward10: () -> Unit = {},
     onToggleShuffle: () -> Unit,
     onToggleRepeat: () -> Unit,
     onToggleFavorite: () -> Unit,
@@ -777,7 +1576,11 @@ private fun PlayerViewContent(
     isDownloading: Boolean = false,
     onToggleDownload: () -> Unit = {},
     audioOutputState: com.example.sonara.domain.model.AudioOutputState = com.example.sonara.domain.model.AudioOutputState(),
-    onOpenAudioOutputSelector: () -> Unit = {}
+    onOpenAudioOutputSelector: () -> Unit = {},
+    mediaContent: (@Composable (Modifier) -> Unit)? = null,
+    videoSize: VideoSize = VideoSize.UNKNOWN,
+    videoQualityState: VideoQualityUiState? = null,
+    onOpenQualitySheet: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val colors = SonaraTheme.colors
@@ -788,9 +1591,11 @@ private fun PlayerViewContent(
         contentAlignment = Alignment.Center
     ) {
         val availableHeight = maxHeight
+        val availableWidth = maxWidth
+        val isVideo = mediaContent != null
 
         // Balanced scaling ensuring artwork is close to screen center with natural spacing
-        val metrics = when {
+        val baseMetrics = when {
             availableHeight < 560.dp -> ExpandedLayoutMetrics(
                 artworkSize = 190.dp,
                 artworkToMetaGap = 14.dp,
@@ -813,6 +1618,42 @@ private fun PlayerViewContent(
                 transportToVolumeGap = 18.dp
             )
         }
+
+        val metrics = if (isVideo) {
+            baseMetrics.copy(
+                artworkToMetaGap = minOf(baseMetrics.artworkToMetaGap, 14.dp),
+                metaToProgressGap = minOf(baseMetrics.metaToProgressGap, 10.dp)
+            )
+        } else {
+            baseMetrics
+        }
+
+        val contentWidth = (minOf(availableWidth, 440.dp) - 8.dp).coerceAtLeast(0.dp)
+        val controlsReservedHeight = 44.dp +
+            metrics.artworkToMetaGap +
+            38.dp +
+            (if (videoQualityState != null) 46.dp else 0.dp) +
+            metrics.metaToProgressGap +
+            64.dp +
+            metrics.progressToTransportGap +
+            32.dp +
+            metrics.transportToVolumeGap +
+            28.dp +
+            10.dp +
+            16.dp
+
+        val maxRegionHeight = (availableHeight - controlsReservedHeight).coerceAtLeast(140.dp)
+        val layoutResult = VideoLayoutCalculator.calculateFittedDimensions(
+            containerWidth = contentWidth.value,
+            containerHeight = maxRegionHeight.value,
+            videoWidth = videoSize.width,
+            videoHeight = videoSize.height,
+            unappliedRotationDegrees = videoSize.unappliedRotationDegrees,
+            pixelWidthHeightRatio = videoSize.pixelWidthHeightRatio
+        )
+        val fittedWidth = layoutResult.width.dp
+        val fittedHeight = layoutResult.height.dp
+        val regionHeight = if (layoutResult.isWidthConstrained) fittedHeight else maxRegionHeight
 
         // ── "Fall Away / Rise Up" swipe-to-skip state (Expanded-Player-local, gesture-driven) ──
         val reduceMotion = LocalReduceMotion.current
@@ -851,15 +1692,17 @@ private fun PlayerViewContent(
         // Live identity of the currently-playing track (derived from playback state).
         val livePlayerSnapshot = remember(
             playerState.trackId,
-            playerState.trackTitle,
+            playerState.effectiveTitle,
             playerState.artistName,
-            playerState.artworkUrl
+            playerState.artworkUrl,
+            playerState.formattedViewCount
         ) {
             TrackTransitionSnapshot(
                 trackId = playerState.trackId,
-                title = playerState.trackTitle,
+                title = playerState.effectiveTitle,
                 artist = playerState.artistName,
-                artworkUrl = playerState.artworkUrl
+                artworkUrl = playerState.artworkUrl,
+                formattedViewCount = playerState.formattedViewCount
             )
         }
 
@@ -945,9 +1788,9 @@ private fun PlayerViewContent(
         fun buttonSkip(forward: Boolean) {
             finalizeInFlight()
             val neighbor = if (forward) {
-                latestPeekNext()?.toTransitionSnapshot()
+                latestPeekNext()?.toTransitionSnapshot(isVideo = isVideo)
             } else if (latestPlayerState.currentPositionMs <= FA_PREVIOUS_RESTART_THRESHOLD_MS) {
-                latestPeekPrevious()?.toTransitionSnapshot()
+                latestPeekPrevious()?.toTransitionSnapshot(isVideo = isVideo)
             } else {
                 null
             }
@@ -991,20 +1834,37 @@ private fun PlayerViewContent(
             modifier = Modifier
                 .widthIn(max = 440.dp)
                 .fillMaxWidth()
-                .offset(y = (-14).dp)
+                .offset(y = if (isVideo) 0.dp else (-14).dp)
                 .padding(horizontal = 4.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // ── 1. ARTWORK & SWIPE ZONE CONTAINER ──
-            // Sized to fillMaxWidth() with height matching the artwork plus comfortable vertical padding.
-            // Catches horizontal swipe gestures starting both INSIDE and OUTSIDE the artwork,
-            // while leaving the progress rail, transport controls, and volume slider completely untouched.
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(metrics.artworkSize + 16.dp)
-                    .pointerInput(reduceMotion, metrics.artworkSize) {
+            if (isVideo) {
+                // ── 1. DEDICATED VIDEO VIEWING REGION ──
+                // Black background, preserving source video aspect ratio (letterbox / pillarbox),
+                // sized responsively within available bounds without covering metadata or playback controls.
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(regionHeight)
+                        .background(Color.Black, shape = RoundedCornerShape(16.dp))
+                        .clip(RoundedCornerShape(16.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    mediaContent?.invoke(
+                        Modifier.size(width = fittedWidth, height = fittedHeight)
+                    )
+                }
+            } else {
+                // ── 1. ARTWORK & SWIPE ZONE CONTAINER ──
+                // Sized to fillMaxWidth() with height matching the artwork plus comfortable vertical padding.
+                // Catches horizontal swipe gestures starting both INSIDE and OUTSIDE the artwork,
+                // while leaving the progress rail, transport controls, and volume slider completely untouched.
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(metrics.artworkSize + 16.dp)
+                        .pointerInput(reduceMotion, metrics.artworkSize) {
                         awaitEachGesture {
                             val down = awaitFirstDown(requireUnconsumed = false)
                             val startX = down.position.x
@@ -1049,10 +1909,10 @@ private fun PlayerViewContent(
                                     // direction is known. Left → next, right → previous (unless the
                                     // 3000ms rule makes "previous" a restart, which has no neighbour).
                                     val desiredUnder = when {
-                                        projected < 0f -> latestPeekNext()?.toTransitionSnapshot()
+                                        projected < 0f -> latestPeekNext()?.toTransitionSnapshot(isVideo = isVideo)
                                         projected > 0f &&
                                             latestPlayerState.currentPositionMs <= FA_PREVIOUS_RESTART_THRESHOLD_MS ->
-                                            latestPeekPrevious()?.toTransitionSnapshot()
+                                            latestPeekPrevious()?.toTransitionSnapshot(isVideo = isVideo)
                                         else -> null
                                     }
                                     if (desiredUnder?.trackId != underSnapshot?.trackId) {
@@ -1134,6 +1994,7 @@ private fun PlayerViewContent(
                         }
                 )
             }
+        }
 
         Spacer(modifier = Modifier.height(metrics.artworkToMetaGap))
 
@@ -1141,7 +2002,7 @@ private fun PlayerViewContent(
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = if (isVideo) Alignment.Top else Alignment.CenterVertically
             ) {
                 Box(
                     modifier = Modifier
@@ -1161,7 +2022,8 @@ private fun PlayerViewContent(
                                 val l = FallAwayRiseUp.layers(drag.value, p, maxFallPx, maxRisePx, maxEntryXPx, reduceMotion)
                                 translationY = l.underTranslationY * FA_METADATA_TRAVEL_FRACTION
                                 alpha = l.underAlpha
-                            }
+                            },
+                            isVideo = isVideo
                         )
                     }
                     TrackMetadata(
@@ -1171,12 +2033,14 @@ private fun PlayerViewContent(
                             val l = FallAwayRiseUp.layers(drag.value, p, maxFallPx, maxRisePx, maxEntryXPx, reduceMotion)
                             translationY = l.topTranslationY * FA_METADATA_TRAVEL_FRACTION
                             alpha = l.topAlpha * swapAlpha.value
-                        }
+                        },
+                        isVideo = isVideo
                     )
                 }
 
                 // Quick Action Buttons (Favorite + Add to Playlist)
                 Row(
+                    modifier = if (isVideo) Modifier.padding(top = 6.dp) else Modifier,
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -1210,28 +2074,42 @@ private fun PlayerViewContent(
                         )
                     }
 
-                    // Download Button
-                    SonaraIconButton(
-                        onClick = onToggleDownload,
-                        contentDescription = if (isDownloaded) "Downloaded" else "Download Track",
-                        variant = SonaraIconButtonVariant.Ghost,
-                        size = 40.dp
-                    ) {
-                        if (isDownloading) {
-                            SonaraLoadingIndicator(
-                                size = 20.dp,
-                                color = colors.accent
-                            )
-                        } else {
-                            Icon(
-                                imageVector = if (isDownloaded) PhosphorIcons.CheckCircle else PhosphorIcons.DownloadSimple,
-                                contentDescription = if (isDownloaded) "Downloaded" else "Download Track",
-                                tint = if (isDownloaded) colors.accent else colors.secondaryText,
-                                modifier = Modifier.size(22.dp)
-                            )
+                    // Download Button (in Audio mode)
+                    if (videoQualityState == null) {
+                        SonaraIconButton(
+                            onClick = onToggleDownload,
+                            contentDescription = if (isDownloaded) stringResource(R.string.action_downloaded) else stringResource(R.string.action_download),
+                            variant = SonaraIconButtonVariant.Ghost,
+                            size = 40.dp
+                        ) {
+                            if (isDownloading) {
+                                SonaraLoadingIndicator(
+                                    size = 20.dp,
+                                    color = colors.accent
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = if (isDownloaded) PhosphorIcons.CheckCircle else PhosphorIcons.DownloadSimple,
+                                    contentDescription = if (isDownloaded) stringResource(R.string.action_downloaded) else stringResource(R.string.action_download),
+                                    tint = if (isDownloaded) colors.accent else colors.secondaryText,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
                         }
                     }
                 }
+            }
+
+            // ── VIDEO ACTIONS ROW (Download & Quality side by side) ──
+            if (videoQualityState != null) {
+                Spacer(modifier = Modifier.height(10.dp))
+                VideoActionControlsRow(
+                    isDownloaded = isDownloaded,
+                    isDownloading = isDownloading,
+                    onToggleDownload = onToggleDownload,
+                    qualityState = videoQualityState,
+                    onOpenQualitySheet = onOpenQualitySheet
+                )
             }
 
             Spacer(modifier = Modifier.height(metrics.metaToProgressGap))
@@ -1239,8 +2117,8 @@ private fun PlayerViewContent(
             // ── 3. PLAYBACK PROGRESS RAIL & TIMESTAMPS AT TWO ENDS BELOW RAIL ──
             Column(modifier = Modifier.fillMaxWidth()) {
                 ExpandedSegmentedProgressRail(
-                    progress = playerState.progress,
-                    onSeek = onSeek,
+                    progress = if (playerState.isLive) 1f else playerState.progress,
+                    onSeek = if (playerState.isLive) { {} } else onSeek,
                     isDark = isDark,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1256,74 +2134,124 @@ private fun PlayerViewContent(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = formatTime(playerState.currentPositionMs / 1000L),
+                        text = if (playerState.isPositionAvailable) {
+                            formatTime(playerState.currentPositionMs / 1000L)
+                        } else {
+                            "--:--"
+                        },
                         style = typography.playbackTiming.copy(
                             fontSize = 13.sp,
                             fontWeight = FontWeight.SemiBold
                         ),
                         color = colors.secondaryText
                     )
-                    Text(
-                        text = if (playerState.durationMs > 0L) formatTime(playerState.durationMs / 1000L) else "--:--",
-                        style = typography.playbackTiming.copy(
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold
-                        ),
-                        color = colors.secondaryText
-                    )
+                    if (playerState.isLive) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(colors.accent.copy(alpha = 0.2f))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = "LIVE",
+                                style = typography.playbackTiming.copy(
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                ),
+                                color = colors.accent
+                            )
+                        }
+                    } else if (playerState.isUpcoming) {
+                        Text(
+                            text = "UPCOMING",
+                            style = typography.playbackTiming.copy(
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold
+                            ),
+                            color = colors.secondaryText
+                        )
+                    } else {
+                        Text(
+                            text = if (playerState.durationMs > 0L) formatTime(playerState.durationMs / 1000L) else "--:--",
+                            style = typography.playbackTiming.copy(
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold
+                            ),
+                            color = colors.secondaryText
+                        )
+                    }
                 }
             }
 
             Spacer(modifier = Modifier.height(metrics.progressToTransportGap))
 
-            // ── 4. 5-BUTTON TRANSPORT CORE ──
+            // ── 4. 7-BUTTON TRANSPORT CORE ──
+            val inactiveTransportTint = if (isVideo) colors.primaryText.copy(alpha = 0.75f) else colors.secondaryText.copy(alpha = 0.60f)
+            val shuffleTint = if (playerState.isShuffled) colors.accent else inactiveTransportTint
+            val repeatTint = if (playerState.repeatMode != 0) colors.accent else inactiveTransportTint
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Shuffle Toggle
+                // 1. Shuffle Toggle
                 SonaraIconButton(
                     onClick = onToggleShuffle,
                     contentDescription = "Toggle Shuffle",
                     variant = SonaraIconButtonVariant.Ghost,
-                    size = 44.dp
+                    size = 40.dp
                 ) {
                     Icon(
                         imageVector = PhosphorIcons.Shuffle,
                         contentDescription = "Toggle Shuffle",
-                        tint = if (playerState.isShuffled) SonaraPalette.OxideAccent else colors.secondaryText.copy(alpha = 0.60f),
-                        modifier = Modifier.size(20.dp)
+                        tint = shuffleTint,
+                        modifier = Modifier.size(19.dp)
                     )
                 }
 
-                // Previous Track
+                // 2. Previous Track
                 SonaraIconButton(
                     onClick = { buttonSkip(forward = false) },
                     contentDescription = "Previous Track",
                     variant = SonaraIconButtonVariant.Ghost,
-                    size = 48.dp
+                    size = 40.dp
                 ) {
                     Icon(
                         imageVector = PhosphorIcons.SkipBack,
                         contentDescription = "Previous Track",
                         tint = colors.primaryText,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(22.dp)
                     )
                 }
 
-                // Dominant 64dp Play/Pause Button
+                // 3. Seek Backward 10 Seconds
+                SonaraIconButton(
+                    onClick = onSeekBackward10,
+                    contentDescription = "Seek backward 10 seconds",
+                    variant = SonaraIconButtonVariant.Ghost,
+                    size = 40.dp
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Replay10,
+                        contentDescription = "Seek backward 10 seconds",
+                        tint = colors.primaryText,
+                        modifier = Modifier.size(23.dp)
+                    )
+                }
+
+                // 4. Dominant 60dp Play/Pause Button
                 Box(
                     modifier = Modifier
-                        .size(64.dp)
+                        .size(60.dp)
                         .shadow(
                             elevation = 14.dp,
                             shape = CircleShape,
-                            spotColor = SonaraPalette.OxideAccent.copy(alpha = 0.45f),
-                            ambientColor = SonaraPalette.OxideAccent.copy(alpha = 0.25f)
+                            spotColor = colors.accent.copy(alpha = 0.45f),
+                            ambientColor = colors.accent.copy(alpha = 0.25f)
                         )
                         .clip(CircleShape)
-                        .background(SonaraPalette.OxideAccent)
+                        .background(colors.accent)
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
@@ -1336,45 +2264,59 @@ private fun PlayerViewContent(
                     contentAlignment = Alignment.Center
                 ) {
                     if (playerState.isBuffering) {
-                        SonaraLoadingIndicator(size = 28.dp, color = Color.White)
+                        SonaraLoadingIndicator(size = 28.dp, color = colors.onAccent)
                     } else {
                         PlayPauseMorph(
                             isPlaying = isPlaying,
-                            size      = 30.dp,
-                            color     = Color.White
+                            size      = 28.dp,
+                            color     = colors.onAccent
                         )
                     }
                 }
 
-                // Next Track
+                // 5. Seek Forward 10 Seconds
+                SonaraIconButton(
+                    onClick = onSeekForward10,
+                    contentDescription = "Seek forward 10 seconds",
+                    variant = SonaraIconButtonVariant.Ghost,
+                    size = 40.dp
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Forward10,
+                        contentDescription = "Seek forward 10 seconds",
+                        tint = colors.primaryText,
+                        modifier = Modifier.size(23.dp)
+                    )
+                }
+
+                // 6. Next Track
                 SonaraIconButton(
                     onClick = { buttonSkip(forward = true) },
                     contentDescription = "Next Track",
                     variant = SonaraIconButtonVariant.Ghost,
-                    size = 48.dp
+                    size = 40.dp
                 ) {
                     Icon(
                         imageVector = PhosphorIcons.SkipForward,
                         contentDescription = "Next Track",
                         tint = colors.primaryText,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(22.dp)
                     )
                 }
 
-                // Repeat Mode Toggle
-                val repeatTint = if (playerState.repeatMode != 0) SonaraPalette.OxideAccent else colors.secondaryText.copy(alpha = 0.60f)
+                // 7. Repeat Mode Toggle
                 val repeatIcon = if (playerState.repeatMode == 2) PhosphorIcons.RepeatOnce else PhosphorIcons.Repeat
                 SonaraIconButton(
                     onClick = onToggleRepeat,
                     contentDescription = "Toggle Repeat",
                     variant = SonaraIconButtonVariant.Ghost,
-                    size = 44.dp
+                    size = 40.dp
                 ) {
                     Icon(
                         imageVector = repeatIcon,
                         contentDescription = "Toggle Repeat",
                         tint = repeatTint,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(19.dp)
                     )
                 }
             }
@@ -1387,7 +2329,8 @@ private fun PlayerViewContent(
                 isMuted = playerState.isMuted,
                 onVolumeChange = onVolumeChange,
                 onToggleMute = onToggleMute,
-                isDark = isDark
+                isDark = isDark,
+                isVideo = isVideo
             )
 
             Spacer(modifier = Modifier.height(10.dp))
@@ -1438,7 +2381,7 @@ private fun ExpandedAudioOutputRow(
         Icon(
             imageVector = icon,
             contentDescription = outputText,
-            tint = SonaraPalette.OxideAccent,
+            tint = colors.accent,
             modifier = Modifier.size(17.dp)
         )
         Spacer(modifier = Modifier.width(8.dp))
@@ -1467,12 +2410,26 @@ private fun ExpandedVolumeControl(
     onVolumeChange: (Float) -> Unit,
     onToggleMute: () -> Unit,
     isDark: Boolean,
+    isVideo: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val typography = SonaraTheme.typography
     val colors = SonaraTheme.colors
 
-    val displayVolume = if (isMuted) 0f else volume.coerceIn(0f, 1f)
+    var liveDragProgress by remember { mutableStateOf<Float?>(null) }
+
+    // In video mode, clear live drag progress once external volume catches up
+    LaunchedEffect(volume) {
+        if (liveDragProgress != null && abs(volume - (liveDragProgress ?: 0f)) < 0.02f) {
+            liveDragProgress = null
+        }
+    }
+
+    val displayVolume = if (isMuted) {
+        0f
+    } else {
+        if (isVideo) (liveDragProgress ?: volume).coerceIn(0f, 1f) else volume.coerceIn(0f, 1f)
+    }
     val percentage = (displayVolume * 100).toInt()
 
     val speakerIcon = when {
@@ -1486,19 +2443,19 @@ private fun ExpandedVolumeControl(
             .fillMaxWidth()
             .padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+        horizontalArrangement = Arrangement.spacedBy(if (isVideo) 4.dp else 10.dp)
     ) {
         // Speaker / Mute Toggle Button
         SonaraIconButton(
             onClick = onToggleMute,
             contentDescription = if (isMuted) "Unmute" else "Mute",
             variant = SonaraIconButtonVariant.Ghost,
-            size = 36.dp
+            size = if (isVideo) 30.dp else 36.dp
         ) {
             Icon(
                 imageVector = speakerIcon,
                 contentDescription = if (isMuted) "Unmute" else "Mute",
-                tint = if (isMuted) Color(0xFFFF6B81) else colors.secondaryText,
+                tint = if (isMuted) colors.error else colors.secondaryText,
                 modifier = Modifier.size(18.dp)
             )
         }
@@ -1514,6 +2471,8 @@ private fun ExpandedVolumeControl(
                 progress = displayVolume,
                 onSeek = onVolumeChange,
                 isDark = isDark,
+                isVideo = isVideo,
+                onDragProgressChange = if (isVideo) { fraction -> liveDragProgress = fraction } else null,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(36.dp)
@@ -1543,14 +2502,20 @@ private fun SmoothVolumeSlider(
     progress: Float,
     onSeek: (Float) -> Unit,
     isDark: Boolean,
+    isVideo: Boolean = false,
+    onDragProgressChange: ((Float?) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    val activeColor = SonaraPalette.OxideAccent
-    val inactiveColor = if (isDark) Color.White.copy(alpha = 0.16f) else Color(0xFF1B1F1E).copy(alpha = 0.15f)
+    val colors = SonaraTheme.colors
+    val activeColor = colors.playbackActive
+    val inactiveColor = colors.surfaceVariant
 
     val currentOnSeek by rememberUpdatedState(onSeek)
+    val currentOnDragProgressChange by rememberUpdatedState(onDragProgressChange)
+
     var isDragging by remember { mutableStateOf(false) }
     var dragProgress by remember { mutableFloatStateOf(0f) }
+    var lastDispatchTimeMs by remember { mutableStateOf(0L) }
 
     val effectiveProgress = if (isDragging) dragProgress else progress.coerceIn(0f, 1f)
 
@@ -1564,6 +2529,7 @@ private fun SmoothVolumeSlider(
                     if (width > 0f) {
                         val fraction = (offset.x / width).coerceIn(0f, 1f)
                         dragProgress = fraction
+                        currentOnDragProgressChange?.invoke(fraction)
                         currentOnSeek(fraction)
                     }
                 }
@@ -1576,14 +2542,19 @@ private fun SmoothVolumeSlider(
                             isDragging = true
                             val fraction = (offset.x / width).coerceIn(0f, 1f)
                             dragProgress = fraction
+                            currentOnDragProgressChange?.invoke(fraction)
+                            lastDispatchTimeMs = System.currentTimeMillis()
                             currentOnSeek(fraction)
                         }
                     },
                     onDragEnd = {
                         isDragging = false
+                        // Always commit final selected volume on drag release
+                        currentOnSeek(dragProgress)
                     },
                     onDragCancel = {
                         isDragging = false
+                        currentOnDragProgressChange?.invoke(null)
                     },
                     onHorizontalDrag = { change, _ ->
                         change.consume()
@@ -1591,7 +2562,17 @@ private fun SmoothVolumeSlider(
                         if (width > 0f) {
                             val fraction = (change.position.x / width).coerceIn(0f, 1f)
                             dragProgress = fraction
-                            currentOnSeek(fraction)
+                            currentOnDragProgressChange?.invoke(fraction)
+                            if (isVideo) {
+                                // Throttle continuous video IPC volume commands to ~32ms while keeping 120Hz local UI drag
+                                val now = System.currentTimeMillis()
+                                if (now - lastDispatchTimeMs >= 32L) {
+                                    lastDispatchTimeMs = now
+                                    currentOnSeek(fraction)
+                                }
+                            } else {
+                                currentOnSeek(fraction)
+                            }
                         }
                     }
                 )
@@ -1644,8 +2625,9 @@ private fun ExpandedSegmentedProgressRail(
     isDark: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val activeColor = SonaraPalette.OxideAccent
-    val inactiveColor = if (isDark) Color.White.copy(alpha = 0.16f) else Color(0xFF1B1F1E).copy(alpha = 0.15f)
+    val colors = SonaraTheme.colors
+    val activeColor = colors.playbackActive
+    val inactiveColor = colors.surfaceVariant
 
     val currentOnSeek by rememberUpdatedState(onSeek)
     var isDragging by remember { mutableStateOf(false) }
@@ -1827,7 +2809,7 @@ private fun LyricsViewContent(
                                         text = displayText,
                                         fontSize = 23.sp,
                                         fontWeight = if (isActive) FontWeight.Bold else FontWeight.SemiBold,
-                                        color = if (isActive) SonaraPalette.OxideAccent else colors.primaryText.copy(alpha = lineAlpha),
+                                        color = if (isActive) colors.playbackActive else colors.primaryText.copy(alpha = lineAlpha),
                                         lineHeight = 31.sp,
                                         textAlign = TextAlign.Center,
                                         modifier = Modifier.fillMaxWidth()
@@ -1972,7 +2954,7 @@ private fun ActiveLyricLineWords(
 
             // Progressive karaoke fill: active and sung words remain lit in OxideAccent, future words are dimmed
             val targetColor = when {
-                isWordActive || isWordPast -> SonaraPalette.OxideAccent
+                isWordActive || isWordPast -> colors.playbackActive
                 else -> colors.primaryText.copy(alpha = 0.40f)
             }
             val wordColor by animateColorAsState(
@@ -2006,8 +2988,14 @@ private fun ActiveLyricLineWords(
 }
 
 private fun formatTime(totalSeconds: Long): String {
-    if (totalSeconds < 0) return "0:00"
-    val minutes = totalSeconds / 60
-    val seconds = totalSeconds % 60
-    return String.format("%d:%02d", minutes, seconds)
+    if (totalSeconds < 0L) return "0:00"
+    val hours = totalSeconds / 3600L
+    val remainderSeconds = totalSeconds % 3600L
+    val minutes = remainderSeconds / 60L
+    val seconds = remainderSeconds % 60L
+    return if (hours > 0L) {
+        String.format(Locale.US, "%d:%02d:%02d", hours, minutes, seconds)
+    } else {
+        String.format(Locale.US, "%d:%02d", minutes, seconds)
+    }
 }

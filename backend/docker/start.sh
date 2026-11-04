@@ -21,6 +21,16 @@
 
 set -euo pipefail
 
+# Validate before launching children or evaluating the value as shell arithmetic.
+# Keep the deadline within one day and reject empty, fractional and signed values.
+STARTUP_TIMEOUT_SECONDS="${STARTUP_TIMEOUT_SECONDS-60}"
+if [[ ! "$STARTUP_TIMEOUT_SECONDS" =~ ^[0-9]{1,5}$ ]] ||
+   (( 10#$STARTUP_TIMEOUT_SECONDS < 1 || 10#$STARTUP_TIMEOUT_SECONDS > 86400 )); then
+    echo "[start.sh] ERROR: STARTUP_TIMEOUT_SECONDS must be an integer from 1 to 86400." >&2
+    exit 1
+fi
+STARTUP_TIMEOUT_SECONDS=$((10#$STARTUP_TIMEOUT_SECONDS))
+
 # ── Activate the Python virtual environment ───────────────────────────────────
 VIRTUAL_ENV=/opt/venv
 PATH="$VIRTUAL_ENV/bin:$PATH"
@@ -36,9 +46,13 @@ PID_NODE=""
 
 # ── Shutdown handler ──────────────────────────────────────────────────────────
 # Called on SIGTERM, SIGINT, or unexpected child exit.
-# Sends SIGTERM to all living children and waits for them to exit.
+# Allows ten seconds for graceful exit, then kills only the tracked children.
 shutdown() {
     local signal="${1:-SIGTERM}"
+    local pid alive
+    local deadline=$((SECONDS + 10))
+    # A second signal must not re-enter cleanup or restart its deadline.
+    trap '' TERM INT
     echo "[start.sh] Received ${signal}. Shutting down all processes..."
 
     # Forward to each child if still running
@@ -49,14 +63,31 @@ shutdown() {
         fi
     done
 
-    # Wait for all children
+    while (( SECONDS < deadline )); do
+        alive=0
+        for pid in "$PID_YTMUSIC" "$PID_AUDIO" "$PID_NODE"; do
+            if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+                alive=1
+            fi
+        done
+        if [ "$alive" -eq 0 ]; then
+            break
+        fi
+        sleep 0.1
+    done
+
     for pid in "$PID_YTMUSIC" "$PID_AUDIO" "$PID_NODE"; do
         if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+            echo "[start.sh] Sending SIGKILL to PID $pid"
+            kill -KILL "$pid" 2>/dev/null || true
+        fi
+        # Never block in wait on a still-live child (even after SIGKILL).
+        if [ -n "$pid" ] && ! kill -0 "$pid" 2>/dev/null; then
             wait "$pid" 2>/dev/null || true
         fi
     done
 
-    echo "[start.sh] All processes stopped."
+    echo "[start.sh] Shutdown complete."
     if [ "$signal" = "SIGTERM" ] || [ "$signal" = "SIGINT" ]; then
         exit 0
     fi
@@ -65,17 +96,32 @@ shutdown() {
 trap 'shutdown SIGTERM' TERM
 trap 'shutdown SIGINT'  INT
 
-# ── Helper: wait a moment and confirm a child is still running ────────────────
-# Returns 1 if the process has already died (start failure).
-check_pid_alive() {
+# ── Helper: wait for process liveness and HTTP readiness ──────────────────────
+# A live Python process can still be importing ytmusicapi/yt-dlp. Starting Node
+# after only a fixed sleep makes the first Android requests fail unpredictably.
+# Returns 1 if the child exits or its readiness endpoint does not respond before
+# STARTUP_TIMEOUT_SECONDS (bounded so a broken dependency fails the container).
+wait_for_http() {
     local pid="$1"
     local label="$2"
-    sleep 1
-    if ! kill -0 "$pid" 2>/dev/null; then
-        echo "[start.sh] ERROR: ${label} (PID ${pid}) failed to start." >&2
-        return 1
-    fi
-    return 0
+    local url="$3"
+    local timeout_seconds="${STARTUP_TIMEOUT_SECONDS:-60}"
+    local deadline=$((SECONDS + timeout_seconds))
+
+    while (( SECONDS < deadline )); do
+        if ! kill -0 "$pid" 2>/dev/null; then
+            echo "[start.sh] ERROR: ${label} (PID ${pid}) exited before becoming ready." >&2
+            return 1
+        fi
+        if curl --fail --silent --show-error --max-time 2 "$url" >/dev/null 2>&1; then
+            echo "[start.sh] ${label} is ready at ${url}."
+            return 0
+        fi
+        sleep 1
+    done
+
+    echo "[start.sh] ERROR: ${label} did not become ready at ${url} within ${timeout_seconds}s." >&2
+    return 1
 }
 
 # ── 1. Start Python YTMusic service ──────────────────────────────────────────
@@ -85,7 +131,7 @@ echo "[start.sh] Starting Python YTMusic service (127.0.0.1:5000)..."
 PORT=5000 python python/ytmusic_service.py &
 PID_YTMUSIC=$!
 echo "[start.sh] YTMusic service PID: ${PID_YTMUSIC}"
-check_pid_alive "$PID_YTMUSIC" "YTMusic service" || { shutdown; exit 1; }
+wait_for_http "$PID_YTMUSIC" "YTMusic service" "http://127.0.0.1:5000/health" || { shutdown "startup-failure"; exit 1; }
 
 # ── 2. Start Python audio service ────────────────────────────────────────────
 # PORT=5001: same rationale as above — isolates this service from Railway's PORT.
@@ -93,14 +139,14 @@ echo "[start.sh] Starting Python audio service (127.0.0.1:5001)..."
 PORT=5001 python python/youtube_audio_api.py &
 PID_AUDIO=$!
 echo "[start.sh] Audio service PID: ${PID_AUDIO}"
-check_pid_alive "$PID_AUDIO" "Audio service" || { shutdown; exit 1; }
+wait_for_http "$PID_AUDIO" "Audio service" "http://127.0.0.1:5001/" || { shutdown "startup-failure"; exit 1; }
 
 # ── 3. Start Node.js gateway ─────────────────────────────────────────────────
 echo "[start.sh] Starting Node.js gateway (0.0.0.0:${PORT:-3002})..."
 node src/index.js &
 PID_NODE=$!
 echo "[start.sh] Node gateway PID: ${PID_NODE}"
-check_pid_alive "$PID_NODE" "Node gateway" || { shutdown; exit 1; }
+wait_for_http "$PID_NODE" "Node gateway" "http://127.0.0.1:${PORT:-3002}/health" || { shutdown "startup-failure"; exit 1; }
 
 echo "[start.sh] All three processes running. Container is live."
 
@@ -108,11 +154,13 @@ echo "[start.sh] All three processes running. Container is live."
 # wait -n returns when any child exits; we then check which one died.
 while true; do
     # Wait for any child to finish.
-    # "|| true" guards against set -e: wait -n returns the exit code of the
-    # reaped child, and a non-zero exit would abort the script before the
-    # kill -0 liveness checks below can determine which process died.
-    wait -n "$PID_YTMUSIC" "$PID_AUDIO" "$PID_NODE" 2>/dev/null || true
+    # Temporarily disable errexit: wait -n returns the exit code of the reaped
+    # child, and a non-zero exit must not abort before liveness checks identify
+    # which required process died.
+    set +e
+    wait -n "$PID_YTMUSIC" "$PID_AUDIO" "$PID_NODE" 2>/dev/null
     exit_status=$?
+    set -e
 
     # Determine which process exited
     if ! kill -0 "$PID_YTMUSIC" 2>/dev/null; then

@@ -32,13 +32,16 @@ import com.example.sonara.core.ui.components.SonaraDivider
 import com.example.sonara.core.ui.theme.SonaraTheme
 import com.example.sonara.domain.model.AppLanguage
 import com.example.sonara.domain.model.AudioQuality
+import com.example.sonara.domain.model.ColorPalette
 import com.example.sonara.domain.model.DownloadFileFormat
 import com.example.sonara.domain.model.SearchMode
 import com.example.sonara.domain.model.ThemeMode
+import com.example.sonara.domain.model.video.VideoQuality
 import com.example.sonara.feature.settings.components.AppInfoDialog
 import com.example.sonara.feature.settings.components.AppLanguageSelectorDialog
 import com.example.sonara.feature.settings.components.ClearDownloadsConfirmationDialog
 import com.example.sonara.feature.settings.components.ClearHistoryConfirmationDialog
+import com.example.sonara.feature.settings.components.ColorPaletteSelectorDialog
 import com.example.sonara.feature.settings.components.DefaultSearchModeDialog
 import com.example.sonara.feature.settings.components.DownloadFormatSelectorDialog
 import com.example.sonara.feature.settings.components.DownloadQualitySelectorDialog
@@ -51,6 +54,8 @@ import com.example.sonara.feature.settings.components.SettingsSelectorRow
 import com.example.sonara.feature.settings.components.SettingsToggleRow
 import com.example.sonara.feature.settings.components.StreamingQualitySelectorDialog
 import com.example.sonara.feature.settings.components.ThemeModeSelectorDialog
+import com.example.sonara.feature.settings.components.VideoQualitySelectorDialog
+import com.example.sonara.feature.settings.components.getPaletteDisplayNameRes
 
 @Composable
 fun SettingsScreen(
@@ -59,6 +64,7 @@ fun SettingsScreen(
     onOpenDialog: (SettingsDialog) -> Unit,
     onDismissDialog: () -> Unit,
     onSetThemeMode: (ThemeMode) -> Unit,
+    onSetSelectedPalette: (ColorPalette) -> Unit = {},
     onSetAppLanguage: (AppLanguage) -> Unit,
     onSetShowRomanized: (Boolean) -> Unit,
     onSetRestorePlaybackSession: (Boolean) -> Unit,
@@ -73,6 +79,7 @@ fun SettingsScreen(
     onSetDownloadQuality: (AudioQuality) -> Unit,
     onSetDownloadFileFormat: (DownloadFileFormat) -> Unit,
     onSetDownloadOverWifiOnly: (Boolean) -> Unit,
+    onSetDefaultVideoQuality: (VideoQuality) -> Unit,
     onClearAllDownloads: () -> Unit,
     onClearImageCache: () -> Unit,
     onClearPlaybackHistory: () -> Unit,
@@ -149,6 +156,13 @@ fun SettingsScreen(
                     onClick = { onOpenDialog(SettingsDialog.ThemeModeSelector) }
                 )
                 SonaraDivider()
+                SettingsSelectorRow(
+                    title = stringResource(R.string.setting_color_palette),
+                    currentValue = stringResource(getPaletteDisplayNameRes(state.preferences.selectedPalette)),
+                    description = stringResource(R.string.setting_color_palette_desc),
+                    onClick = { onOpenDialog(SettingsDialog.ColorPaletteSelector) }
+                )
+                SonaraDivider()
                 val langLabel = if (state.preferences.appLanguage == AppLanguage.SYSTEM_DEFAULT) {
                     stringResource(R.string.language_system_default)
                 } else {
@@ -181,6 +195,13 @@ fun SettingsScreen(
                     currentValue = state.preferences.streamingQuality.label,
                     description = state.preferences.streamingQuality.description,
                     onClick = { onOpenDialog(SettingsDialog.StreamingQualitySelector) }
+                )
+                SonaraDivider()
+                SettingsSelectorRow(
+                    title = stringResource(R.string.setting_default_video_quality),
+                    currentValue = state.preferences.defaultVideoQuality.label,
+                    description = stringResource(R.string.setting_default_video_quality_desc),
+                    onClick = { onOpenDialog(SettingsDialog.DefaultVideoQualitySelector) }
                 )
                 SonaraDivider()
                 val eqLabel = if (!state.isEqualizerSupported) {
@@ -363,6 +384,17 @@ fun SettingsScreen(
                 )
             }
 
+            SettingsDialog.ColorPaletteSelector -> {
+                ColorPaletteSelectorDialog(
+                    currentPalette = state.preferences.selectedPalette,
+                    onSelect = { palette ->
+                        onSetSelectedPalette(palette)
+                        onDismissDialog()
+                    },
+                    onDismiss = onDismissDialog
+                )
+            }
+
             SettingsDialog.AppLanguageSelector -> {
                 AppLanguageSelectorDialog(
                     currentLanguage = state.preferences.appLanguage,
@@ -411,6 +443,14 @@ fun SettingsScreen(
                 DownloadQualitySelectorDialog(
                     currentQuality = state.preferences.downloadQuality,
                     onSelect = onSetDownloadQuality,
+                    onDismiss = onDismissDialog
+                )
+            }
+
+            SettingsDialog.DefaultVideoQualitySelector -> {
+                VideoQualitySelectorDialog(
+                    currentQuality = state.preferences.defaultVideoQuality,
+                    onSelect = onSetDefaultVideoQuality,
                     onDismiss = onDismissDialog
                 )
             }

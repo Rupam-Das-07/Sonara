@@ -27,6 +27,26 @@
     <string name="theme_system">سسٹم ڈیفالٹ</string>
     <string name="theme_dark">ڈارک (منرل پیٹرول)</string>
     <string name="theme_light">لائٹ (بون کینوس)</string>
+    <string name="setting_color_palette">رنگین تھیم</string>
+    <string name="setting_color_palette_desc">اپنی پسندیدہ سونارا رنگ پیلیٹ منتخب کریں۔</string>
+    <string name="palette_sonara_classic">سونارا کلاسک</string>
+    <string name="palette_sonara_classic_desc">منرل پیٹرول اور برنٹ آکسائیڈ</string>
+    <string name="palette_ocean_blue">اوشن بلیو</string>
+    <string name="palette_ocean_blue_desc">گہرا نیوی اور سیان توانائی</string>
+    <string name="palette_rose">روز</string>
+    <string name="palette_rose_desc">مخمل کرمسن اور گرم کورل بلوم</string>
+    <string name="palette_forest_green">فارسٹ گرین</string>
+    <string name="palette_forest_green_desc">نورڈک پائن اور زمرد کی جھلکیاں</string>
+    <string name="palette_lavender">لیوینڈر</string>
+    <string name="palette_lavender_desc">مدہم گودھولی ارغوانی اور لیلک رنگ</string>
+    <string name="palette_midnight">مڈ نائٹ</string>
+    <string name="palette_midnight_desc">گہری رات اور الیکٹرک انڈیگو</string>
+    <string name="palette_amoled_black">AMOLED بلیک</string>
+    <string name="palette_amoled_black_desc">او ایل ای ڈی بیٹری بچت کے لیے گہرا سیاہ</string>
+    <string name="palette_dynamic_wallpaper">ڈائنامک وال پیپر</string>
+    <string name="palette_dynamic_wallpaper_desc">آپ کے ڈیوائس کے وال پیپر سے اخذ کردہ میٹریل یو رنگ۔</string>
+    <string name="palette_dynamic_wallpaper_unsupported">اینڈرائیڈ 12+ درکار ہے (سونارا کلاسک پر ڈیفالٹ)</string>
+    <string name="palette_dynamic_wallpaper_monet_active">مونیٹ فعال</string>
     <string name="language_system_default">سسٹم ڈیفالٹ</string>
 
     <string name="setting_app_language">ایپ کی زبان</string>
@@ -145,9 +165,12 @@
     <!-- Library & Playlists -->
     <string name="library_title">آپ کی لائبریری</string>
     <string name="tab_liked_songs">پسندیدہ گانے</string>
+    <string name="tab_downloads">ڈاؤن لوڈز</string>
     <string name="tab_playback_history">تاریخ</string>
     <string name="library_liked_empty_title">ابھی تک کوئی پسندیدہ گانا نہیں</string>
     <string name="library_liked_empty_message">اپنے مجموعے میں شامل کرنے کے لیے کسی بھی گانے پر دل کے نشان کو دبائیں۔</string>
+    <string name="library_downloads_empty_title">کوئی ڈاؤن لوڈ گانا نہیں</string>
+    <string name="library_downloads_empty_message">آف لائن چلانے کے لیے ڈاؤن لوڈ کردہ گانے یہاں ظاہر ہوں گے۔</string>
     <string name="library_history_empty_title">کوئی پلے بیک ہسٹری نہیں</string>
     <string name="library_history_empty_message">آپ کے بجائے ہوئے گانے یہاں دوبارہ سننے کے لیے ظاہر ہوں گے۔</string>
     <string name="playlists_title">آپ کی پلے لسٹس</string>
@@ -231,4 +254,18 @@
     <string name="import_alternatives_label">متبادل گانے دستیاب ہیں</string>
     <string name="import_change_selection">متبادل منتخب کریں</string>
     <string name="import_view_playlist">پلے لسٹ دیکھیں</string>
+
+    <!-- Video Quality & Video Actions -->
+    <string name="video_quality_title">ویڈیو کوالٹی</string>
+    <string name="video_quality_subtitle">ریزولوشن اور فریم ریٹ منتخب کریں</string>
+    <string name="video_quality_auto_desc">آپ کے کنکشن کے مطابق ایڈجسٹ ہوتا ہے</string>
+    <string name="video_quality_preparing">کوالٹی</string>
+    <string name="video_quality_unsupported_device">ڈیوائس پر تعاون یافتہ نہیں</string>
+    <string name="action_download">ڈاؤن لوڈ</string>
+    <string name="action_downloaded">ڈاؤن لوڈ ہو چکا</string>
+    <string name="action_downloading">ڈاؤن لوڈ ہو رہا ہے…</string>
+    <!-- SoundCloud Integration -->
+    <string name="source_soundcloud">ساؤنڈ کلاؤڈ</string>
+    <string name="source_youtube_music">یوٹیوب میوزک</string>
+    <string name="download_unsupported_soundcloud">ساؤنڈ کلاؤڈ ٹریکس کے لیے آف لائن ڈاؤن لوڈ سپورٹ نہیں ہے</string>
 </resources>

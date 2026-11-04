@@ -33,6 +33,9 @@ import com.example.sonara.data.local.db.entity.TrackEntity
  *            [MIGRATION_1_2] never created (see [MIGRATION_4_5]).
  *   v5 → v6: Added origin column to `playlists` table to distinguish user playlists
  *            from Spotify imports (see [MIGRATION_5_6]).
+ *   v6 → v7: Added structured `artistCredits` to `tracks` (see [MIGRATION_6_7]).
+ *   v7 → v8: Added playback provenance and session identity to `playback_history`
+ *            (see [MIGRATION_7_8]).
  */
 @Database(
     entities = [
@@ -44,7 +47,7 @@ import com.example.sonara.data.local.db.entity.TrackEntity
         DownloadEntity::class,
         SearchHistoryEntity::class
     ],
-    version = 6,
+    version = 8,
     exportSchema = false
 )
 abstract class SonaraDatabase : RoomDatabase() {
@@ -263,6 +266,55 @@ abstract class SonaraDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * 6 -> 7: adds `tracks.artistCredits`, the structured artist credit list that
+         * Featured Artists affinity uses to attribute a listen to a VERIFIED artist
+         * identity instead of parsing the flat `artist` display string.
+         *
+         * Data preservation: this is a pure additive ALTER. No row is rewritten, moved
+         * or deleted, and no existing column changes type or nullability, so every
+         * historical `tracks` row — and therefore every `playback_history` row that
+         * references one — survives untouched.
+         *
+         * Legacy semantics: the default is the EMPTY string, which
+         * [com.example.sonara.domain.model.ArtistCreditCodec.decode] maps to an empty
+         * credit list. Pre-7 rows therefore carry "no verified identity" rather than a
+         * guessed one, and cannot satisfy an identity-gated rule by accident. Rows
+         * re-fetched after upgrade pick up real credits naturally on the next upsert.
+         */
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE `tracks` ADD COLUMN `artistCredits` TEXT NOT NULL DEFAULT ''"
+                )
+            }
+        }
+
+        /**
+         * 7 -> 8: adds durable playback provenance and session identity.
+         *
+         * Existing rows intentionally receive LEGACY_UNKNOWN and a NULL session ID. The
+         * nullable unique index makes retries for a real session atomic while allowing every
+         * legacy row with no session ID to remain an independent history event. The domain layer
+         * exposes this storage sentinel as the approved empty string default.
+         */
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE `playback_history` ADD COLUMN `sourceSection` TEXT NOT NULL DEFAULT 'LEGACY_UNKNOWN'"
+                )
+                db.execSQL(
+                    "ALTER TABLE `playback_history` ADD COLUMN `playbackSessionId` TEXT"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_playback_history_sourceSection_listenedAt` ON `playback_history` (`sourceSection`, `listenedAt`)"
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_playback_history_playbackSessionId` ON `playback_history` (`playbackSessionId`)"
+                )
+            }
+        }
+
         @Volatile
         private var instance: SonaraDatabase? = null
 
@@ -273,7 +325,15 @@ abstract class SonaraDatabase : RoomDatabase() {
                     SonaraDatabase::class.java,
                     DATABASE_NAME
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                    .addMigrations(
+                        MIGRATION_1_2,
+                        MIGRATION_2_3,
+                        MIGRATION_3_4,
+                        MIGRATION_4_5,
+                        MIGRATION_5_6,
+                        MIGRATION_6_7,
+                        MIGRATION_7_8
+                    )
                     .build()
                     .also { instance = it }
             }

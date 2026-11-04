@@ -16,8 +16,11 @@ import com.example.sonara.SonaraApp
 import com.example.sonara.core.notification.NotificationChannels
 import com.example.sonara.data.stream.StreamResolverImpl
 import com.example.sonara.domain.model.AudioQuality
+import com.example.sonara.domain.model.PlaybackOrigin
 import com.example.sonara.domain.model.Track
 import com.example.sonara.domain.model.UserPreferences
+import com.example.sonara.playback.checkpoint.PlaybackHistoryCoordinator
+import com.example.sonara.playback.client.MediaControllerState
 import com.example.sonara.playback.controller.NextTrackDecision
 import com.example.sonara.playback.controller.PlaybackController
 import com.example.sonara.playback.controller.PlaybackQueueEngine
@@ -27,6 +30,7 @@ import com.example.sonara.playback.controller.TransitionManager
 import com.example.sonara.playback.player.EqualizerManager
 import com.example.sonara.playback.player.ExoPlayerHolder
 import com.example.sonara.playback.player.datasource.RefreshingDataSource
+import androidx.media3.common.MimeTypes
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.cache.CacheDataSource
 import com.example.sonara.playback.player.cache.NextTrackPrefetcher
@@ -39,6 +43,7 @@ import kotlinx.coroutines.delay
 import java.util.concurrent.CancellationException
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.MutableStateFlow
 import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
 import android.util.LruCache
@@ -78,9 +83,9 @@ class SonaraPlaybackService : MediaSessionService() {
 
     companion object {
         private const val TAG = "SonaraPlaybackService"
-        const val ACTION_TOGGLE_FAVORITE = "com.example.sonara.ACTION_TOGGLE_FAVORITE"
-        const val ACTION_OPEN_EXPANDED_PLAYER = "com.example.sonara.ACTION_OPEN_EXPANDED_PLAYER"
-        const val EXTRA_OPEN_EXPANDED_PLAYER = "com.example.sonara.EXTRA_OPEN_EXPANDED_PLAYER"
+        const val ACTION_TOGGLE_FAVORITE = "app.sonara.music.ACTION_TOGGLE_FAVORITE"
+        const val ACTION_OPEN_EXPANDED_PLAYER = "app.sonara.music.ACTION_OPEN_EXPANDED_PLAYER"
+        const val EXTRA_OPEN_EXPANDED_PLAYER = "app.sonara.music.EXTRA_OPEN_EXPANDED_PLAYER"
         private const val ARTWORK_BOUND_PX = 512
         private const val PRELOAD_DEBOUNCE_MS = 1500L
 
@@ -111,6 +116,77 @@ class SonaraPlaybackService : MediaSessionService() {
                 return true
             }
             return false
+        }
+
+        internal fun isExtractedVideoMediaItem(
+            mediaItem: androidx.media3.common.MediaItem?
+        ): Boolean {
+            val mediaKind = com.example.sonara.playback.client.MediaControllerClient.EXTRA_MEDIA_KIND
+            return isExtractedVideoMarker(
+                tag = mediaItem?.localConfiguration?.tag,
+                metadataMediaKind = mediaItem?.mediaMetadata?.extras?.getString(mediaKind),
+                requestMediaKind = mediaItem?.requestMetadata?.extras?.getString(mediaKind)
+            )
+        }
+
+        internal fun isExtractedVideoMarker(
+            tag: Any?,
+            metadataMediaKind: String?,
+            requestMediaKind: String?
+        ): Boolean {
+            val extractedKind = com.example.sonara.playback.client.MediaControllerClient.MEDIA_KIND_EXTRACTED_VIDEO
+            return tag == extractedKind ||
+                metadataMediaKind == extractedKind ||
+                requestMediaKind == extractedKind
+        }
+
+        internal fun shouldAdvanceQueueOnEnded(
+            isExtractedVideo: Boolean,
+            hasCurrentMediaItem: Boolean = true,
+            mediaItemCount: Int = 1,
+            playWhenReady: Boolean = true
+        ): Boolean =
+            !isExtractedVideo && hasCurrentMediaItem && mediaItemCount > 0 && playWhenReady
+
+        internal fun shouldRecordAutoTransitionHistory(
+            reason: Int,
+            isExtractedVideo: Boolean
+        ): Boolean =
+            reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO && !isExtractedVideo
+
+        internal fun shouldHandleNativeTrackTransition(isExtractedVideo: Boolean): Boolean =
+            !isExtractedVideo
+
+        internal fun shouldSuppressPlaybackCommand(isIFrameVideoActive: Boolean): Boolean =
+            isIFrameVideoActive
+
+        internal fun resolvePlayerCommandRequestResult(
+            playerCommand: Int,
+            isIFrameVideoActive: Boolean,
+            defaultResultSupplier: () -> Int
+        ): Int {
+            if (isIFrameVideoActive) {
+                when (playerCommand) {
+                    Player.COMMAND_PLAY_PAUSE,
+                    Player.COMMAND_SEEK_TO_NEXT,
+                    Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM,
+                    Player.COMMAND_SEEK_TO_PREVIOUS,
+                    Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM -> {
+                        return androidx.media3.session.SessionResult.RESULT_INFO_SKIPPED
+                    }
+                }
+            }
+            return when (playerCommand) {
+                Player.COMMAND_SEEK_TO_NEXT,
+                Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM -> {
+                    androidx.media3.session.SessionResult.RESULT_SUCCESS
+                }
+                Player.COMMAND_SEEK_TO_PREVIOUS,
+                Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM -> {
+                    androidx.media3.session.SessionResult.RESULT_SUCCESS
+                }
+                else -> defaultResultSupplier()
+            }
         }
 
         @Volatile
@@ -147,6 +223,17 @@ class SonaraPlaybackService : MediaSessionService() {
     @Volatile
     private var stopMusicOnTaskClear: Boolean = false
 
+    /**
+     * Authoritative ExoPlayer state snapshots published for [playbackHistoryCoordinator].
+     *
+     * Immutable snapshots are published (rather than letting the coordinator read the live
+     * player) so it can never observe a half-updated player and never needs the main thread.
+     */
+    private val historyPlaybackState = MutableStateFlow(MediaControllerState())
+
+    /** The SOLE production playback-history writer. Owned and lifecycled by this service. */
+    private var playbackHistoryCoordinator: PlaybackHistoryCoordinator? = null
+
     @OptIn(UnstableApi::class)
     override fun onCreate() {
         super.onCreate()
@@ -173,6 +260,36 @@ class SonaraPlaybackService : MediaSessionService() {
         val playerHolder = ExoPlayerHolder(this, defaultDataSourceFactory)
         exoPlayerHolder = playerHolder
 
+        // Stage 3 — SOLE authoritative history writer.
+        // The coordinator is owned by this service (not the Activity) so it keeps measuring
+        // listening sessions while the UI is gone — background, locked screen, auto-advance —
+        // and it is driven by the real ExoPlayer state published in
+        // publishHistoryPlaybackState(). No other production component writes playback_history.
+        (application as? SonaraApp)?.container?.let { container ->
+            val coordinator = PlaybackHistoryCoordinator(
+                playbackState = historyPlaybackState,
+                historyRepository = container.historyRepository,
+                settingsRepository = container.settingsRepository,
+                // Phase 2B: provenance comes from the queue engine, which owns the queue
+                // context. Resolved lazily per qualifying track and fails closed to
+                // LEGACY_UNKNOWN when the engine is unavailable or has moved on.
+                originFor = { trackId ->
+                    container.playbackQueueEngine
+                        ?.originFor(trackId)
+                        ?: PlaybackOrigin.LEGACY_UNKNOWN
+                },
+                onSessionClosed = { trackId, sessionId ->
+                    container.playerCheckpointEngine.clearPersistedSessionIdentity(
+                        trackId = trackId,
+                        expectedSessionId = sessionId
+                    )
+                }
+            )
+            playbackHistoryCoordinator = coordinator
+            container.playerCheckpointEngine.setSessionIdProvider(coordinator::sessionIdFor)
+            coordinator.start()
+        }
+
         val prefetcher = NextTrackPrefetcher(
             cacheDataSourceFactory = cacheDataSourceFactory,
             coroutineScope = serviceScope
@@ -180,13 +297,25 @@ class SonaraPlaybackService : MediaSessionService() {
         nextTrackPrefetcher = prefetcher
         instancePrefetcher = prefetcher
 
+        val routeCoordinator = (application as? SonaraApp)?.container?.playbackRouteCoordinator
+
         val forwardingPlayer = SonaraForwardingPlayer(
             player = playerHolder.player,
             queueEngineProvider = { (application as? SonaraApp)?.container?.playbackQueueEngine },
+            isIFrameVideoActive = { routeCoordinator?.isIFrameVideoActive == true },
             onSeekToNext = { advanceToNext() },
             onSeekToPrevious = { advanceToPrevious() }
         )
         this.forwardingPlayer = forwardingPlayer
+
+        // Wire PlaybackRouteCoordinator route changes to invalidate available commands
+        routeCoordinator?.let { rc ->
+            rc.onRouteChanged = {
+                serviceScope.launch(Dispatchers.Main) {
+                    forwardingPlayer.invalidateAvailableCommands()
+                }
+            }
+        }
 
         // Wire PlaybackQueueEngine queue changes to invalidate commands and update preloaded next track
         (application as? SonaraApp)?.container?.playbackQueueEngine?.let { qe ->
@@ -201,18 +330,64 @@ class SonaraPlaybackService : MediaSessionService() {
         // Auto-advance & transition listener for instant gapless transitions and lookahead buffering
         playerHolder.player.addListener(object : Player.Listener {
             override fun onMediaItemTransition(mediaItem: androidx.media3.common.MediaItem?, reason: Int) {
+                // A gapless AUTOMATIC transition is the ONLY completion signal the track
+                // that just finished will ever get: with next-track prefetching ExoPlayer
+                // slides from A into B with playbackState still STATE_READY, so
+                // onPlaybackStateChanged(STATE_ENDED) never fires for A.
+                //
+                // The coordinator is told FIRST, synchronously, and only then is the
+                // successor's snapshot published. Reversing these two would let the
+                // coordinator's asynchronous collector open B's session — discarding A's
+                // in-flight history row id — before A could be marked completed.
+                //
+                // Only REASON_AUTO qualifies. A user skip arrives as REASON_PLAYLIST_CHANGED
+                // (explicit setMediaItem) or REASON_SEEK and must stay completed=false.
+                val isExtracted = isExtractedVideoMediaItem(mediaItem)
+                if (shouldRecordAutoTransitionHistory(reason, isExtracted)) {
+                    playbackHistoryCoordinator?.onAutoTransitionTo(mediaItem?.mediaId)
+                }
+                publishHistoryPlaybackState()
                 if (mediaItem != null) {
                     Log.i(TAG, "onMediaItemTransition: mediaId=${mediaItem.mediaId}, reason=$reason")
                     handleArtworkForMediaItem(mediaItem)
-                    handleTrackTransition(mediaItem.mediaId, reason)
+                    if (isExtracted) {
+                        preloadJob?.cancel()
+                        nextTrackPrefetcher?.cancelActivePrefetch("extracted_video_transition")
+                    } else {
+                        handleTrackTransition(mediaItem.mediaId, reason)
+                    }
                 }
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
-                if (playbackState == Player.STATE_ENDED) {
+                // Published BEFORE advanceToNext() so the terminal STATE_ENDED snapshot is
+                // observed for the track that actually ended, not for its successor.
+                publishHistoryPlaybackState()
+                val player = exoPlayerHolder?.player
+                val currentMediaItem = player?.currentMediaItem
+                if (playbackState == Player.STATE_ENDED &&
+                    shouldAdvanceQueueOnEnded(
+                        isExtractedVideo = isExtractedVideoMediaItem(currentMediaItem),
+                        hasCurrentMediaItem = currentMediaItem != null,
+                        mediaItemCount = player?.mediaItemCount ?: 0,
+                        playWhenReady = player?.playWhenReady == true
+                    )
+                ) {
                     Log.i(TAG, "ExoPlayer reached STATE_ENDED -> advanceToNext()")
                     advanceToNext()
+                } else if (playbackState == Player.STATE_ENDED) {
+                    Log.d(
+                        TAG,
+                        "Ignoring STATE_ENDED without an active playing native item: " +
+                            "hasItem=${currentMediaItem != null}, count=${player?.mediaItemCount ?: 0}, " +
+                            "playWhenReady=${player?.playWhenReady == true}"
+                    )
                 }
+            }
+
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                // Drives the coordinator's "actual playing time" accumulation.
+                publishHistoryPlaybackState()
             }
         })
 
@@ -285,17 +460,12 @@ class SonaraPlaybackService : MediaSessionService() {
                 controller: MediaSession.ControllerInfo,
                 playerCommand: Int
             ): Int {
-                return when (playerCommand) {
-                    Player.COMMAND_SEEK_TO_NEXT,
-                    Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM -> {
-                        androidx.media3.session.SessionResult.RESULT_SUCCESS
-                    }
-                    Player.COMMAND_SEEK_TO_PREVIOUS,
-                    Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM -> {
-                        androidx.media3.session.SessionResult.RESULT_SUCCESS
-                    }
-                    else -> super.onPlayerCommandRequest(session, controller, playerCommand)
-                }
+                val isIFrameActive = (application as? SonaraApp)?.container?.playbackRouteCoordinator?.isIFrameVideoActive == true
+                return resolvePlayerCommandRequestResult(
+                    playerCommand = playerCommand,
+                    isIFrameVideoActive = isIFrameActive,
+                    defaultResultSupplier = { super.onPlayerCommandRequest(session, controller, playerCommand) }
+                )
             }
 
             @OptIn(UnstableApi::class)
@@ -387,6 +557,10 @@ class SonaraPlaybackService : MediaSessionService() {
 
                 // Invalidate in-flight service-level async playback resolutions when new items arrive from controller
                 activePlaybackJob?.cancel()
+                if (updatedMediaItemsContainExtractedVideo(mediaItems)) {
+                    preloadJob?.cancel()
+                    nextTrackPrefetcher?.cancelActivePrefetch("extracted_video_request")
+                }
 
                 // The stream URI is always set in requestMetadata.mediaUri by MediaControllerClient
                 // before sending the MediaItem to the session. No local fallback is needed.
@@ -397,6 +571,12 @@ class SonaraPlaybackService : MediaSessionService() {
                         if (uri != null) {
                             builder.setUri(uri)
                         }
+                    }
+                    val itemMimeType = item.localConfiguration?.mimeType
+                        ?: item.requestMetadata.extras?.getString(com.example.sonara.playback.client.MediaControllerClient.EXTRA_MIME_TYPE)
+                        ?: item.mediaMetadata.extras?.getString(com.example.sonara.playback.client.MediaControllerClient.EXTRA_MIME_TYPE)
+                    if (itemMimeType != null) {
+                        builder.setMimeType(itemMimeType)
                     }
                     val artworkUrl = item.mediaMetadata.artworkUri?.toString()
                     val cachedBytes = artworkUrl?.let { artworkCache.get(it) }
@@ -548,6 +728,13 @@ class SonaraPlaybackService : MediaSessionService() {
 
     override fun onDestroy() {
         Log.i(TAG, "SonaraPlaybackService onDestroy")
+        // This is a lifecycle stop, not a genuine session close. Detach the provider first so
+        // an Activity-scoped checkpoint engine retains the persisted id while the service is
+        // being recreated instead of interpreting the stopped coordinator as a new session.
+        (application as? SonaraApp)?.container?.playerCheckpointEngine?.setSessionIdProvider(null)
+        (application as? SonaraApp)?.container?.playbackRouteCoordinator?.onRouteChanged = null
+        playbackHistoryCoordinator?.stop()
+        playbackHistoryCoordinator = null
         nextTrackPrefetcher?.cancelActivePrefetch("service_destroyed")
         instancePrefetcher = null
         likedObserverJob?.cancel()
@@ -570,6 +757,30 @@ class SonaraPlaybackService : MediaSessionService() {
         exoPlayerHolder = null
         forwardingPlayer = null
         super.onDestroy()
+    }
+
+    /**
+     * Publishes an immutable snapshot of the authoritative ExoPlayer state to
+     * [historyPlaybackState] for [playbackHistoryCoordinator].
+     *
+     * Called from the player listener on media-item transition, playback-state change and
+     * play/pause change — the three signals the session state machine needs. Safe to call
+     * repeatedly: identical snapshots are conflated by the StateFlow.
+     */
+    private fun publishHistoryPlaybackState() {
+        val player = exoPlayerHolder?.player ?: return
+        val currentMediaItem = player.currentMediaItem
+        historyPlaybackState.value = MediaControllerState(
+            isConnected = true,
+            isPlaying = player.isPlaying,
+            isBuffering = player.playbackState == Player.STATE_BUFFERING,
+            currentMediaItem = currentMediaItem.takeUnless { isExtractedVideoMediaItem(it) },
+            currentPositionMs = player.currentPosition.coerceAtLeast(0L),
+            // coerceAtLeast also normalises C.TIME_UNSET (a large negative) to 0.
+            durationMs = player.duration.coerceAtLeast(0L),
+            playbackState = player.playbackState,
+            errorMessage = null
+        )
     }
 
     private fun advanceToNext() {
@@ -649,6 +860,10 @@ class SonaraPlaybackService : MediaSessionService() {
                 player.seekTo(0L)
             }
             is PreviousTrackDecision.PlayTrack -> {
+                // Match the ViewModel fallback path: stop the old item before resolving the
+                // previous stream. The preloaded next-track path is handled separately and remains
+                // gapless.
+                player.pause()
                 playTrackInternal(decision.track, gen)
             }
         }
@@ -658,7 +873,6 @@ class SonaraPlaybackService : MediaSessionService() {
         val container = (application as? SonaraApp)?.container
         val downloadRepo = container?.downloadRepository
         val settingsRepo = container?.settingsRepository
-        val historyRepo = container?.historyRepository
 
         activePlaybackJob?.cancel()
         preloadJob?.cancel()
@@ -677,7 +891,6 @@ class SonaraPlaybackService : MediaSessionService() {
                         setPlayerMediaItem(track, "file://$localFilePath")
                     }
                 }
-                recordHistory(historyRepo, track)
                 return@launch
             }
 
@@ -705,10 +918,10 @@ class SonaraPlaybackService : MediaSessionService() {
                 }
                 withContext(Dispatchers.Main) {
                     if (transitionManager.isAuthoritative(generation)) {
-                        setPlayerMediaItem(track, streamInfo.streamUrl)
+                        val mimeType = streamInfo.format.takeIf { it == MimeTypes.APPLICATION_M3U8 }
+                        setPlayerMediaItem(track, streamInfo.streamUrl, mimeType)
                     }
                 }
-                recordHistory(historyRepo, track)
             }.onFailure { error ->
                 Log.e(TAG, "playTrackInternal stream resolution failed for ${track.title}: ${error.message}")
             }
@@ -845,7 +1058,7 @@ class SonaraPlaybackService : MediaSessionService() {
         bytes
     }
 
-    private fun buildMediaItem(track: Track, streamUrl: String, artworkBytes: ByteArray? = null): androidx.media3.common.MediaItem {
+    private fun buildMediaItem(track: Track, streamUrl: String, artworkBytes: ByteArray? = null, mimeType: String? = null): androidx.media3.common.MediaItem {
         val metadataBuilder = androidx.media3.common.MediaMetadata.Builder()
             .setTitle(track.title)
             .setArtist(track.artist)
@@ -862,24 +1075,37 @@ class SonaraPlaybackService : MediaSessionService() {
             } catch (_: Exception) {}
         }
 
+        val requestExtras = android.os.Bundle().apply {
+            if (mimeType != null) {
+                putString(com.example.sonara.playback.client.MediaControllerClient.EXTRA_MIME_TYPE, mimeType)
+            }
+        }
+        metadataBuilder.setExtras(requestExtras)
+
         return androidx.media3.common.MediaItem.Builder()
             .setMediaId(track.id)
             .setUri(streamUrl)
+            .apply {
+                if (mimeType != null) {
+                    setMimeType(mimeType)
+                }
+            }
             // Authoritative trackId carrier → propagates to DataSpec.key for 403/410 recovery.
             .setCustomCacheKey(track.id)
             .setRequestMetadata(
                 androidx.media3.common.MediaItem.RequestMetadata.Builder()
                     .setMediaUri(android.net.Uri.parse(streamUrl))
+                    .setExtras(requestExtras)
                     .build()
             )
             .setMediaMetadata(metadataBuilder.build())
             .build()
     }
 
-    private fun setPlayerMediaItem(track: Track, streamUrl: String) {
+    private fun setPlayerMediaItem(track: Track, streamUrl: String, mimeType: String? = null) {
         val player = exoPlayerHolder?.player ?: return
         val cachedBytes = track.artworkUrl?.let { artworkCache.get(it) }
-        val mediaItem = buildMediaItem(track, streamUrl, cachedBytes)
+        val mediaItem = buildMediaItem(track, streamUrl, cachedBytes, mimeType)
         if (cachedBytes != null && cachedBytes.isNotEmpty()) {
             forwardingPlayer?.setArtworkDataForMediaId(track.id, cachedBytes)
         }
@@ -897,6 +1123,7 @@ class SonaraPlaybackService : MediaSessionService() {
     private fun handleTrackTransition(newTrackId: String, reason: Int) {
         nextTrackPrefetcher?.cancelActivePrefetch("track_transition")
         val player = exoPlayerHolder?.player ?: return
+        if (!shouldHandleNativeTrackTransition(isExtractedVideoMediaItem(player.currentMediaItem))) return
         val container = (application as? SonaraApp)?.container
         val qe = container?.playbackQueueEngine ?: return
 
@@ -919,7 +1146,6 @@ class SonaraPlaybackService : MediaSessionService() {
             qe.upcomingQueue.find { it.id == newTrackId } ?: qe.currentTrack
         }
         observeLikedState(currentTrack)
-        currentTrack?.let { recordHistory(container?.historyRepository, it) }
         preloadNextTrackAhead()
     }
 
@@ -969,19 +1195,22 @@ class SonaraPlaybackService : MediaSessionService() {
                     loadArtworkBytes(nextTrack.artworkUrl)
                 }
 
+                var preloadedMimeType: String? = null
                 val localFilePath = downloadRepo.getDownloadedFileUri(nextTrack.id)
                 val streamUrl = if (localFilePath != null && localFilePath.isNotBlank()) {
                     "file://$localFilePath"
                 } else {
                     val quality = settingsRepo.getUserPreferences().firstOrNull()?.streamingQuality ?: AudioQuality.AUTO
                     val durationSec = if (nextTrack.durationMs > 0) (nextTrack.durationMs / 1000).toInt() else 0
-                    streamResolver.resolveStream(
+                    val streamInfo = streamResolver.resolveStream(
                         trackId = nextTrack.id,
                         quality = quality,
                         title = nextTrack.title,
                         artist = nextTrack.artist,
                         durationSeconds = durationSec
-                    ).getOrNull()?.streamUrl
+                    ).getOrNull()
+                    preloadedMimeType = streamInfo?.format?.takeIf { it == MimeTypes.APPLICATION_M3U8 }
+                    streamInfo?.streamUrl
                 }
 
                 val preloadedArtworkBytes = artworkDeferred.await()
@@ -990,7 +1219,7 @@ class SonaraPlaybackService : MediaSessionService() {
                     withContext(Dispatchers.Main) {
                         val p = exoPlayerHolder?.player ?: return@withContext
                         if (p.mediaItemCount == 1 && qe.currentTrack?.id != nextTrack.id) {
-                            p.addMediaItem(buildMediaItem(nextTrack, streamUrl, preloadedArtworkBytes))
+                            p.addMediaItem(buildMediaItem(nextTrack, streamUrl, preloadedArtworkBytes, preloadedMimeType))
                             Log.i(TAG, "Preloaded next track into ExoPlayer: ${nextTrack.title} t=${System.currentTimeMillis()}")
                             val gen = transitionManager.currentGeneration()
                             nextTrackPrefetcher?.prefetch(
@@ -1009,14 +1238,7 @@ class SonaraPlaybackService : MediaSessionService() {
         }
     }
 
-    private fun recordHistory(historyRepo: com.example.sonara.domain.repository.HistoryRepository?, track: Track) {
-        if (historyRepo == null) return
-        serviceScope.launch(Dispatchers.IO) {
-            try {
-                historyRepo.recordHistory(track, completed = false)
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to record history: ${e.message}")
-            }
-        }
-    }
+    private fun updatedMediaItemsContainExtractedVideo(
+        mediaItems: List<androidx.media3.common.MediaItem>
+    ): Boolean = mediaItems.any { isExtractedVideoMediaItem(it) }
 }

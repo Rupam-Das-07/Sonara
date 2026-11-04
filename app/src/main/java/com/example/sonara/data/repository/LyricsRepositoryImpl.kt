@@ -1,23 +1,22 @@
 package com.example.sonara.data.repository
 
-import androidx.collection.LruCache
-import com.example.sonara.data.remote.providers.lrclib.LrclibLyricsProvider
+import com.example.sonara.data.remote.providers.LyricsProviderResolver
 import com.example.sonara.domain.lyrics.RomanizationEngine
 import com.example.sonara.domain.lyrics.WordTimingCalculator
 import com.example.sonara.domain.model.LyricLine
 import com.example.sonara.domain.model.Lyrics
+import com.example.sonara.domain.model.withMetadata
 import com.example.sonara.domain.repository.LyricsRepository
 
 /**
- * Implements LyricsRepository with automatic Indic Romanization and positive in-memory LRU caching.
+ * Implements LyricsRepository with automatic Indic Romanization.
+ * Provider resolution, the positive in-memory cache, and in-flight request de-duplication are
+ * delegated to [LyricsProviderResolver] (Lyrics Architecture Revision #1, Stage 2).
  * Follows Phase 4B-3 §16 & Phase 4C §5 rules (no negative caching of errors).
  */
 class LyricsRepositoryImpl(
-    private val remoteProvider: LrclibLyricsProvider = LrclibLyricsProvider()
+    private val resolver: LyricsProviderResolver
 ) : LyricsRepository {
-
-    // Positive in-memory cache: trackId -> Lyrics (max 100 entries)
-    private val memoryCache = LruCache<String, Lyrics>(100)
 
     override suspend fun getLyrics(
         trackId: String,
@@ -25,22 +24,15 @@ class LyricsRepositoryImpl(
         artist: String,
         durationMs: Long
     ): Result<Lyrics> {
-        // Check in-memory cache first
-        val cached = memoryCache[trackId]
-        if (cached != null) {
-            return Result.success(cached)
-        }
-
-        val result = remoteProvider.getLyrics(title, artist, durationMs)
+        val result = resolver.getLyrics(trackId, title, artist, durationMs)
 
         return result.map { rawLyrics ->
+            // Stage 3: capture provider metadata before the calibration + Romanization passes (both
+            // reconstruct Lyrics subtypes and would otherwise reset metadata to the default), then
+            // re-attach it to the processed result. Calibration/Romanization behavior is unchanged.
+            val metadata = rawLyrics.metadata
             val calibratedLyrics = com.example.sonara.domain.lyrics.LyricsOffsetCalibrator.calibrate(rawLyrics, title, artist)
-            val romanizedLyrics = applyRomanization(calibratedLyrics)
-            // Store successful lyrics in positive cache
-            if (romanizedLyrics is Lyrics.SyncedLyrics || romanizedLyrics is Lyrics.PlainLyrics || romanizedLyrics is Lyrics.Instrumental) {
-                memoryCache.put(trackId, romanizedLyrics)
-            }
-            romanizedLyrics
+            applyRomanization(calibratedLyrics).withMetadata(metadata)
         }
     }
 

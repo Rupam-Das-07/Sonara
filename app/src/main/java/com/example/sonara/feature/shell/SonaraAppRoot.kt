@@ -28,6 +28,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
@@ -47,8 +48,12 @@ import com.example.sonara.R
 import com.example.sonara.core.ui.motion.LocalReduceMotion
 import com.example.sonara.core.ui.motion.SonaraMotion
 import com.example.sonara.core.ui.theme.SonaraTheme
+import com.example.sonara.data.remote.backend.SonaraBackendClient
+import com.example.sonara.domain.model.ColorPalette
+import com.example.sonara.domain.model.PlaybackOrigin
 import com.example.sonara.domain.model.ThemeMode
 import com.example.sonara.domain.model.Track
+import com.example.sonara.domain.model.soundcloud.SoundcloudSourceIdentity
 import com.example.sonara.feature.home.HomeScreen
 import com.example.sonara.feature.home.HomeUiState
 import com.example.sonara.feature.home.HomeViewModel
@@ -81,6 +86,18 @@ import com.example.sonara.feature.search.SearchViewModel
 import com.example.sonara.feature.settings.SettingsScreen
 import com.example.sonara.feature.settings.SettingsUiState
 import com.example.sonara.feature.settings.SettingsViewModel
+import com.example.sonara.feature.video.VideoMediaCard
+import com.example.sonara.feature.video.VideoMedia3Surface
+import com.example.sonara.feature.video.VideoResolutionSurface
+import com.example.sonara.feature.video.YouTubePlayerController
+import com.example.sonara.feature.video.YouTubePlayerState
+import com.example.sonara.feature.video.VideoPlaybackViewModel
+import com.example.sonara.feature.video.shouldRenderMedia3Surface
+import com.example.sonara.feature.video.shouldRenderResolutionState
+import com.example.sonara.feature.video.toMedia3VideoPlayerUiState
+import com.example.sonara.feature.video.toVideoPlayerUiState
+import com.example.sonara.feature.video.VideoQualityUiState
+import com.example.sonara.feature.video.VideoPreviousNavigationCoordinator
 import kotlin.math.abs
 import kotlin.math.hypot
 
@@ -137,10 +154,21 @@ fun SonaraAppRoot(
     lyricsViewModel: LyricsViewModel,
     playlistViewModel: PlaylistViewModel,
     settingsViewModel: SettingsViewModel,
+    backendClient: SonaraBackendClient,
+    videoPlaybackViewModel: VideoPlaybackViewModel,
     importViewModel: ImportViewModel? = null,
     themeMode: ThemeMode,
+    selectedPalette: ColorPalette = ColorPalette.SONARA_CLASSIC,
     onToggleTheme: () -> Unit,
     onPlayTrack: (Track) -> Unit,
+    /**
+     * Phase 2B: origin-carrying play intent. Each surface supplies its own explicit semantic
+     * origin (Search, Library, Home, or Playlist); callers that do not opt in fail closed.
+     */
+     onPlayTrackWithOrigin: (Track, PlaybackOrigin) -> Unit = { track, _ -> onPlayTrack(track) },
+     onPlayTrackWithContext: (Track, PlaybackOrigin, List<Track>) -> Unit = { track, origin, _ ->
+         onPlayTrackWithOrigin(track, origin)
+     },
     openExpandedPlayerTrigger: Long = 0L,
     modifier: Modifier = Modifier
 ) {
@@ -155,11 +183,84 @@ fun SonaraAppRoot(
     val playlistState by playlistViewModel.uiState.collectAsState()
     val settingsState by settingsViewModel.uiState.collectAsState()
     val audioOutputState by playerViewModel.audioOutputState.collectAsState()
+    val videoQueueState by videoPlaybackViewModel.state.collectAsState()
+    val videoPlaybackState by videoPlaybackViewModel.playback.collectAsState()
+    val videoMedia3State by videoPlaybackViewModel.media3State.collectAsState()
+    val currentVideoMedia3Player by videoPlaybackViewModel.currentMedia3PlayerFlow.collectAsState()
+    val videoVolume by videoPlaybackViewModel.videoVolume.collectAsState()
+    val videoMuted by videoPlaybackViewModel.videoMuted.collectAsState()
+    val activeVideoViewCount by videoPlaybackViewModel.activeViewCount.collectAsState()
+    val activeVideoIsLive by videoPlaybackViewModel.activeIsLive.collectAsState()
+    val activeVideoIsUpcoming by videoPlaybackViewModel.activeIsUpcoming.collectAsState()
+    val videoQualityState = if (
+        videoPlaybackState.route == com.example.sonara.feature.video.VideoPlaybackRoute.MEDIA3 ||
+            videoPlaybackState.route == com.example.sonara.feature.video.VideoPlaybackRoute.RESOLVING
+    ) {
+        VideoQualityUiState(
+            requestedQuality = videoPlaybackState.requestedQuality,
+            availableHeights = videoMedia3State.availableVideoHeights,
+            actualHeight = videoMedia3State.selectedVideoHeight,
+            isPreparing = videoPlaybackState.route == com.example.sonara.feature.video.VideoPlaybackRoute.RESOLVING ||
+                (videoMedia3State.availableVideoHeights.isEmpty() && videoMedia3State.availableVideoQualities.isEmpty()),
+            availableQualities = videoMedia3State.availableVideoQualities,
+            availableQualityOptions = videoMedia3State.availableVideoQualityOptions,
+            actualQuality = videoMedia3State.selectedVideoQuality
+        )
+    } else {
+        null
+    }
 
     var currentDestination by remember { mutableStateOf<NavigationDestination>(NavigationDestination.Home) }
     var previousDestination by remember { mutableStateOf<NavigationDestination>(NavigationDestination.Home) }
     var isExpandedPlayerOpen by remember { mutableStateOf(false) }
     var isAudioOutputDialogOpen by remember { mutableStateOf(false) }
+    var activeVideoId by rememberSaveable { mutableStateOf<String?>(null) }
+    var activeVideoTitle by rememberSaveable { mutableStateOf("") }
+    var activeVideoArtist by rememberSaveable { mutableStateOf("") }
+    var activeVideoAlbum by rememberSaveable { mutableStateOf("") }
+    var activeVideoDurationMs by rememberSaveable { mutableStateOf(0L) }
+    var activeVideoArtworkUrl by rememberSaveable { mutableStateOf<String?>(null) }
+    var activeVideoController by remember { mutableStateOf<YouTubePlayerController?>(null) }
+    var activeVideoPlayerState by remember { mutableStateOf<YouTubePlayerState?>(null) }
+    var handledEndedVideoId by remember { mutableStateOf<String?>(null) }
+    val activeVideoTrack = activeVideoId?.let { videoId ->
+        Track(
+            id = videoId,
+            title = activeVideoTitle,
+            artist = activeVideoArtist,
+            album = activeVideoAlbum,
+            durationMs = activeVideoDurationMs,
+            artworkUrl = activeVideoArtworkUrl
+        )
+    }
+    val closeVideo = {
+        videoPlaybackViewModel.stop()
+        activeVideoController = null
+        activeVideoPlayerState = null
+        activeVideoId = null
+        activeVideoTitle = ""
+        activeVideoArtist = ""
+        activeVideoAlbum = ""
+        activeVideoDurationMs = 0L
+        activeVideoArtworkUrl = null
+        handledEndedVideoId = null
+    }
+    fun activateVideoTrack(track: Track) {
+        activeVideoController = null
+        val retainedPos = videoPlaybackViewModel.getIFramePosition(track.id).takeIf { it > 0L }
+        activeVideoPlayerState = YouTubePlayerState(
+            videoId = track.id,
+            generation = 1L,
+            currentPositionMs = retainedPos
+        )
+        handledEndedVideoId = null
+        activeVideoId = track.id
+        activeVideoTitle = track.title
+        activeVideoArtist = track.artist
+        activeVideoAlbum = track.album
+        activeVideoDurationMs = track.durationMs
+        activeVideoArtworkUrl = track.artworkUrl
+    }
 
     LaunchedEffect(openExpandedPlayerTrigger) {
         if (openExpandedPlayerTrigger > 0L) {
@@ -182,10 +283,14 @@ fun SonaraAppRoot(
     // 3. Playlists detail (selectedPlaylist != null) is excluded here so UserPlaylistDetailScreen's
     //    own BackHandler can pop the playlist detail first.
     BackHandler(
-        enabled = currentDestination != NavigationDestination.Home &&
-            (currentDestination != NavigationDestination.Playlists || playlistState.selectedPlaylist == null)
+        enabled = (activeVideoTrack != null && !isExpandedPlayerOpen) || (
+            currentDestination != NavigationDestination.Home &&
+                (currentDestination != NavigationDestination.Playlists || playlistState.selectedPlaylist == null)
+            )
     ) {
-        if (currentDestination == NavigationDestination.Settings) {
+        if (activeVideoTrack != null) {
+            closeVideo()
+        } else if (currentDestination == NavigationDestination.Settings) {
             currentDestination = if (previousDestination != NavigationDestination.Settings) {
                 previousDestination
             } else {
@@ -201,12 +306,273 @@ fun SonaraAppRoot(
     }
     val effectivePlayerState = playerState.copy(isFavorite = isCurrentTrackFavorite)
 
+    val presentedPlayerState = when {
+        activeVideoTrack == null -> effectivePlayerState
+        videoPlaybackState.route == com.example.sonara.feature.video.VideoPlaybackRoute.MEDIA3 ->
+            activeVideoTrack.toMedia3VideoPlayerUiState(
+                mediaState = videoMedia3State,
+                isFavorite = libraryState.likedSongs.any { it.id == activeVideoTrack.id },
+                volume = videoVolume,
+                isMuted = videoMuted,
+                isShuffled = videoQueueState.isShuffled,
+                repeatMode = videoQueueState.repeatMode,
+                viewCount = activeVideoViewCount,
+                isLive = activeVideoIsLive,
+                isUpcoming = activeVideoIsUpcoming
+            )
+        else -> activeVideoTrack.toVideoPlayerUiState(
+            youtubeState = activeVideoPlayerState
+                ?: YouTubePlayerState(
+                    videoId = activeVideoTrack.id,
+                    generation = 1L,
+                    currentPositionMs = videoPlaybackViewModel.getIFramePosition(activeVideoTrack.id).takeIf { it > 0L },
+                    isLive = activeVideoIsLive,
+                    isUpcoming = activeVideoIsUpcoming
+                ),
+            isFavorite = libraryState.likedSongs.any { it.id == activeVideoTrack.id },
+            volume = videoVolume,
+            isMuted = videoMuted,
+            isShuffled = videoQueueState.isShuffled,
+            repeatMode = videoQueueState.repeatMode,
+            viewCount = activeVideoViewCount,
+            isLive = activeVideoPlayerState?.isLive ?: activeVideoIsLive,
+            isUpcoming = activeVideoPlayerState?.isUpcoming ?: activeVideoIsUpcoming
+        )
+    }
+
     val downloadsMap by playerViewModel.downloads.collectAsState()
-    val currentDownloadInfo = downloadsMap[playerState.trackId]
+    val currentDownloadInfo = downloadsMap[presentedPlayerState.trackId]
     val isCurrentTrackDownloaded = currentDownloadInfo?.status == com.example.sonara.domain.model.DownloadStatus.DOWNLOADED
     val isCurrentTrackDownloading = currentDownloadInfo?.status == com.example.sonara.domain.model.DownloadStatus.DOWNLOADING || currentDownloadInfo?.status == com.example.sonara.domain.model.DownloadStatus.QUEUED
 
     var activeDownloadTrack by remember { mutableStateOf<Track?>(null) }
+
+    val onPresentedPlay: () -> Unit = {
+        if (activeVideoTrack != null) {
+            videoPlaybackViewModel.play()
+            if (videoPlaybackState.route == com.example.sonara.feature.video.VideoPlaybackRoute.IFRAME) {
+                activeVideoController?.play()
+            }
+        } else {
+            playerViewModel.play()
+        }
+    }
+
+    LaunchedEffect(activeVideoId, activeVideoPlayerState?.playbackState, videoPlaybackState.route) {
+        val videoId = activeVideoId
+        if (videoPlaybackState.route != com.example.sonara.feature.video.VideoPlaybackRoute.IFRAME ||
+            activeVideoPlayerState?.playbackState != com.example.sonara.feature.video.YouTubePlaybackState.ENDED
+        ) {
+            if (handledEndedVideoId == videoId) handledEndedVideoId = null
+        } else if (videoId != null && handledEndedVideoId != videoId) {
+            handledEndedVideoId = videoId
+            videoPlaybackViewModel.onEnded { track -> activateVideoTrack(track) }
+        }
+    }
+    val onPresentedPause: () -> Unit = {
+        if (activeVideoTrack != null) {
+            videoPlaybackViewModel.pause()
+            if (videoPlaybackState.route == com.example.sonara.feature.video.VideoPlaybackRoute.IFRAME) {
+                activeVideoController?.pause()
+            }
+        } else {
+            playerViewModel.pause()
+        }
+    }
+    val onPresentedSeek: (Float) -> Unit = { fraction ->
+        if (activeVideoTrack != null) {
+            if (videoPlaybackState.route == com.example.sonara.feature.video.VideoPlaybackRoute.MEDIA3) {
+                val targetMs = VideoPreviousNavigationCoordinator.calculateSeekTargetMs(fraction, videoMedia3State.durationMs)
+                videoPlaybackViewModel.seekMedia3(targetMs)
+            } else {
+                val durationMs = activeVideoPlayerState?.durationMs
+                if (durationMs != null && durationMs > 0L) {
+                    val targetMs = VideoPreviousNavigationCoordinator.calculateSeekTargetMs(fraction, durationMs)
+                    activeVideoController?.seekTo(targetMs)
+                    videoPlaybackViewModel.updateIFramePosition(activeVideoTrack.id, targetMs, durationMs)
+                    activeVideoPlayerState = activeVideoPlayerState?.copy(currentPositionMs = targetMs)
+                }
+            }
+        } else {
+            playerViewModel.seekTo((fraction * playerState.durationMs).toLong())
+        }
+    }
+    val onPresentedSeekBackward10: () -> Unit = {
+        if (activeVideoTrack != null) {
+            val isMedia3 = videoPlaybackState.route == com.example.sonara.feature.video.VideoPlaybackRoute.MEDIA3
+            val currentPos = VideoPreviousNavigationCoordinator.resolveCurrentPosition(
+                isMedia3 = isMedia3,
+                media3PositionMs = videoMedia3State.currentPositionMs,
+                iframeStatePositionMs = activeVideoPlayerState?.currentPositionMs,
+                retainedIFramePositionMs = videoPlaybackViewModel.getIFramePosition(activeVideoTrack.id)
+            )
+            val targetMs = (currentPos - 10_000L).coerceAtLeast(0L)
+            if (isMedia3) {
+                videoPlaybackViewModel.seekMedia3(targetMs)
+            } else {
+                val durationMs = activeVideoPlayerState?.durationMs ?: 0L
+                activeVideoController?.seekTo(targetMs)
+                videoPlaybackViewModel.updateIFramePosition(activeVideoTrack.id, targetMs, durationMs)
+                activeVideoPlayerState = activeVideoPlayerState?.copy(currentPositionMs = targetMs)
+            }
+        } else {
+            val currentPos = playerState.currentPositionMs
+            val targetMs = (currentPos - 10_000L).coerceAtLeast(0L)
+            playerViewModel.seekTo(targetMs)
+        }
+    }
+    val onPresentedSeekForward10: () -> Unit = {
+        if (activeVideoTrack != null) {
+            val isMedia3 = videoPlaybackState.route == com.example.sonara.feature.video.VideoPlaybackRoute.MEDIA3
+            val currentPos = VideoPreviousNavigationCoordinator.resolveCurrentPosition(
+                isMedia3 = isMedia3,
+                media3PositionMs = videoMedia3State.currentPositionMs,
+                iframeStatePositionMs = activeVideoPlayerState?.currentPositionMs,
+                retainedIFramePositionMs = videoPlaybackViewModel.getIFramePosition(activeVideoTrack.id)
+            )
+            val durationMs = if (isMedia3) videoMedia3State.durationMs else (activeVideoPlayerState?.durationMs ?: 0L)
+            val isLive = activeVideoPlayerState?.isLive ?: activeVideoIsLive
+            val targetMs = if (!isLive && durationMs > 0L) {
+                (currentPos + 10_000L).coerceAtMost(durationMs)
+            } else {
+                currentPos + 10_000L
+            }
+            if (isMedia3) {
+                videoPlaybackViewModel.seekMedia3(targetMs)
+            } else {
+                activeVideoController?.seekTo(targetMs)
+                videoPlaybackViewModel.updateIFramePosition(activeVideoTrack.id, targetMs, durationMs)
+                activeVideoPlayerState = activeVideoPlayerState?.copy(currentPositionMs = targetMs)
+            }
+        } else {
+            val durationMs = playerState.durationMs
+            val targetMs = if (!playerState.isLive && durationMs > 0L) {
+                (playerState.currentPositionMs + 10_000L).coerceAtMost(durationMs)
+            } else {
+                playerState.currentPositionMs + 10_000L
+            }
+            playerViewModel.seekTo(targetMs)
+        }
+    }
+    val onPresentedNext: () -> Unit = {
+        if (activeVideoTrack == null) {
+            playerViewModel.skipToNext()
+        } else {
+            if (videoPlaybackState.route == com.example.sonara.feature.video.VideoPlaybackRoute.MEDIA3) {
+                videoPlaybackViewModel.pauseMedia3()
+            } else {
+                activeVideoController?.pause()
+            }
+            videoPlaybackViewModel.next { track -> activateVideoTrack(track) }
+        }
+    }
+    val onPresentedPrevious: () -> Unit = {
+        if (activeVideoTrack == null) {
+            playerViewModel.skipToPrevious()
+        } else {
+            val isMedia3 = videoPlaybackState.route == com.example.sonara.feature.video.VideoPlaybackRoute.MEDIA3
+            val currentPos = VideoPreviousNavigationCoordinator.resolveCurrentPosition(
+                isMedia3 = isMedia3,
+                media3PositionMs = videoMedia3State.currentPositionMs,
+                iframeStatePositionMs = activeVideoPlayerState?.currentPositionMs,
+                retainedIFramePositionMs = videoPlaybackViewModel.getIFramePosition(activeVideoTrack.id)
+            )
+            val hasPrevious = videoPlaybackViewModel.peekPreviousTrack() != null
+            if (VideoPreviousNavigationCoordinator.shouldPauseBeforePrevious(currentPos, hasPrevious)) {
+                if (isMedia3) {
+                    videoPlaybackViewModel.pauseMedia3()
+                } else {
+                    activeVideoController?.pause()
+                }
+            }
+            videoPlaybackViewModel.previous(
+                currentPositionMs = currentPos,
+                onRestartCurrent = {
+                    if (isMedia3) {
+                        videoPlaybackViewModel.seekMedia3(0L)
+                    } else {
+                        activeVideoController?.seekTo(0L)
+                        activeVideoTrack?.let { track ->
+                            videoPlaybackViewModel.updateIFramePosition(track.id, 0L)
+                        }
+                        activeVideoPlayerState = activeVideoPlayerState?.copy(currentPositionMs = 0L)
+                            ?: activeVideoTrack?.let { track ->
+                                YouTubePlayerState(videoId = track.id, generation = 1L, currentPositionMs = 0L)
+                            }
+                    }
+                },
+                onTrackReady = { track -> activateVideoTrack(track) }
+            )
+        }
+    }
+    val onPresentedVolumeChange: (Float) -> Unit = { volume ->
+        if (activeVideoTrack == null) {
+            playerViewModel.setVolume(volume)
+        } else {
+            videoPlaybackViewModel.setVolume(volume)
+            activeVideoController?.setVolume(volume)
+        }
+    }
+    val onPresentedToggleMute: () -> Unit = {
+        if (activeVideoTrack == null) {
+            playerViewModel.toggleMute()
+        } else {
+            val isMuted = videoPlaybackViewModel.toggleMute()
+            activeVideoController?.setMuted(isMuted)
+        }
+    }
+
+    val videoMediaContent: (@Composable (Modifier) -> Unit)? = activeVideoTrack?.let { videoTrack ->
+        { surfaceModifier ->
+            when {
+                videoPlaybackState.route.shouldRenderMedia3Surface() -> {
+                    VideoMedia3Surface(
+                        player = currentVideoMedia3Player ?: videoPlaybackViewModel.currentMedia3Player(),
+                        modifier = surfaceModifier,
+                        isVisible = isExpandedPlayerOpen
+                    )
+                }
+                videoPlaybackState.route.shouldRenderResolutionState() -> {
+                    VideoResolutionSurface(modifier = surfaceModifier)
+                }
+                else -> {
+                    VideoMediaCard(
+                        videoId = videoTrack.id,
+                        backendClient = backendClient,
+                        initialPositionMs = videoPlaybackViewModel.getIFramePosition(videoTrack.id),
+                        autoPlay = videoPlaybackState.userPlayIntent,
+                        modifier = surfaceModifier,
+                        onCanvasTap = {
+                            if (presentedPlayerState.isPlaying) {
+                                onPresentedPause()
+                            } else {
+                                onPresentedPlay()
+                            }
+                        },
+                        onControllerAvailable = { controller ->
+                            if (activeVideoId == videoTrack.id) {
+                                activeVideoController = controller
+                                if (controller != null) {
+                                    controller.setVolume(videoPlaybackViewModel.videoVolume.value)
+                                    if (videoPlaybackViewModel.videoMuted.value) {
+                                        controller.setMuted(true)
+                                    }
+                                }
+                            }
+                        },
+                        onPlayerStateChanged = { state ->
+                            if (activeVideoId == videoTrack.id) {
+                                activeVideoPlayerState = state
+                                state.currentPositionMs?.let { pos ->
+                                    videoPlaybackViewModel.updateIFramePosition(videoTrack.id, pos, state.durationMs)
+                                }
+                            }
+                        }
+                    )
+                }
+            }
+        }
+    }
 
     val context = LocalContext.current
 
@@ -321,7 +687,7 @@ fun SonaraAppRoot(
             onBack = { currentDestination = previousDestination },
             themeMode = themeMode,
             onToggleTheme = onToggleTheme,
-            playerState = effectivePlayerState,
+            playerState = presentedPlayerState,
             playerViewModel = playerViewModel,
             libraryState = libraryState,
             libraryViewModel = libraryViewModel,
@@ -337,9 +703,30 @@ fun SonaraAppRoot(
             settingsViewModel = settingsViewModel,
             importViewModel = importViewModel,
             audioOutputState = audioOutputState,
-            onPlayTrack = onPlayTrack,
+            onPlayTrack = { track ->
+                if (activeVideoTrack != null) closeVideo()
+                onPlayTrack(track)
+            },
+             onPlayTrackWithOrigin = { track, origin ->
+                 if (activeVideoTrack != null) closeVideo()
+                 onPlayTrackWithOrigin(track, origin)
+             },
+             onPlayTrackWithContext = { track, origin, contextQueue ->
+                 if (activeVideoTrack != null) closeVideo()
+                 onPlayTrackWithContext(track, origin, contextQueue)
+             },
+            onPlayCurrent = onPresentedPlay,
+            onPauseCurrent = onPresentedPause,
+            onNextCurrent = onPresentedNext,
+            onPreviousCurrent = onPresentedPrevious,
+            onSeekCurrent = onPresentedSeek,
+            onOpenVideo = { track ->
+                playerViewModel.pause()
+                videoPlaybackViewModel.seed(track) { activateVideoTrack(it) }
+                isExpandedPlayerOpen = true
+            },
             onOpenExpandedPlayer = { isExpandedPlayerOpen = true },
-            onOpenAudioOutputSelector = {
+                 onOpenAudioOutputSelector = {
                 playerViewModel.refreshAudioOutputs()
                 isAudioOutputDialogOpen = true
             }
@@ -359,7 +746,7 @@ fun SonaraAppRoot(
                 initialFirstVisibleItemIndex = backdropScroll.first,
                 initialFirstVisibleItemScrollOffset = backdropScroll.second
             )
-            SonaraTheme(darkTheme = previousIsDark) {
+            SonaraTheme(darkTheme = previousIsDark, palette = selectedPalette) {
                 shellContent(backdropListState)
             }
         }
@@ -368,7 +755,7 @@ fun SonaraAppRoot(
         // theme and is clipped to the circle growing out of the screen centre; at rest it draws
         // unclipped. isTransitioning and rippleProgress are read inside the draw block, so each
         // frame of the reveal re-runs the draw phase only -- no recomposition, no re-layout.
-        SonaraTheme(darkTheme = displayedIsDark) {
+        SonaraTheme(darkTheme = displayedIsDark, palette = selectedPalette) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -425,69 +812,86 @@ fun SonaraAppRoot(
         }
 
         // Modal Expanded Player Screen (Immersive Now Playing)
-        SonaraTheme(darkTheme = displayedIsDark) {
+        SonaraTheme(darkTheme = displayedIsDark, palette = selectedPalette) {
             ExpandedPlayerScreen(
                 isExpanded = isExpandedPlayerOpen,
-                playerState = effectivePlayerState,
+                playerState = presentedPlayerState,
                 lyricsState = lyricsState,
                 onCollapse = { isExpandedPlayerOpen = false },
-                onPlay = { playerViewModel.play() },
-                onPause = { playerViewModel.pause() },
-                onNext = { playerViewModel.skipToNext() },
-                onPrevious = { playerViewModel.skipToPrevious() },
-                peekNextTrack = { playerViewModel.peekNextTrack() },
-                peekPreviousTrack = { playerViewModel.peekPreviousTrack() },
-                onSeek = { fraction ->
-                    val targetMs = (fraction * playerState.durationMs).toLong()
-                    playerViewModel.seekTo(targetMs)
-                },
-                onToggleShuffle = { playerViewModel.toggleShuffle() },
-                onToggleRepeat = { playerViewModel.toggleRepeatMode() },
+                onPlay = onPresentedPlay,
+                onPause = onPresentedPause,
+                onNext = onPresentedNext,
+                onPrevious = onPresentedPrevious,
+                 peekNextTrack = { if (activeVideoTrack == null) playerViewModel.peekNextTrack() else videoPlaybackViewModel.peekNextTrack() },
+                 peekPreviousTrack = { if (activeVideoTrack == null) playerViewModel.peekPreviousTrack() else videoPlaybackViewModel.peekPreviousTrack() },
+                onSeek = onPresentedSeek,
+                onSeekBackward10 = onPresentedSeekBackward10,
+                onSeekForward10 = onPresentedSeekForward10,
+                onToggleShuffle = { if (activeVideoTrack == null) playerViewModel.toggleShuffle() else videoPlaybackViewModel.toggleShuffle() },
+                onToggleRepeat = { if (activeVideoTrack == null) playerViewModel.toggleRepeatMode() else videoPlaybackViewModel.toggleRepeat() },
                 onToggleFavorite = {
-                    val currentTrack = Track(
-                        id = playerState.trackId,
-                        title = playerState.trackTitle,
-                        artist = playerState.artistName,
-                        album = playerState.albumTitle,
-                        artworkUrl = playerState.artworkUrl
-                    )
-                    libraryViewModel.toggleLike(currentTrack, isCurrentTrackFavorite)
+                    if (presentedPlayerState.trackId.isNotBlank()) {
+                        val currentTrack = Track(
+                            id = presentedPlayerState.trackId,
+                            title = presentedPlayerState.trackTitle,
+                            artist = presentedPlayerState.artistName,
+                            album = presentedPlayerState.albumTitle,
+                            artworkUrl = presentedPlayerState.artworkUrl
+                        )
+                        libraryViewModel.toggleLike(currentTrack, presentedPlayerState.isFavorite)
+                    }
                 },
                 onAddPlaylist = {
-                    val currentTrack = Track(
-                        id = playerState.trackId,
-                        title = playerState.trackTitle,
-                        artist = playerState.artistName,
-                        album = playerState.albumTitle,
-                        artworkUrl = playerState.artworkUrl
-                    )
-                    playlistViewModel.openAddToPlaylist(currentTrack)
+                    if (presentedPlayerState.trackId.isNotBlank()) {
+                        val currentTrack = Track(
+                            id = presentedPlayerState.trackId,
+                            title = presentedPlayerState.trackTitle,
+                            artist = presentedPlayerState.artistName,
+                            album = presentedPlayerState.albumTitle,
+                            artworkUrl = presentedPlayerState.artworkUrl
+                        )
+                        playlistViewModel.openAddToPlaylist(currentTrack)
+                    }
                 },
-                onVolumeChange = { volume -> playerViewModel.setVolume(volume) },
-                onToggleMute = { playerViewModel.toggleMute() },
+                onVolumeChange = onPresentedVolumeChange,
+                onToggleMute = onPresentedToggleMute,
                 onToggleRomanization = { lyricsViewModel.toggleRomanization() },
                 isDownloaded = isCurrentTrackDownloaded,
                 isDownloading = isCurrentTrackDownloading,
                 onToggleDownload = {
                     val currentTrack = Track(
-                        id = playerState.trackId,
-                        title = playerState.trackTitle,
-                        artist = playerState.artistName,
-                        album = playerState.albumTitle,
-                        artworkUrl = playerState.artworkUrl
+                        id = presentedPlayerState.trackId,
+                        title = presentedPlayerState.trackTitle,
+                        artist = presentedPlayerState.artistName,
+                        album = presentedPlayerState.albumTitle,
+                        artworkUrl = presentedPlayerState.artworkUrl
                     )
-                    activeDownloadTrack = currentTrack
-                    val downloadInfo = downloadsMap[currentTrack.id]
-                    if (downloadInfo == null || (downloadInfo.status != com.example.sonara.domain.model.DownloadStatus.DOWNLOADED && downloadInfo.status != com.example.sonara.domain.model.DownloadStatus.DOWNLOADING)) {
-                        playerViewModel.requestDownload(currentTrack)
+                    if (SoundcloudSourceIdentity.isSoundcloudTrackId(currentTrack.id)) {
+                        Toast.makeText(context, R.string.download_unsupported_soundcloud, Toast.LENGTH_SHORT).show()
+                    } else {
+                        activeDownloadTrack = currentTrack
+                        val downloadInfo = downloadsMap[currentTrack.id]
+                        if (downloadInfo == null || (downloadInfo.status != com.example.sonara.domain.model.DownloadStatus.DOWNLOADED && downloadInfo.status != com.example.sonara.domain.model.DownloadStatus.DOWNLOADING)) {
+                            playerViewModel.requestDownload(currentTrack)
+                        }
                     }
                 },
                 audioOutputState = audioOutputState,
                 onOpenAudioOutputSelector = {
                     playerViewModel.refreshAudioOutputs()
                     isAudioOutputDialogOpen = true
-                }
-            )
+                 },
+                 mediaContent = videoMediaContent,
+                 videoQualityState = videoQualityState,
+                 onSelectVideoQuality = videoPlaybackViewModel::selectVideoQuality,
+                 onOpenVideoQualitySelector = videoPlaybackViewModel::onOpenQualitySelector,
+                 videoSize = if (videoMedia3State.videoSize.width > 0 && videoMedia3State.videoSize.height > 0) {
+                     videoMedia3State.videoSize
+                 } else {
+                     val playerSize = (currentVideoMedia3Player ?: videoPlaybackViewModel.currentMedia3Player())?.videoSize
+                     if (playerSize != null && playerSize.width > 0 && playerSize.height > 0) playerSize else videoMedia3State.videoSize
+                 }
+             )
 
             // Centralized DownloadProgressDialog
             if (activeDownloadTrack != null) {
@@ -595,6 +999,16 @@ private fun AppScaffoldContent(
     importViewModel: ImportViewModel? = null,
     audioOutputState: com.example.sonara.domain.model.AudioOutputState,
     onPlayTrack: (Track) -> Unit,
+     onPlayTrackWithOrigin: (Track, PlaybackOrigin) -> Unit = { track, _ -> onPlayTrack(track) },
+     onPlayTrackWithContext: (Track, PlaybackOrigin, List<Track>) -> Unit = { track, origin, _ ->
+         onPlayTrackWithOrigin(track, origin)
+     },
+    onPlayCurrent: () -> Unit,
+    onPauseCurrent: () -> Unit,
+    onNextCurrent: () -> Unit,
+    onPreviousCurrent: () -> Unit,
+    onSeekCurrent: (Float) -> Unit,
+    onOpenVideo: (Track) -> Unit,
     onOpenExpandedPlayer: () -> Unit,
     onOpenAudioOutputSelector: () -> Unit,
     modifier: Modifier = Modifier
@@ -669,15 +1083,14 @@ private fun AppScaffoldContent(
                     Column {
                         MiniPlayer(
                             state = playerState,
-                            onPlay = { playerViewModel.play() },
-                            onPause = { playerViewModel.pause() },
-                            onNext = { playerViewModel.skipToNext() },
-                            onPrevious = { playerViewModel.skipToPrevious() },
-                            onSeek = { fraction ->
-                                val targetMs = (fraction * playerState.durationMs).toLong()
-                                playerViewModel.seekTo(targetMs)
-                            },
+                            onPlay = onPlayCurrent,
+                            onPause = onPauseCurrent,
+                            onNext = onNextCurrent,
+                            onPrevious = onPreviousCurrent,
+                            onSeek = onSeekCurrent,
                             onClickBody = onOpenExpandedPlayer,
+                            onToggleShuffle = { playerViewModel.toggleShuffle() },
+                            onToggleRepeat = { playerViewModel.toggleRepeatMode() },
                             audioOutputState = audioOutputState,
                             onOpenAudioOutputSelector = onOpenAudioOutputSelector
                         )
@@ -782,7 +1195,9 @@ private fun AppScaffoldContent(
                                 onBackFromCatalog = { homeViewModel.viewAllPlaylists(false) },
                                 onBackFromArtistsCatalog = { homeViewModel.viewAllArtists(false) },
                                 onRefreshQuickPicks = { homeViewModel.refreshQuickPicks() },
-                                onPlayTrack = onPlayTrack,
+                                 onPlayTrack = onPlayTrack,
+                                 onPlayTrackWithOrigin = onPlayTrackWithOrigin,
+                                 onPlayTrackWithContext = onPlayTrackWithContext,
                                 onToggleLike = { track, liked -> libraryViewModel.toggleLike(track, liked) },
                                 isLiked = { id -> libraryState.likedSongs.any { it.id == id } }
                             )
@@ -797,12 +1212,15 @@ private fun AppScaffoldContent(
                                 onSuggestionSelected = { searchViewModel.onSuggestionSelected(it) },
                                 onSelectMode = { searchViewModel.selectMode(it) },
                                 onPlayTrack = onPlayTrack,
+                                onPlayVideo = onOpenVideo,
+                                 onPlayTrackWithOrigin = onPlayTrackWithOrigin,
+                                 onPlayTrackWithContext = onPlayTrackWithContext,
                                 onToggleLike = { track, liked -> libraryViewModel.toggleLike(track, liked) },
                                 isLiked = { id -> libraryState.likedSongs.any { it.id == id } },
                                 onDeleteHistoryEntry = { searchViewModel.deleteHistoryEntry(it) },
                                 onClearHistory = { searchViewModel.clearSearchHistory() },
-                                onPlayNext = { track ->
-                                    playerViewModel.playNext(track)
+                                onPlayNext = { track, origin ->
+                                    playerViewModel.playNext(track, origin = origin)
                                     Toast.makeText(context, R.string.toast_added_to_play_next, Toast.LENGTH_SHORT).show()
                                 },
                                 onAddToPlaylist = { track ->
@@ -819,7 +1237,10 @@ private fun AppScaffoldContent(
                                 state = libraryState,
                                 onSelectTab = { libraryViewModel.selectTab(it) },
                                 onPlayTrack = onPlayTrack,
-                                onToggleLike = { track, liked -> libraryViewModel.toggleLike(track, liked) }
+                                 onPlayTrackWithOrigin = onPlayTrackWithOrigin,
+                                 onPlayTrackWithContext = onPlayTrackWithContext,
+                                onToggleLike = { track, liked -> libraryViewModel.toggleLike(track, liked) },
+                                onRemoveDownload = { trackId -> libraryViewModel.removeDownload(trackId) }
                             )
                         }
                         NavigationDestination.Playlists -> {
@@ -860,7 +1281,12 @@ private fun AppScaffoldContent(
                                         isReorderMode = playlistState.isReorderMode,
                                         reorderedTracks = playlistState.reorderedTracks,
                                         onBack = { playlistViewModel.selectPlaylist(null) },
-                                        onPlayTrack = onPlayTrack,
+                                         onPlayTrack = { track ->
+                                              onPlayTrackWithOrigin(track, PlaybackOrigin.PLAYLIST)
+                                          },
+                                         onPlayTrackWithContext = { track, contextQueue ->
+                                              onPlayTrackWithContext(track, PlaybackOrigin.PLAYLIST, contextQueue)
+                                          },
                                         onToggleLike = { track, liked -> libraryViewModel.toggleLike(track, liked) },
                                         isLiked = { id -> libraryState.likedSongs.any { it.id == id } },
                                         onStartReorder = { playlistViewModel.startReorderMode() },
@@ -893,6 +1319,7 @@ private fun AppScaffoldContent(
                                 onOpenDialog = { settingsViewModel.openDialog(it) },
                                 onDismissDialog = { settingsViewModel.dismissDialog() },
                                 onSetThemeMode = { settingsViewModel.setThemeMode(it) },
+                                onSetSelectedPalette = { settingsViewModel.setSelectedPalette(it) },
                                 onSetAppLanguage = { settingsViewModel.setAppLanguage(it) },
                                 onSetShowRomanized = { settingsViewModel.setShowRomanized(it) },
                                 onSetRestorePlaybackSession = { settingsViewModel.setRestorePlaybackSession(it) },
@@ -906,7 +1333,8 @@ private fun AppScaffoldContent(
                                 onSetStreamingQuality = { settingsViewModel.setStreamingQuality(it) },
                                 onSetDownloadQuality = { settingsViewModel.setDownloadQuality(it) },
                                 onSetDownloadFileFormat = { settingsViewModel.setDownloadFileFormat(it) },
-                                onSetDownloadOverWifiOnly = { settingsViewModel.setDownloadOverWifiOnly(it) },
+                                 onSetDownloadOverWifiOnly = { settingsViewModel.setDownloadOverWifiOnly(it) },
+                                 onSetDefaultVideoQuality = { settingsViewModel.setDefaultVideoQuality(it) },
                                 onClearAllDownloads = { settingsViewModel.clearAllDownloads() },
                                 onClearImageCache = { settingsViewModel.clearImageCache() },
                                 onClearPlaybackHistory = { settingsViewModel.clearPlaybackHistory() },

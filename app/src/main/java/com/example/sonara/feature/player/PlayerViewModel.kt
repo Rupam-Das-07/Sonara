@@ -3,13 +3,17 @@ package com.example.sonara.feature.player
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.media3.common.MimeTypes
 import com.example.sonara.domain.model.AudioQuality
 import com.example.sonara.domain.model.DownloadInfo
+import com.example.sonara.domain.model.PlaybackOrigin
 import com.example.sonara.domain.model.Track
+import com.example.sonara.domain.model.soundcloud.SoundcloudSourceIdentity
 import com.example.sonara.domain.ports.StreamResolverPort
 import com.example.sonara.domain.repository.DiscoveryRepository
 import com.example.sonara.domain.repository.DownloadRepository
 import com.example.sonara.domain.repository.SettingsRepository
+import com.example.sonara.core.util.MediaTitleFormatter
 import com.example.sonara.playback.client.MediaControllerClient
 import com.example.sonara.playback.client.MediaControllerState
 import com.example.sonara.playback.controller.NextTrackDecision
@@ -43,7 +47,8 @@ private data class LocalPlayerState(
     val transitionalTrack: Track? = null,
     val isResolvingStream: Boolean = false,
     val initialPositionMs: Long = 0L,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val transitionGeneration: Long? = null
 )
 
 /**
@@ -60,7 +65,6 @@ class PlayerViewModel(
     private val downloadRepository: DownloadRepository? = null,
     private val settingsRepository: SettingsRepository? = null,
     private val audioOutputRepository: com.example.sonara.domain.repository.AudioOutputRepository? = null,
-    private val historyRepository: com.example.sonara.domain.repository.HistoryRepository? = null,
     val queueEngine: PlaybackQueueEngine = PlaybackQueueEngine(),
     val transitionManager: TransitionManager = TransitionManager(),
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
@@ -112,12 +116,6 @@ class PlayerViewModel(
     init {
         client.connect()
 
-        // Convergence: Automatic playback completion uses the exact same advance pathway
-        client.onPlaybackEnded = {
-            Log.d(TAG, "onPlaybackEnded -> triggering skipToNext()")
-            skipToNext()
-        }
-
         // Observe downloads if repository available
         downloadRepository?.let { repo ->
             viewModelScope.launch {
@@ -135,14 +133,34 @@ class PlayerViewModel(
                 if (currentMediaId != null && transitional != null && currentMediaId == transitional.id) {
                     // Target track is now live on the controller: a pending preload-consume (if any)
                     // has landed, so release the in-flight guard and cancel its backstop.
-                    clearConsumeInFlight()
-                    _localState.update { it.copy(transitionalTrack = null, initialPositionMs = 0L, errorMessage = null) }
+                    if (state.requestFailureGeneration == null ||
+                        state.requestFailureGeneration == _localState.value.transitionGeneration
+                    ) {
+                        clearConsumeInFlight()
+                    }
+                    _localState.update {
+                        it.copy(
+                            transitionalTrack = null,
+                            initialPositionMs = 0L,
+                            errorMessage = null,
+                            transitionGeneration = null
+                        )
+                    }
                 }
                 if (state.errorMessage != null && transitional != null) {
                     // Controller surfaced an error for the pending transition: release the guard too,
                     // otherwise a failed consume would wedge skip handling until the timeout fires.
                     clearConsumeInFlight()
-                    _localState.update { it.copy(transitionalTrack = null, isResolvingStream = false, initialPositionMs = 0L) }
+                    if (state.requestFailureGeneration != null &&
+                        state.requestFailureGeneration == _localState.value.transitionGeneration
+                    ) {
+                        _localState.update {
+                            it.copy(
+                                isResolvingStream = false,
+                                errorMessage = state.errorMessage
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -181,10 +199,15 @@ class PlayerViewModel(
                 isBuffering = if (isError) false else local.isResolvingStream,
                 trackId = local.transitionalTrack.id,
                 trackTitle = local.transitionalTrack.title,
+                displayTitle = MediaTitleFormatter.format(
+                    local.transitionalTrack.title,
+                    local.transitionalTrack.artist
+                ),
                 artistName = local.transitionalTrack.artist,
                 albumTitle = local.transitionalTrack.album ?: "",
                 artworkUrl = local.transitionalTrack.artworkUrl,
                 currentPositionMs = local.initialPositionMs,
+                isPositionAvailable = true,
                 durationMs = local.transitionalTrack.durationMs,
                 playbackState = playbackState,
                 isShuffled = local.isShuffled,
@@ -196,16 +219,20 @@ class PlayerViewModel(
         }
 
         val metadata = raw.currentMediaItem?.mediaMetadata
+        val rawTitle = metadata?.title?.toString() ?: "No Track Selected"
+        val rawArtist = metadata?.artist?.toString() ?: "Sonara Music"
         return PlayerUiState(
             isConnected = raw.isConnected,
             isPlaying = raw.isPlaying,
             isBuffering = raw.isBuffering,
             trackId = raw.currentMediaItem?.mediaId ?: "",
-            trackTitle = metadata?.title?.toString() ?: "No Track Selected",
-            artistName = metadata?.artist?.toString() ?: "Sonara Music",
+            trackTitle = rawTitle,
+            displayTitle = MediaTitleFormatter.format(rawTitle, rawArtist),
+            artistName = rawArtist,
             albumTitle = metadata?.albumTitle?.toString() ?: "",
             artworkUrl = metadata?.artworkUri?.toString(),
             currentPositionMs = raw.currentPositionMs,
+            isPositionAvailable = raw.currentMediaItem != null,
             durationMs = raw.durationMs,
             playbackState = raw.playbackState,
             isShuffled = local.isShuffled,
@@ -274,15 +301,24 @@ class PlayerViewModel(
 
     /**
      * Restores a track session into the queue and presentation state without auto-starting audio playback.
+     *
+     * Provenance is deliberately NOT restored. The persisted snapshot
+     * ([com.example.sonara.domain.model.PlaybackSessionSnapshot]) carries only
+     * `lastTrackId`, `lastPositionMs` and `queueTrackIds` — no origin and no session id —
+     * so there is nothing trustworthy to recover. Rather than invent continuity from the
+     * track id or a timestamp, a restored context fails closed to
+     * [PlaybackOrigin.LEGACY_UNKNOWN] and the coordinator mints a fresh session id when
+     * playback actually resumes.
      */
     fun restoreTrack(track: Track, initialPositionMs: Long = 0L, contextQueue: List<Track> = emptyList()) {
-        queueEngine.setContext(track, contextQueue)
+        queueEngine.setContext(track, contextQueue, origin = PlaybackOrigin.LEGACY_UNKNOWN)
         _localState.update {
             it.copy(
                 transitionalTrack = track,
                 isResolvingStream = false,
                 initialPositionMs = initialPositionMs,
-                errorMessage = null
+                errorMessage = null,
+                transitionGeneration = null
             )
         }
         prefetchRecommendationsAndPreResolve(track.id)
@@ -313,6 +349,7 @@ class PlayerViewModel(
             Log.d(TAG, "skipToNext dropped: preload-consume still in flight")
             return
         }
+        Log.d(TAG, "LATENCY_T0 next intent: fromId=$fromTrackId t=${System.currentTimeMillis()}")
         lookaheadJob?.cancel()
         lookaheadJob = null
         rateLimitCooldownJob?.cancel()
@@ -351,7 +388,8 @@ class PlayerViewModel(
                     transitionalTrack = decision.track,
                     isResolvingStream = false,
                     initialPositionMs = 0L,
-                    errorMessage = null
+                    errorMessage = null,
+                    transitionGeneration = gen
                 )
             }
             consumeInFlight = true
@@ -377,7 +415,19 @@ class PlayerViewModel(
                     Log.d(TAG, "skipToNext [gen=$gen]: track ${decision.track.id} already active/resolving, skipping duplicate execution")
                     return
                 }
-                _localState.update { it.copy(transitionalTrack = decision.track, isResolvingStream = true, initialPositionMs = 0L, errorMessage = null) }
+                // The fallback path resolves a new URL asynchronously, so stop the old item
+                // before presenting the target track. The preloaded path above intentionally
+                // remains gapless and does not pause.
+                client.pause()
+                _localState.update {
+                    it.copy(
+                        transitionalTrack = decision.track,
+                        isResolvingStream = true,
+                        initialPositionMs = 0L,
+                        errorMessage = null,
+                        transitionGeneration = gen
+                    )
+                }
                 activePlaybackJob?.cancel()
                 activePlaybackJob = viewModelScope.launch {
                     executeTrackPlay(decision.track, gen)
@@ -390,7 +440,14 @@ class PlayerViewModel(
             }
 
             is NextTrackDecision.NeedRecommendations -> {
-                _localState.update { it.copy(isResolvingStream = true, errorMessage = null) }
+                client.pause()
+                _localState.update {
+                    it.copy(
+                        isResolvingStream = true,
+                        errorMessage = null,
+                        transitionGeneration = gen
+                    )
+                }
                 activePlaybackJob?.cancel()
                 activePlaybackJob = viewModelScope.launch {
                     val recResult = withContext(ioDispatcher) {
@@ -406,7 +463,14 @@ class PlayerViewModel(
                         queueEngine.ingestRecommendations(candidates)
                         val nextDecision = queueEngine.advance()
                         if (nextDecision is NextTrackDecision.PlayTrack) {
-                            _localState.update { it.copy(transitionalTrack = nextDecision.track, initialPositionMs = 0L, errorMessage = null) }
+                            _localState.update {
+                                it.copy(
+                                    transitionalTrack = nextDecision.track,
+                                    initialPositionMs = 0L,
+                                    errorMessage = null,
+                                    transitionGeneration = gen
+                                )
+                            }
                             executeTrackPlay(nextDecision.track, gen)
                         } else {
                             Log.d(TAG, "No valid candidates after recommendation ingest -> stopping")
@@ -463,7 +527,16 @@ class PlayerViewModel(
             }
 
             is PreviousTrackDecision.PlayTrack -> {
-                _localState.update { it.copy(transitionalTrack = decision.track, isResolvingStream = true, initialPositionMs = 0L, errorMessage = null) }
+                client.pause()
+                _localState.update {
+                    it.copy(
+                        transitionalTrack = decision.track,
+                        isResolvingStream = true,
+                        initialPositionMs = 0L,
+                        errorMessage = null,
+                        transitionGeneration = gen
+                    )
+                }
                 activePlaybackJob?.cancel()
                 activePlaybackJob = viewModelScope.launch {
                     executeTrackPlay(decision.track, gen)
@@ -505,31 +578,51 @@ class PlayerViewModel(
      * Inserts [track] immediately after the currently active track in [PlaybackQueueEngine].
      * If no track is currently playing or loaded, starts playback of [track] immediately.
      */
-    fun playNext(track: Track) {
+    fun playNext(
+        track: Track,
+        origin: PlaybackOrigin = PlaybackOrigin.LEGACY_UNKNOWN
+    ) {
         val currentMediaId = client.controllerState.value.currentMediaItem?.mediaId
         val currTrack = queueEngine.currentTrack
         if (currTrack == null && currentMediaId.isNullOrEmpty()) {
-            playTrack(track)
+            playTrack(track, origin = origin)
         } else {
-            queueEngine.playNext(track)
+            // Play Next is an explicit intent with its own provenance. Never let the queued
+            // entry inherit the currently active context (which may be unrelated).
+            queueEngine.playNext(track, origin = origin)
             triggerLookaheadPreResolution()
         }
     }
 
     /**
      * Plays a track with optional context queue, updating queue engine and resolving audio source.
+     *
+     * [origin] is the Phase 2B provenance of this deliberate play intent. It is passed
+     * explicitly by the initiating UI — never inferred from navigation state or the
+     * visible screen — and defaults to [PlaybackOrigin.LEGACY_UNKNOWN] so every existing
+     * call site remains source-compatible and ineligible.
      */
-    fun playTrack(track: Track, contextQueue: List<Track> = emptyList()) {
+    fun playTrack(
+        track: Track,
+        contextQueue: List<Track> = emptyList(),
+        origin: PlaybackOrigin = PlaybackOrigin.LEGACY_UNKNOWN
+    ) {
+        Log.d(TAG, "LATENCY_T0 play intent: trackId=${track.id} t=${System.currentTimeMillis()}")
         lookaheadJob?.cancel()
         lookaheadJob = null
         val gen = transitionManager.nextGeneration()
-        queueEngine.setContext(track, contextQueue)
+        // A manual selection is a real transition even when resolution is remote. Pause the
+        // currently loaded item before changing presentation state so the previous track cannot
+        // continue underneath the optimistic target.
+        client.pause()
+        queueEngine.setContext(track, contextQueue, origin = origin)
         _localState.update {
             it.copy(
                 transitionalTrack = track,
                 isResolvingStream = true,
                 initialPositionMs = if (it.transitionalTrack?.id == track.id) it.initialPositionMs else 0L,
-                errorMessage = null
+                errorMessage = null,
+                transitionGeneration = gen
             )
         }
 
@@ -549,6 +642,10 @@ class PlayerViewModel(
      * Request an offline download for a track.
      */
     fun requestDownload(track: Track) {
+        if (SoundcloudSourceIdentity.isSoundcloudTrackId(track.id)) {
+            Log.w(TAG, "Offline downloading is not supported for SoundCloud track: ${track.id}")
+            return
+        }
         val downloadRepo = downloadRepository ?: return
         viewModelScope.launch(ioDispatcher) {
             downloadRepo.enqueueDownload(track)
@@ -579,6 +676,8 @@ class PlayerViewModel(
         lookaheadJob?.cancel()
         lookaheadJob = null
 
+        try {
+
         val seekPos = if (_localState.value.transitionalTrack?.id == track.id) {
             _localState.value.initialPositionMs
         } else {
@@ -599,13 +698,6 @@ class PlayerViewModel(
                 _localState.update { it.copy(transitionalTrack = null, initialPositionMs = 0L) }
             }
             prefetchRecommendationsAndPreResolve(track.id)
-            viewModelScope.launch(ioDispatcher) {
-                try {
-                    historyRepository?.recordHistory(track, completed = false)
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to record history: ${e.message}")
-                }
-            }
             return
         }
 
@@ -632,7 +724,12 @@ class PlayerViewModel(
                 Log.d(TAG, "Dropping stale stream commit for ${track.title} [gen=$generation]")
                 return@onSuccess
             }
-            client.playTrack(track, streamInfo.streamUrl, generation)
+            val mimeType = streamInfo.format.takeIf { it == MimeTypes.APPLICATION_M3U8 }
+            if (mimeType != null) {
+                client.playTrack(track, streamInfo.streamUrl, generation, mimeType)
+            } else {
+                client.playTrack(track, streamInfo.streamUrl, generation)
+            }
             if (seekPos > 0L) {
                 client.seekTo(seekPos)
             }
@@ -641,13 +738,6 @@ class PlayerViewModel(
                 _localState.update { it.copy(transitionalTrack = null, initialPositionMs = 0L) }
             }
             prefetchRecommendationsAndPreResolve(track.id)
-            viewModelScope.launch(ioDispatcher) {
-                try {
-                    historyRepository?.recordHistory(track, completed = false)
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to record history: ${e.message}")
-                }
-            }
         }.onFailure { error ->
             Log.e(TAG, "Stream resolution failed for ${track.title}: ${error.message}")
             if (isRateLimitError(error)) {
@@ -668,6 +758,25 @@ class PlayerViewModel(
                     )
                 }
             }
+        }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Throwable) {
+            failTrackTransition(track, generation, error)
+        }
+    }
+
+    private fun failTrackTransition(track: Track, generation: Long, error: Throwable) {
+        if (!transitionManager.isAuthoritative(generation)) return
+        Log.e(TAG, "Track transition failed for ${track.title}: ${error.message}")
+        client.pause()
+        _localState.update {
+            it.copy(
+                isResolvingStream = false,
+                transitionalTrack = track,
+                errorMessage = error.message ?: "Failed to play ${track.title}",
+                transitionGeneration = generation
+            )
         }
     }
 
@@ -764,7 +873,6 @@ class PlayerViewModel(
         lookaheadJob?.cancel()
         rateLimitCooldownJob?.cancel()
         consumeTimeoutJob?.cancel()
-        client.onPlaybackEnded = null
         client.disconnect()
     }
 }

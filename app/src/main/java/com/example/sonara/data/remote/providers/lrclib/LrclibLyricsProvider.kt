@@ -2,8 +2,13 @@ package com.example.sonara.data.remote.providers.lrclib
 
 import android.util.Log
 import com.example.sonara.core.error.SonaraException
+import com.example.sonara.data.remote.providers.LyricsProvider
 import com.example.sonara.domain.lyrics.LrcParser
+import com.example.sonara.domain.lyrics.TrackCandidate
+import com.example.sonara.domain.lyrics.TrackMatcher
 import com.example.sonara.domain.model.Lyrics
+import com.example.sonara.domain.model.LyricsMetadata
+import com.example.sonara.domain.model.withMetadata
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -16,14 +21,15 @@ import java.net.URLEncoder
  * Remote provider fetching synced and plain lyrics from LRCLIB (https://lrclib.net).
  * Implements multi-strategy candidate pooling and precision scoring across slow, medium, and fast mix tracks (Audit 02 §3.1).
  */
-class LrclibLyricsProvider {
+class LrclibLyricsProvider : LyricsProvider {
 
     companion object {
         private const val TAG = "LrclibLyricsProvider"
         private const val BASE_URL = "https://lrclib.net/api"
+        private const val SOURCE = "LRCLIB"
     }
 
-    suspend fun getLyrics(
+    override suspend fun getLyrics(
         title: String,
         artist: String,
         durationMs: Long
@@ -94,14 +100,20 @@ class LrclibLyricsProvider {
 
             if (syncedCandidates.isNotEmpty()) {
                 val bestSynced = syncedCandidates.minByOrNull { item ->
-                    scoreCandidate(item, targetDurationSec, cleanArtistStr)
+                    TrackMatcher.score(item.toTrackCandidate(), targetDurationSec, cleanArtistStr)
                 } ?: syncedCandidates.first()
-                return@withContext Result.success(parseLyricsJson(bestSynced, cleanTitleStr, cleanArtistStr))
+                val bestScore = TrackMatcher.score(bestSynced.toTrackCandidate(), targetDurationSec, cleanArtistStr)
+                val parsed = parseLyricsJson(bestSynced, cleanTitleStr, cleanArtistStr)
+                return@withContext Result.success(
+                    parsed.withMetadata(metadataFor(bestSynced, TrackMatcher.confidenceFromScore(bestScore)))
+                )
             }
 
             if (plainCandidates.isNotEmpty()) {
                 val bestPlain = plainCandidates.first()
-                return@withContext Result.success(parseLyricsJson(bestPlain, cleanTitleStr, cleanArtistStr))
+                val parsed = parseLyricsJson(bestPlain, cleanTitleStr, cleanArtistStr)
+                // Plain candidates are selected by result order, not scored, so match confidence is unknown.
+                return@withContext Result.success(parsed.withMetadata(metadataFor(bestPlain, null)))
             }
 
             Result.success(Lyrics.Unavailable("No lyrics found for this track"))
@@ -117,47 +129,25 @@ class LrclibLyricsProvider {
         }
     }
 
-    private fun scoreCandidate(item: JSONObject, targetDurationSec: Double, targetArtist: String): Double {
-        val synced = item.optString("syncedLyrics", "").trim()
-        if (synced.isBlank()) return 999999.0
+    /**
+     * Builds additive [LyricsMetadata] for a chosen LRCLIB candidate (Stage 3). [matchConfidence] is
+     * the display-only confidence derived from the candidate's score for synced results, or null for
+     * plain results (which are not scored). [LyricsMetadata.language] is taken from LRCLIB's "lang"
+     * field when present, else null (unknown).
+     */
+    private fun metadataFor(json: JSONObject, matchConfidence: Float?): LyricsMetadata =
+        LyricsMetadata(
+            source = SOURCE,
+            language = json.optString("lang", "").ifBlank { null },
+            matchConfidence = matchConfidence
+        )
 
-        val dur = item.optDouble("duration", 0.0)
-        val durDiff = if (targetDurationSec > 0.0 && dur > 0.0) {
-            kotlin.math.abs(dur - targetDurationSec)
-        } else {
-            50.0
-        }
-        var score = durDiff * 3.0
-
-        // Artist proximity bonus
-        if (targetArtist.isNotBlank()) {
-            val candidateArtist = item.optString("artistName", "").lowercase()
-            val targetTokens = targetArtist.split(Regex("[,&;/]|\\bfeat\\.?\\b|\\bft\\.?\\b", RegexOption.IGNORE_CASE))
-                .map { it.trim().lowercase() }
-                .filter { it.length > 2 }
-            if (targetTokens.any { candidateArtist.contains(it) }) {
-                score -= 15.0
-            }
-        }
-
-        // Dialogue / Video Intro Delay Check
-        val firstTs = extractFirstTimestampSec(synced)
-        if (firstTs > 30.0) {
-            score += 25.0
-        } else if (firstTs > 20.0 && durDiff > 4.0) {
-            score += 15.0
-        }
-
-        // Completeness bonus (rewards well-formatted full tracks over truncated 5-line submissions)
-        val lineCount = synced.lineSequence().count { it.isNotBlank() }
-        if (lineCount >= 30) {
-            score -= 5.0
-        } else if (lineCount < 10) {
-            score += 20.0
-        }
-
-        return score
-    }
+    /** Maps an LRCLIB result object to the provider-neutral [TrackCandidate] consumed by [TrackMatcher]. */
+    private fun JSONObject.toTrackCandidate(): TrackCandidate = TrackCandidate(
+        syncedLyrics = optString("syncedLyrics", ""),
+        durationSec = optDouble("duration", 0.0),
+        artistName = optString("artistName", "")
+    )
 
     private fun fetchJson(urlStr: String): JSONObject? {
         return try {
@@ -189,14 +179,6 @@ class LrclibLyricsProvider {
         } catch (_: Exception) {
             JSONArray()
         }
-    }
-
-    private fun extractFirstTimestampSec(syncedLyrics: String): Double {
-        val line = syncedLyrics.lineSequence().firstOrNull { it.trim().isNotBlank() } ?: return 0.0
-        val match = Regex("\\[(\\d+):(\\d+\\.?\\d*)\\]").find(line) ?: return 0.0
-        val min = match.groupValues[1].toDoubleOrNull() ?: 0.0
-        val sec = match.groupValues[2].toDoubleOrNull() ?: 0.0
-        return (min * 60) + sec
     }
 
     private fun parseLyricsJson(json: JSONObject, title: String = "", artist: String = ""): Lyrics {

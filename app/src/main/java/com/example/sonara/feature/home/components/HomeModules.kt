@@ -25,6 +25,7 @@ import com.example.sonara.core.ui.components.ShimmerBox
 import com.example.sonara.core.ui.components.SonaraLoadingIndicator
 import com.example.sonara.core.ui.components.TrackRow
 import com.example.sonara.core.ui.theme.SonaraTheme
+import com.example.sonara.core.util.MediaTitleFormatter
 import com.example.sonara.domain.model.FeaturedArtist
 import com.example.sonara.domain.model.PlaylistDetail
 import com.example.sonara.domain.model.PlaylistSummary
@@ -222,6 +223,7 @@ fun LazyListScope.quickPicksModule(
     module: HomeModule<List<Track>>,
     onRefresh: () -> Unit,
     onPlayTrack: (Track) -> Unit,
+    onPlayTrackWithContext: (Track, List<Track>) -> Unit = { track, _ -> onPlayTrack(track) },
     onToggleLike: (Track, Boolean) -> Unit,
     isLiked: (String) -> Boolean
 ) {
@@ -241,7 +243,7 @@ fun LazyListScope.quickPicksModule(
                     module.value.take(6).forEach { track ->
                         QuickPickRow(
                             track = track,
-                            onPlay = { onPlayTrack(track) },
+                             onPlay = { onPlayTrackWithContext(track, module.value) },
                             onToggleLike = { liked -> onToggleLike(track, liked) },
                             isLiked = isLiked(track.id)
                         )
@@ -283,6 +285,7 @@ fun QuickPicksSkeleton() {
 fun LazyListScope.becauseYouListenedModule(
     module: HomeModule<BecauseYouListenedData>,
     onPlayTrack: (Track) -> Unit,
+    onPlayTrackWithContext: (Track, List<Track>) -> Unit = { track, _ -> onPlayTrack(track) },
     onToggleLike: (Track, Boolean) -> Unit,
     isLiked: (String) -> Boolean
 ) {
@@ -292,13 +295,15 @@ fun LazyListScope.becauseYouListenedModule(
         is HomeModule.Ready -> item(key = "bylt") {
             val dimensions = SonaraTheme.dimensions
             Column(verticalArrangement = Arrangement.spacedBy(dimensions.spaceSm)) {
-                HomeSectionHeader(title = "Because You Listen To ${module.value.seedTitle}")
+                HomeSectionHeader(
+                    title = "Because You Listen To ${MediaTitleFormatter.format(module.value.seedTitle)}"
+                )
                 Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
                     module.value.tracks.take(5).forEach { track ->
                         TrackRow(
                             track = track,
                             isLiked = isLiked(track.id),
-                            onPlay = { onPlayTrack(track) },
+                             onPlay = { onPlayTrackWithContext(track, module.value.tracks) },
                             onToggleLike = { liked -> onToggleLike(track, liked) }
                         )
                     }

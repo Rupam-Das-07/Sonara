@@ -1,6 +1,7 @@
 package com.example.sonara.data.repository
 
 import com.example.sonara.domain.model.AudioQuality
+import com.example.sonara.domain.model.ColorPalette
 import com.example.sonara.domain.model.PlaybackSessionSnapshot
 import com.example.sonara.domain.model.SearchMode
 import com.example.sonara.domain.model.ThemeMode
@@ -25,6 +26,7 @@ class SettingsRepositoryTest {
         override fun getUserPreferences(): Flow<UserPreferences> = _prefs
 
         override suspend fun setThemeMode(mode: ThemeMode) { _prefs.value = _prefs.value.copy(themeMode = mode) }
+        override suspend fun setSelectedPalette(palette: ColorPalette) { _prefs.value = _prefs.value.copy(selectedPalette = palette) }
         override suspend fun setShowRomanized(show: Boolean) { _prefs.value = _prefs.value.copy(showRomanized = show) }
         override suspend fun setRestorePlaybackSession(enabled: Boolean) { _prefs.value = _prefs.value.copy(restorePlaybackSession = enabled) }
         override suspend fun setDefaultSearchMode(mode: SearchMode) { _prefs.value = _prefs.value.copy(defaultSearchMode = mode) }
@@ -57,6 +59,7 @@ class SettingsRepositoryTest {
     fun defaultPreferencesHaveApprovedDefaults() = runTest {
         val prefs = repository.getUserPreferences().first()
         assertEquals(ThemeMode.SYSTEM, prefs.themeMode)
+        assertEquals(ColorPalette.SONARA_CLASSIC, prefs.selectedPalette)
         assertTrue(prefs.showRomanized)
         assertTrue(prefs.restorePlaybackSession)
         assertEquals(SearchMode.SONGS, prefs.defaultSearchMode)
@@ -64,6 +67,15 @@ class SettingsRepositoryTest {
         assertEquals(AudioQuality.AUTO, prefs.streamingQuality)
         assertEquals(AudioQuality.VERY_HIGH, prefs.downloadQuality)
         assertFalse(prefs.downloadOverWifiOnly)
+    }
+
+    @Test
+    fun setSelectedPaletteUpdatesPreference() = runTest {
+        repository.setSelectedPalette(ColorPalette.OCEAN_BLUE)
+        assertEquals(ColorPalette.OCEAN_BLUE, repository.getUserPreferences().first().selectedPalette)
+
+        repository.setSelectedPalette(ColorPalette.AMOLED_BLACK)
+        assertEquals(ColorPalette.AMOLED_BLACK, repository.getUserPreferences().first().selectedPalette)
     }
 
     @Test
@@ -89,6 +101,7 @@ class SettingsRepositoryTest {
         repository.setStreamingQuality(AudioQuality.VERY_HIGH)
         repository.setDownloadQuality(AudioQuality.HIGH)
         repository.setDownloadOverWifiOnly(true)
+        repository.setSelectedPalette(ColorPalette.ROSE)
 
         repository.resetSettings()
 
@@ -96,5 +109,6 @@ class SettingsRepositoryTest {
         assertEquals(AudioQuality.AUTO, prefs.streamingQuality)
         assertEquals(AudioQuality.VERY_HIGH, prefs.downloadQuality)
         assertFalse(prefs.downloadOverWifiOnly)
+        assertEquals(ColorPalette.SONARA_CLASSIC, prefs.selectedPalette)
     }
 }

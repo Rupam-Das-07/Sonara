@@ -269,6 +269,12 @@ const PLAYLIST_DEFINITIONS = {
     size: 25,
     updateIntervalDays: 2,
     artistStrategy: 'search',
+    candidateSource: 'chart',
+    chartConfig: {
+      country: 'IN',
+      language: 'Hindi',
+      chartId: 'PL4fGSI1pDJn5RgLW0Sb_zECecWdH_4zOX',
+    },
     artistName: null,
     candidateQueries: [
       'trending bollywood songs',
@@ -303,6 +309,15 @@ const PLAYLIST_DEFINITIONS = {
     updateIntervalDays: 2,
     artistStrategy: 'search',
     artistName: null,
+    // Hybrid candidate source. The native New Releases shelf feeds candidates ALONGSIDE
+    // the queries below — it does not replace them, and if it yields nothing the
+    // playlist is built from search alone exactly as before.
+    //
+    // This buys editorial newness (YouTube Music's own shelf, Single/EP containers
+    // only), NOT verified release dates: upstream exposes no release date on this
+    // path, so a Single or EP can still hold older recordings or reissues. The
+    // eraAfterYear bound and negativeKeywords below remain the real filters.
+    nativeFeed: 'new_releases',
     // F-01: Resilient query triad — 2 evergreen + 1 dynamic {year} token resolved at resolution time.
     // Do NOT freeze year at module load. {year} is replaced in resolveCandidatePool().
     candidateQueries: [

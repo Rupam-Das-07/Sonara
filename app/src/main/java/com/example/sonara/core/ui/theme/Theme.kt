@@ -5,21 +5,25 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.ui.platform.LocalContext
+import com.example.sonara.domain.model.ColorPalette
 
 /**
  * Authoritative Sonara Theme provider.
- * Enforces Petrol/Bone/Oxide brand identity and provides semantic design tokens.
+ * Enforces curated brand palettes, dynamic Material You, and semantic design tokens.
  */
 @Composable
 fun SonaraTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
+    palette: ColorPalette = ColorPalette.SONARA_CLASSIC,
     content: @Composable () -> Unit
 ) {
-    val colors = if (darkTheme) DarkSonaraColors else LightSonaraColors
+    val context = LocalContext.current
+    val colors = SonaraPalettePresets.colorsFor(palette, darkTheme, context)
     val typography = DefaultSonaraTypography
     val dimensions = DefaultSonaraDimensions
     val shapes = DefaultSonaraShapes
-    val materials = if (darkTheme) DarkSonaraMaterials else LightSonaraMaterials
+    val materials = SonaraPalettePresets.materialsFor(palette, colors)
 
     CompositionLocalProvider(
         LocalSonaraColors provides colors,

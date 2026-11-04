@@ -161,7 +161,7 @@ fun ClearSearchHistoryConfirmationDialog(
                     onDismiss()
                 }
             ) {
-                Text(stringResource(R.string.action_clear_all), color = Color(0xFFE57373), style = typography.buttonLabel)
+                Text(stringResource(R.string.action_clear_all), color = colors.error, style = typography.buttonLabel)
             }
         },
         dismissButton = {

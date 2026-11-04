@@ -1,9 +1,12 @@
 package com.example.sonara.data.remote.backend
 
 import android.util.Log
+import com.example.sonara.BuildConfig
 import com.example.sonara.core.error.SonaraException
 import com.example.sonara.data.remote.mapper.ArtworkUrlUpgrader
+import com.example.sonara.domain.discovery.FeaturedArtistImage
 import com.example.sonara.domain.model.ArtistCatalog
+import com.example.sonara.domain.model.ArtistCredit
 import com.example.sonara.domain.model.AudioQuality
 import com.example.sonara.domain.model.FeaturedArtist
 import com.example.sonara.domain.model.ImportMatchItem
@@ -15,6 +18,15 @@ import com.example.sonara.domain.model.PlaylistSummary
 import com.example.sonara.domain.model.SearchSuggestion
 import com.example.sonara.domain.model.StreamInfo
 import com.example.sonara.domain.model.Track
+import com.example.sonara.domain.model.video.EmbeddabilityStatus
+import com.example.sonara.domain.model.video.HighResAudioRepresentation
+import com.example.sonara.domain.model.video.HighResByteRange
+import com.example.sonara.domain.model.video.HighResVideoDiscovery
+import com.example.sonara.domain.model.video.HighResVideoRepresentation
+import com.example.sonara.domain.model.video.MadeForKidsStatus
+import com.example.sonara.domain.model.video.VideoStatus
+import com.example.sonara.domain.model.video.isValidYouTubeVideoId
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -22,8 +34,634 @@ import org.json.JSONObject
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.SocketTimeoutException
+import java.net.URI
 import java.net.URL
 import java.net.URLEncoder
+
+/**
+ * Applies the trusted-image contract at the editorial roster response boundary.
+ * Invalid or absent artwork intentionally becomes null so the Home tile keeps its monogram.
+ */
+internal fun sanitizeFeaturedArtistImageUrl(rawUrl: String?): String? =
+    FeaturedArtistImage.trustedHttpsUrl(rawUrl)
+
+
+/**
+ * Values supported by the video-status response's flat JSON object.
+ * Keeping the value type prevents a numeric or boolean videoId from being coerced into a string.
+ */
+private sealed interface SimpleJsonValue {
+    data class StringValue(val value: String) : SimpleJsonValue
+    data class BooleanValue(val value: Boolean) : SimpleJsonValue
+    data class NumberValue(val raw: String) : SimpleJsonValue
+    data object NullValue : SimpleJsonValue
+}
+
+private fun SimpleJsonValue?.asStringOrNull(): String? =
+    (this as? SimpleJsonValue.StringValue)?.value
+
+/**
+ * Strict, pure-Kotlin parser for the flat JSON object returned by video status.
+ * It rejects nested objects/arrays, duplicate keys, trailing commas, malformed literals/numbers,
+ * invalid escapes, and unsupported value syntax. It avoids Android SDK `org.json` stubs during
+ * host JVM unit tests.
+ */
+private fun parseSimpleJsonObject(json: String): Map<String, SimpleJsonValue> {
+    val trimmed = json.trim()
+    if (trimmed.length < 2 || trimmed.first() != '{' || trimmed.last() != '}') {
+        throw SonaraException.ParsingException("Malformed JSON: must be enclosed in braces")
+    }
+
+    val content = trimmed.substring(1, trimmed.length - 1)
+    val result = linkedMapOf<String, SimpleJsonValue>()
+    var i = 0
+
+    fun fail(message: String): Nothing = throw SonaraException.ParsingException(message)
+
+    fun skipWhitespace() {
+        while (i < content.length && content[i].isWhitespace()) i++
+    }
+
+    fun parseString(): String {
+        if (i >= content.length || content[i] != '"') fail("Expected string at position $i")
+        i++
+        val value = StringBuilder()
+        while (i < content.length) {
+            when (val character = content[i++]) {
+                '"' -> return value.toString()
+                '\\' -> {
+                    if (i >= content.length) fail("Unterminated escape sequence")
+                    when (val escape = content[i++]) {
+                        '"', '\\', '/' -> value.append(escape)
+                        'b' -> value.append('\b')
+                        'f' -> value.append('\u000c')
+                        'n' -> value.append('\n')
+                        'r' -> value.append('\r')
+                        't' -> value.append('\t')
+                        'u' -> {
+                            if (i + 4 > content.length) fail("Invalid unicode escape")
+                            val hex = content.substring(i, i + 4)
+                            if (!hex.all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' }) {
+                                fail("Invalid unicode escape")
+                            }
+                            value.append(hex.toInt(16).toChar())
+                            i += 4
+                        }
+                        else -> fail("Invalid escape sequence")
+                    }
+                }
+                else -> {
+                    if (character.code < 0x20) fail("Unescaped control character in string")
+                    value.append(character)
+                }
+            }
+        }
+        fail("Unterminated string")
+    }
+
+    fun isValueDelimiter(index: Int): Boolean =
+        index >= content.length || content[index].isWhitespace() || content[index] == ','
+
+    fun parseLiteral(literal: String, value: SimpleJsonValue): SimpleJsonValue {
+        if (!content.startsWith(literal, i)) fail("Invalid literal at position $i")
+        i += literal.length
+        if (!isValueDelimiter(i)) fail("Invalid literal boundary at position $i")
+        return value
+    }
+
+    fun parseNumber(): SimpleJsonValue.NumberValue {
+        val start = i
+        while (!isValueDelimiter(i)) {
+            if (content[i] == '{' || content[i] == '[' || content[i] == '}' || content[i] == ']') {
+                fail("Nested JSON values are not supported")
+            }
+            i++
+        }
+        val raw = content.substring(start, i)
+        val numberPattern = Regex("-?(0|[1-9]\\d*)(\\.\\d+)?([eE][+-]?\\d+)?")
+        if (!numberPattern.matches(raw)) fail("Invalid number at position $start")
+        return SimpleJsonValue.NumberValue(raw)
+    }
+
+    skipWhitespace()
+    if (i >= content.length) return result
+
+    while (true) {
+        skipWhitespace()
+        if (i >= content.length) fail("Trailing comma or missing member")
+        val key = parseString()
+        if (result.containsKey(key)) fail("Duplicate object key: $key")
+        skipWhitespace()
+        if (i >= content.length || content[i] != ':') fail("Expected ':' after key at position $i")
+        i++
+        skipWhitespace()
+        if (i >= content.length) fail("Expected value after ':'")
+
+        val value = when {
+            content[i] == '"' -> SimpleJsonValue.StringValue(parseString())
+            content[i] == '{' || content[i] == '[' -> fail("Nested JSON values are not supported")
+            content.startsWith("null", i) -> parseLiteral("null", SimpleJsonValue.NullValue)
+            content.startsWith("true", i) -> parseLiteral("true", SimpleJsonValue.BooleanValue(true))
+            content.startsWith("false", i) -> parseLiteral("false", SimpleJsonValue.BooleanValue(false))
+            else -> parseNumber()
+        }
+        result[key] = value
+
+        skipWhitespace()
+        if (i >= content.length) return result
+        if (content[i] != ',') fail("Expected ',' or end of object at position $i")
+        i++
+        skipWhitespace()
+        if (i >= content.length) fail("Trailing comma")
+    }
+}
+
+/**
+ * Parses the backend video-status response and verifies that it describes the
+ * video requested by the caller.
+ */
+internal fun parseVideoStatus(json: String, requestedVideoId: String): VideoStatus {
+    try {
+        val trimmed = json.trim()
+        if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) {
+            throw SonaraException.ParsingException("Malformed video status response: not a JSON object")
+        }
+
+        val fields = parseSimpleJsonObject(trimmed)
+        if (!fields.containsKey("videoId")) {
+            throw SonaraException.ParsingException("Backend returned an invalid videoId in video status")
+        }
+
+        val returnedVideoId = fields["videoId"].asStringOrNull()
+            ?: throw SonaraException.ParsingException("Backend returned a non-string videoId")
+        if (returnedVideoId.isBlank() || returnedVideoId != requestedVideoId) {
+            throw SonaraException.ParsingException("Backend returned an invalid videoId in video status")
+        }
+
+        return VideoStatus(
+            videoId = returnedVideoId,
+            madeForKidsStatus = MadeForKidsStatus.fromWireValue(fields["madeForKidsStatus"].asStringOrNull()),
+            embeddabilityStatus = EmbeddabilityStatus.fromWireValue(fields["embeddabilityStatus"].asStringOrNull())
+        )
+    } catch (e: SonaraException) {
+        throw e
+    } catch (e: Exception) {
+        throw SonaraException.ParsingException("Malformed video status response", e)
+    }
+}
+
+/**
+ * Lightweight, pure-Kotlin recursive-descent JSON parser.
+ * Avoids Android SDK `org.json` stubs during host JVM unit tests.
+ */
+internal sealed interface JsonNode {
+    data class JsonObject(val fields: Map<String, JsonNode>) : JsonNode
+    data class JsonArray(val items: List<JsonNode>) : JsonNode
+    data class JsonString(val value: String) : JsonNode
+    data class JsonNumber(val raw: String) : JsonNode {
+        fun toInt(): Int = raw.toDouble().toInt()
+        fun toLong(): Long = raw.toDouble().toLong()
+        fun toDouble(): Double = raw.toDouble()
+    }
+    data class JsonBoolean(val value: Boolean) : JsonNode
+    data object JsonNull : JsonNode
+}
+
+internal class SimpleJsonTreeParser(private val src: String) {
+    private var pos = 0
+
+    private fun skipWhitespace() {
+        while (pos < src.length && src[pos].isWhitespace()) pos++
+    }
+
+    private fun fail(msg: String): Nothing =
+        throw SonaraException.ParsingException("JSON parse error at pos $pos: $msg")
+
+    fun parse(): JsonNode {
+        skipWhitespace()
+        val res = parseValue()
+        skipWhitespace()
+        if (pos < src.length) fail("Unexpected character '${src[pos]}' after JSON payload")
+        return res
+    }
+
+    private fun parseValue(): JsonNode {
+        skipWhitespace()
+        if (pos >= src.length) fail("Unexpected end of input")
+        return when (val c = src[pos]) {
+            '{' -> parseObject()
+            '[' -> parseArray()
+            '"' -> parseString()
+            't', 'f' -> parseBoolean()
+            'n' -> parseNull()
+            in '0'..'9', '-' -> parseNumber()
+            else -> fail("Unexpected token starting with '$c'")
+        }
+    }
+
+    private fun parseObject(): JsonNode.JsonObject {
+        pos++ // skip '{'
+        val map = linkedMapOf<String, JsonNode>()
+        skipWhitespace()
+        if (pos < src.length && src[pos] == '}') {
+            pos++
+            return JsonNode.JsonObject(map)
+        }
+        while (pos < src.length) {
+            skipWhitespace()
+            if (pos >= src.length || src[pos] != '"') fail("Expected string key in object")
+            val key = (parseString() as JsonNode.JsonString).value
+            skipWhitespace()
+            if (pos >= src.length || src[pos] != ':') fail("Expected ':' after key '$key'")
+            pos++ // skip ':'
+            val value = parseValue()
+            map[key] = value
+            skipWhitespace()
+            if (pos >= src.length) fail("Unclosed object")
+            if (src[pos] == '}') {
+                pos++
+                return JsonNode.JsonObject(map)
+            } else if (src[pos] == ',') {
+                pos++
+            } else {
+                fail("Expected ',' or '}' in object, got '${src[pos]}'")
+            }
+        }
+        fail("Unterminated object")
+    }
+
+    private fun parseArray(): JsonNode.JsonArray {
+        pos++ // skip '['
+        val list = mutableListOf<JsonNode>()
+        skipWhitespace()
+        if (pos < src.length && src[pos] == ']') {
+            pos++
+            return JsonNode.JsonArray(list)
+        }
+        while (pos < src.length) {
+            list.add(parseValue())
+            skipWhitespace()
+            if (pos >= src.length) fail("Unclosed array")
+            if (src[pos] == ']') {
+                pos++
+                return JsonNode.JsonArray(list)
+            } else if (src[pos] == ',') {
+                pos++
+            } else {
+                fail("Expected ',' or ']' in array, got '${src[pos]}'")
+            }
+        }
+        fail("Unterminated array")
+    }
+
+    private fun parseString(): JsonNode.JsonString {
+        pos++ // skip '"'
+        val sb = StringBuilder()
+        while (pos < src.length) {
+            when (val c = src[pos++]) {
+                '"' -> return JsonNode.JsonString(sb.toString())
+                '\\' -> {
+                    if (pos >= src.length) fail("Unterminated string escape")
+                    when (val esc = src[pos++]) {
+                        '"', '\\', '/' -> sb.append(esc)
+                        'b' -> sb.append('\b')
+                        'f' -> sb.append('\u000c')
+                        'n' -> sb.append('\n')
+                        'r' -> sb.append('\r')
+                        't' -> sb.append('\t')
+                        'u' -> {
+                            if (pos + 4 > src.length) fail("Invalid unicode escape")
+                            val hex = src.substring(pos, pos + 4)
+                            sb.append(hex.toInt(16).toChar())
+                            pos += 4
+                        }
+                        else -> fail("Unknown escape '\\$esc'")
+                    }
+                }
+                else -> sb.append(c)
+            }
+        }
+        fail("Unterminated string")
+    }
+
+    private fun parseBoolean(): JsonNode.JsonBoolean {
+        return if (src.startsWith("true", pos)) {
+            pos += 4
+            JsonNode.JsonBoolean(true)
+        } else if (src.startsWith("false", pos)) {
+            pos += 5
+            JsonNode.JsonBoolean(false)
+        } else {
+            fail("Expected boolean literal")
+        }
+    }
+
+    private fun parseNull(): JsonNode.JsonNull {
+        if (src.startsWith("null", pos)) {
+            pos += 4
+            return JsonNode.JsonNull
+        }
+        fail("Expected null literal")
+    }
+
+    private fun parseNumber(): JsonNode.JsonNumber {
+        val start = pos
+        if (src[pos] == '-') pos++
+        while (pos < src.length && (src[pos] in '0'..'9' || src[pos] == '.' || src[pos] == 'e' || src[pos] == 'E' || src[pos] == '+' || src[pos] == '-')) {
+            pos++
+        }
+        val raw = src.substring(start, pos)
+        return JsonNode.JsonNumber(raw)
+    }
+}
+
+/**
+ * Parses and strictly validates high-resolution discovery response from the backend.
+ * Rejects mismatched IDs, incomplete representations, or malformed contracts.
+ */
+internal fun parseHighResDiscovery(
+    json: String,
+    requestedVideoId: String,
+    baseUrl: String
+): HighResVideoDiscovery {
+    val trimmed = json.trim()
+    val root = try {
+        SimpleJsonTreeParser(trimmed).parse() as? JsonNode.JsonObject
+            ?: throw SonaraException.ParsingException("High-res response must be a JSON object")
+    } catch (e: SonaraException) {
+        throw e
+    } catch (e: Exception) {
+        throw SonaraException.ParsingException("Malformed high-res discovery JSON: ${e.message}", e)
+    }
+
+    val fields = root.fields
+    val returnedVideoId = (fields["videoId"] as? JsonNode.JsonString)?.value
+        ?: throw SonaraException.ParsingException("Missing videoId in high-res discovery")
+
+    if (returnedVideoId.isBlank() || returnedVideoId != requestedVideoId) {
+        throw SonaraException.ParsingException(
+            "Backend returned mismatched videoId '$returnedVideoId' (requested '$requestedVideoId')"
+        )
+    }
+
+    val hasHighRes = (fields["hasHighRes"] as? JsonNode.JsonBoolean)?.value
+        ?: throw SonaraException.ParsingException("Missing hasHighRes boolean flag")
+
+    val extractedAt = (fields["extractedAt"] as? JsonNode.JsonNumber)?.toLong()
+        ?: (System.currentTimeMillis() / 1000L)
+    val expiresAt = (fields["expiresAt"] as? JsonNode.JsonNumber)?.toLong()
+        ?: (extractedAt + 7200L)
+
+    // Negative discovery
+    if (!hasHighRes) {
+        return HighResVideoDiscovery.Unavailable(
+            videoId = returnedVideoId,
+            extractedAt = extractedAt,
+            expiresAt = expiresAt
+        )
+    }
+
+    // Positive discovery
+    val sessionId = (fields["sessionId"] as? JsonNode.JsonString)?.value
+        ?: throw SonaraException.ParsingException("Positive high-res response missing sessionId")
+    if (sessionId.isBlank()) {
+        throw SonaraException.ParsingException("Positive high-res response has empty sessionId")
+    }
+
+    val videoObj = (fields["video"] as? JsonNode.JsonObject)?.fields
+        ?: throw SonaraException.ParsingException("Positive high-res response missing video object")
+    val audioObj = (fields["audio"] as? JsonNode.JsonObject)?.fields
+        ?: throw SonaraException.ParsingException("Positive high-res response missing audio object")
+
+    fun parseByteRange(rangeValue: JsonNode?, label: String): HighResByteRange {
+        val rObj = (rangeValue as? JsonNode.JsonObject)?.fields
+            ?: throw SonaraException.ParsingException("Missing or invalid $label byte range")
+        val start = (rObj["start"] as? JsonNode.JsonNumber)?.toLong()
+            ?: throw SonaraException.ParsingException("$label missing start offset")
+        val end = (rObj["end"] as? JsonNode.JsonNumber)?.toLong()
+            ?: throw SonaraException.ParsingException("$label missing end offset")
+        return HighResByteRange(start, end)
+    }
+
+    // Parse video representation
+    val vWidth = (videoObj["width"] as? JsonNode.JsonNumber)?.toInt()
+        ?: throw SonaraException.ParsingException("Video representation missing width")
+    val vHeight = (videoObj["height"] as? JsonNode.JsonNumber)?.toInt()
+        ?: throw SonaraException.ParsingException("Video representation missing height")
+    val vFps = (videoObj["fps"] as? JsonNode.JsonNumber)?.toInt()
+        ?: throw SonaraException.ParsingException("Video representation missing fps")
+    val vItag = (videoObj["itag"] as? JsonNode.JsonNumber)?.toInt() ?: 571
+    val vCodec = (videoObj["codec"] as? JsonNode.JsonString)?.value
+        ?: throw SonaraException.ParsingException("Video representation missing codec")
+    val vMime = (videoObj["mimeType"] as? JsonNode.JsonString)?.value
+        ?: throw SonaraException.ParsingException("Video representation missing mimeType")
+    val vBitrate = (videoObj["bitrate"] as? JsonNode.JsonNumber)?.toLong()
+        ?: throw SonaraException.ParsingException("Video representation missing bitrate")
+    val vDuration = (videoObj["duration"] as? JsonNode.JsonNumber)?.toDouble()
+        ?: throw SonaraException.ParsingException("Video representation missing duration")
+    val vInit = parseByteRange(videoObj["initRange"], "video.initRange")
+    val vIndex = parseByteRange(videoObj["indexRange"], "video.indexRange")
+    val vStreamUrl = validateAndResolveProxyUrl(
+        rawUrl = (videoObj["streamUrl"] as? JsonNode.JsonString)?.value,
+        baseUrl = baseUrl,
+        expectedTrack = "video",
+        expectedSessionId = sessionId
+    )
+
+    val videoRep = try {
+        HighResVideoRepresentation(
+            itag = vItag,
+            width = vWidth,
+            height = vHeight,
+            fps = vFps,
+            codec = vCodec,
+            mimeType = vMime,
+            bitrate = vBitrate,
+            duration = vDuration,
+            initRange = vInit,
+            indexRange = vIndex,
+            streamProxyUrl = vStreamUrl
+        )
+    } catch (e: IllegalArgumentException) {
+        throw SonaraException.ParsingException("Invalid video representation: ${e.message}", e)
+    }
+
+    // Parse audio representation
+    val aItag = (audioObj["itag"] as? JsonNode.JsonNumber)?.toInt() ?: 140
+    val aCodec = (audioObj["codec"] as? JsonNode.JsonString)?.value
+        ?: throw SonaraException.ParsingException("Audio representation missing codec")
+    val aMime = (audioObj["mimeType"] as? JsonNode.JsonString)?.value
+        ?: throw SonaraException.ParsingException("Audio representation missing mimeType")
+    val aBitrate = (audioObj["bitrate"] as? JsonNode.JsonNumber)?.toLong()
+        ?: throw SonaraException.ParsingException("Audio representation missing bitrate")
+    val aDuration = (audioObj["duration"] as? JsonNode.JsonNumber)?.toDouble()
+        ?: throw SonaraException.ParsingException("Audio representation missing duration")
+    val aInit = parseByteRange(audioObj["initRange"], "audio.initRange")
+    val aIndex = parseByteRange(audioObj["indexRange"], "audio.indexRange")
+    val aStreamUrl = validateAndResolveProxyUrl(
+        rawUrl = (audioObj["streamUrl"] as? JsonNode.JsonString)?.value,
+        baseUrl = baseUrl,
+        expectedTrack = "audio",
+        expectedSessionId = sessionId
+    )
+
+    val audioRep = try {
+        HighResAudioRepresentation(
+            itag = aItag,
+            codec = aCodec,
+            mimeType = aMime,
+            bitrate = aBitrate,
+            duration = aDuration,
+            initRange = aInit,
+            indexRange = aIndex,
+            streamProxyUrl = aStreamUrl
+        )
+    } catch (e: IllegalArgumentException) {
+        throw SonaraException.ParsingException("Invalid audio representation: ${e.message}", e)
+    }
+
+    return try {
+        HighResVideoDiscovery.Available(
+            videoId = returnedVideoId,
+            sessionId = sessionId,
+            extractedAt = extractedAt,
+            expiresAt = expiresAt,
+            video = videoRep,
+            audio = audioRep
+        )
+    } catch (e: IllegalArgumentException) {
+        throw SonaraException.ParsingException("Invalid high-res discovery payload: ${e.message}", e)
+    }
+}
+
+/**
+ * Strictly validates and resolves proxy URLs from high-res discovery responses.
+ *
+ * Requirements:
+ * - Resolves relative proxy paths (/api/v1/stream/video?...) against baseUrl.
+ * - Rejects any raw googlevideo.com or third-party domains.
+ * - For absolute URLs, host and port must strictly match the configured backend baseUrl.
+ * - Requires HTTPS in production (non-debug). Allows HTTP only for localhost, emulator loopback (10.0.2.2),
+ *   or the configured dev backend origin when BuildConfig.DEBUG is true.
+ * - Restricts route path strictly to "/api/v1/stream/video".
+ * - Validates presence and non-blankness of required query parameters: sessionId and track.
+ * - Validates track parameter matches expectedTrack ("video" or "audio").
+ * - If expectedSessionId is provided, validates sessionId matches.
+ * - Never includes the full URL or bearer sessionId in thrown exception messages or logs.
+ */
+internal fun validateAndResolveProxyUrl(
+    rawUrl: String?,
+    baseUrl: String,
+    expectedTrack: String,
+    expectedSessionId: String? = null,
+    isDebug: Boolean = BuildConfig.DEBUG
+): String {
+    val trimmed = rawUrl?.trim()
+        ?: throw SonaraException.ParsingException("Missing proxy stream URL")
+    if (trimmed.isEmpty()) {
+        throw SonaraException.ParsingException("Blank proxy stream URL")
+    }
+
+    val resolved = if (trimmed.startsWith("/") && !trimmed.startsWith("//")) {
+        "${baseUrl.trimEnd('/')}$trimmed"
+    } else {
+        trimmed
+    }
+
+    val resolvedUri = try {
+        URI(resolved)
+    } catch (e: Exception) {
+        throw SonaraException.ParsingException("Malformed proxy URI")
+    }
+
+    val baseUri = try {
+        URI(baseUrl)
+    } catch (e: Exception) {
+        throw SonaraException.ParsingException("Malformed backend baseUrl")
+    }
+
+    val host = resolvedUri.host?.lowercase()
+        ?: throw SonaraException.ParsingException("Proxy URL missing host")
+
+    // Reject raw googlevideo or upstream streaming domains
+    if (host.contains("googlevideo.com") || host.contains("youtube.com")) {
+        throw SonaraException.ParsingException("Direct upstream streaming URLs are forbidden for high-res proxy")
+    }
+
+    val baseHost = baseUri.host?.lowercase()
+        ?: throw SonaraException.ParsingException("Backend baseUrl missing host")
+
+    // Host comparison: must match configured backend host
+    if (host != baseHost) {
+        throw SonaraException.ParsingException("Proxy URL host does not match backend host")
+    }
+
+    // Port check: normalized comparison
+    val defaultResolvedPort = if (resolvedUri.scheme?.equals("https", ignoreCase = true) == true) 443 else 80
+    val defaultBasePort = if (baseUri.scheme?.equals("https", ignoreCase = true) == true) 443 else 80
+    val resolvedPort = if (resolvedUri.port != -1) resolvedUri.port else defaultResolvedPort
+    val basePort = if (baseUri.port != -1) baseUri.port else defaultBasePort
+    if (resolvedPort != basePort) {
+        throw SonaraException.ParsingException("Proxy URL port does not match backend port")
+    }
+
+    // Scheme check
+    val scheme = resolvedUri.scheme?.lowercase()
+    if (scheme != "http" && scheme != "https") {
+        throw SonaraException.ParsingException("Invalid proxy URL scheme: $scheme")
+    }
+
+    if (!isDebug) {
+        if (scheme != "https") {
+            throw SonaraException.ParsingException("HTTPS is required for proxy URL in release builds")
+        }
+    } else {
+        if (scheme == "http") {
+            val isLoopbackOrLocal = host == "127.0.0.1" || host == "localhost" || host == "10.0.2.2"
+            val isConfiguredDevHost = host == baseHost
+            if (!isLoopbackOrLocal && !isConfiguredDevHost) {
+                throw SonaraException.ParsingException("Insecure HTTP proxy URL rejected for non-local host")
+            }
+        }
+    }
+
+    // Path check
+    if (resolvedUri.path != "/api/v1/stream/video") {
+        throw SonaraException.ParsingException("Invalid proxy URL path: ${resolvedUri.path}, expected /api/v1/stream/video")
+    }
+
+    // Query parameters check
+    val query = resolvedUri.rawQuery
+        ?: throw SonaraException.ParsingException("Missing query parameters in proxy URL")
+
+    var foundSessionId: String? = null
+    var foundTrack: String? = null
+
+    for (part in query.split("&")) {
+        if (part.isEmpty()) continue
+        val eq = part.indexOf('=')
+        if (eq > 0) {
+            val key = part.substring(0, eq)
+            val value = part.substring(eq + 1)
+            when (key) {
+                "sessionId" -> foundSessionId = value
+                "track" -> foundTrack = value
+            }
+        }
+    }
+
+    if (foundSessionId.isNullOrBlank()) {
+        throw SonaraException.ParsingException("Missing sessionId parameter in proxy URL")
+    }
+    if (expectedSessionId != null && foundSessionId != expectedSessionId) {
+        throw SonaraException.ParsingException("Proxy URL sessionId does not match discovery session")
+    }
+    if (foundTrack != expectedTrack) {
+        throw SonaraException.ParsingException("Proxy URL track '$foundTrack' does not match expected '$expectedTrack'")
+    }
+
+    return resolved
+}
 
 /**
  * HTTP client for the independent Sonara backend (sonara-backend on port 3002).
@@ -242,20 +880,22 @@ open class SonaraBackendClient(
             val array = JSONObject(json).optJSONArray("featured") ?: JSONArray()
             val artists = mutableListOf<FeaturedArtist>()
             for (i in 0 until array.length()) {
-                val item = array.getJSONObject(i)
-                val id = item.optString("id").takeIf { it.isNotBlank() } ?: continue
-                val name = item.optString("name").takeIf { it.isNotBlank() } ?: continue
+                val item = array.optJSONObject(i) ?: continue
+                val id = item.optionalString("id") ?: continue
+                val name = item.optionalString("name") ?: continue
                 artists.add(
                     FeaturedArtist(
                         id = id,
                         name = name,
-                        genre = item.optString("genre"),
-                        imageUrl = item.optString("imageUrl").takeIf { it.isNotBlank() },
-                        browseId = item.optString("browseId").takeIf { it.isNotBlank() }
+                        genre = item.optionalString("genre").orEmpty(),
+                        imageUrl = sanitizeFeaturedArtistImageUrl(item.optionalString("imageUrl")),
+                        browseId = item.optionalString("browseId")
                     )
                 )
             }
             Result.success(artists)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: SonaraException) {
             Log.w(TAG, "getFeaturedArtists failed: ${e.message}")
             Result.failure(e)
@@ -309,6 +949,46 @@ open class SonaraBackendClient(
             search(queryName).map { ArtistCatalog(tracks = it, playlists = emptyList()) }
         }
     }
+
+    /**
+     * Resolves a portrait for a locally derived artist.
+     * GET /api/v1/artists/image?name={name} -> { imageUrl|null }
+     */
+    open suspend fun getArtistImage(artistName: String): Result<String?> = withContext(Dispatchers.IO) {
+        if (artistName.isBlank()) return@withContext Result.success(null)
+        val encodedName = URLEncoder.encode(artistName, "UTF-8")
+        val url = "$baseUrl/api/v1/artists/image?name=$encodedName"
+        if (BuildConfig.VERIFY_PORTRAITS) {
+            Log.i(TAG, "ARTIST_IMAGE_REQUEST name=$artistName path=/api/v1/artists/image")
+        }
+        try {
+            val root = JSONObject(get(url, timeoutMs = SonaraBackendConfig.DISCOVERY_TIMEOUT_MS))
+            val imageUrl = FeaturedArtistImage.trustedHttpsUrl(root.optionalString("imageUrl"))
+            if (BuildConfig.VERIFY_PORTRAITS) {
+                Log.i(TAG, "ARTIST_IMAGE_RESPONSE name=$artistName trusted=${imageUrl != null}")
+            }
+            Result.success(imageUrl)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: SonaraException) {
+            if (BuildConfig.VERIFY_PORTRAITS) {
+                Log.e(TAG, "ARTIST_IMAGE_FAILURE name=$artistName message=${e.message}")
+            }
+            Log.w(TAG, "getArtistImage failed for $artistName: ${e.message}")
+            Result.failure(e)
+        } catch (e: Exception) {
+            if (BuildConfig.VERIFY_PORTRAITS) {
+                Log.e(TAG, "ARTIST_IMAGE_FAILURE name=$artistName message=${e.message}")
+            }
+            Log.e(TAG, "getArtistImage unexpected error for $artistName: ${e.message}")
+            Result.failure(SonaraException.NetworkException("Unexpected error fetching artist image", e))
+        }
+    }
+
+    /** JSONObject.optString returns the literal string "null" for JSON null. */
+    private fun JSONObject.optionalString(key: String): String? =
+        if (!has(key) || isNull(key)) null
+        else optString(key).trim().takeIf { it.isNotEmpty() && !it.equals("null", ignoreCase = true) }
 
     /**
      * Curated playlist catalog (tiles only; tracks fetched on demand).
@@ -426,6 +1106,31 @@ open class SonaraBackendClient(
         } catch (e: Exception) {
             Log.e(TAG, "getRelatedTracks unexpected error: ${e.message}")
             Result.failure(SonaraException.NetworkException("Unexpected error fetching recommendations", e))
+        }
+    }
+
+    /**
+     * Seed-based radio continuation.
+     * GET /api/v1/recommendations/radio/{videoId} -> { success, tracks: [ TrackDTO ], ... }
+     */
+    open suspend fun getRadioTracks(seedVideoId: String): Result<List<Track>> = withContext(Dispatchers.IO) {
+        if (seedVideoId.isBlank()) {
+            return@withContext Result.failure(
+                SonaraException.NotFoundException("Cannot fetch radio recommendations for blank videoId")
+            )
+        }
+        val encodedId = URLEncoder.encode(seedVideoId, "UTF-8")
+        val url = "$baseUrl/api/v1/recommendations/radio/$encodedId"
+        try {
+            val json = get(url, timeoutMs = SonaraBackendConfig.DISCOVERY_TIMEOUT_MS)
+            val array = JSONObject(json).optJSONArray("tracks") ?: JSONArray()
+            Result.success(parseTrackArray(array))
+        } catch (e: SonaraException) {
+            Log.w(TAG, "getRadioTracks failed for $seedVideoId: ${e.message}")
+            Result.failure(e)
+        } catch (e: Exception) {
+            Log.e(TAG, "getRadioTracks unexpected error: ${e.message}")
+            Result.failure(SonaraException.NetworkException("Unexpected error fetching radio recommendations", e))
         }
     }
 
@@ -573,9 +1278,10 @@ open class SonaraBackendClient(
                 }
                 code == 400 -> throw SonaraException.ParsingException("Bad request to backend (400)")
                 code == 404 -> throw SonaraException.NotFoundException("Resource not found on backend (404)")
+                code == 410 -> throw SonaraException.NotFoundException("Resource expired on backend (410)")
                 code == 429 -> throw SonaraException.ProviderUnavailableException("Backend rate limit hit (429), please wait")
                 code == 422 -> throw SonaraException.ProviderUnavailableException("Track unavailable or no audio stream (422)")
-                code in 500..503 -> throw SonaraException.NetworkException("Backend server error ($code)")
+                code in 500..504 -> throw SonaraException.NetworkException("Backend server error ($code)")
                 else -> throw SonaraException.NetworkException("Unexpected HTTP status: $code")
             }
         } catch (e: SocketTimeoutException) {
@@ -710,6 +1416,70 @@ open class SonaraBackendClient(
         }
     }
 
+    /**
+     * Reads the backend's policy metadata for one YouTube video.
+     * GET /api/v1/videos/{videoId}/status ->
+     * { videoId, madeForKidsStatus, embeddabilityStatus }
+     *
+     * The returned videoId must match the requested id exactly. A malformed or
+     * mismatched response is a parsing failure rather than usable metadata.
+     */
+    open suspend fun getVideoStatus(videoId: String): Result<VideoStatus> = withContext(Dispatchers.IO) {
+        val cleanVideoId = videoId.removePrefix("yt-").trim()
+        if (!isValidYouTubeVideoId(cleanVideoId)) {
+            return@withContext Result.failure(
+                SonaraException.NotFoundException("Cannot fetch video status for invalid videoId")
+            )
+        }
+
+        val encodedVideoId = URLEncoder.encode(cleanVideoId, "UTF-8")
+        val url = "$baseUrl/api/v1/videos/$encodedVideoId/status"
+        try {
+            Result.success(parseVideoStatus(get(url, timeoutMs = SonaraBackendConfig.READ_TIMEOUT_MS), cleanVideoId))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: SonaraException) {
+            Log.w(TAG, "getVideoStatus failed for $cleanVideoId: ${e.message}")
+            Result.failure(e)
+        } catch (e: Exception) {
+            Log.e(TAG, "getVideoStatus unexpected error: ${e.message}")
+            Result.failure(SonaraException.NetworkException("Unexpected error fetching video status", e))
+        }
+    }
+
+    /**
+     * Queries backend high-resolution 8K discovery endpoint:
+     * GET /api/v1/videos/{videoId}/highres
+     *
+     * Returns genuine 4320p stream representation and session metadata if available,
+     * or [HighResVideoDiscovery.Unavailable] if the video does not expose genuine 8K.
+     *
+     * Logs diagnostic categories without exposing bearer session IDs or proxy URLs.
+     */
+    open suspend fun getVideoHighRes(videoId: String): Result<HighResVideoDiscovery> = withContext(Dispatchers.IO) {
+        val cleanVideoId = videoId.removePrefix("yt-").trim()
+        if (!isValidYouTubeVideoId(cleanVideoId)) {
+            return@withContext Result.failure(
+                SonaraException.NotFoundException("Cannot fetch high-resolution video for invalid videoId")
+            )
+        }
+
+        val encodedVideoId = URLEncoder.encode(cleanVideoId, "UTF-8")
+        val url = "$baseUrl/api/v1/videos/$encodedVideoId/highres"
+        try {
+            val responseBody = get(url, timeoutMs = SonaraBackendConfig.READ_TIMEOUT_MS)
+            Result.success(parseHighResDiscovery(responseBody, cleanVideoId, baseUrl))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: SonaraException) {
+            Log.w(TAG, "getVideoHighRes failed for $cleanVideoId: ${e.message}")
+            Result.failure(e)
+        } catch (e: Exception) {
+            Log.e(TAG, "getVideoHighRes unexpected error for $cleanVideoId: ${e.message}")
+            Result.failure(SonaraException.NetworkException("Unexpected error fetching high-resolution video", e))
+        }
+    }
+
     // -------------------------------------------------------------------------
     // JSON → Domain mapping
     // -------------------------------------------------------------------------
@@ -735,8 +1505,30 @@ open class SonaraBackendClient(
             artist = json.optString("artist"),
             album = json.optString("album"),
             durationSec = json.optInt("duration"),
-            rawArtworkUrl = rawArtworkUrl
+            rawArtworkUrl = rawArtworkUrl,
+            artists = parseArtistCredits(json)
         )
+    }
+
+    /**
+     * Reads TrackDTO.artists — the structured per-artist credits — used for artist
+     * IDENTITY decisions (Featured Artists affinity attribution).
+     *
+     * Absent, non-array and malformed payloads all yield an empty list, which callers
+     * must read as "no verified identity" rather than falling back to parsing the flat
+     * `artist` display string. Entries without a usable name are dropped; a missing
+     * `id` becomes "" (a real credit that simply has no authoritative identifier).
+     */
+    private fun parseArtistCredits(json: JSONObject): List<ArtistCredit> {
+        val array = json.optJSONArray("artists") ?: return emptyList()
+        val credits = mutableListOf<ArtistCredit>()
+        for (i in 0 until array.length()) {
+            val entry = array.optJSONObject(i) ?: continue
+            val name = entry.optString("name").trim()
+            if (name.isEmpty()) continue
+            credits.add(ArtistCredit(name = name, id = entry.optString("id").trim()))
+        }
+        return credits
     }
 
     /**
@@ -783,7 +1575,10 @@ open class SonaraBackendClient(
         }
         val album = json.optString("album").ifBlank { "YouTube" }
         val durationSec = json.optInt("duration", 0)
-        val artworkUrl = resolveArtworkUrl(json) ?: "https://i.ytimg.com/vi/$videoId/maxresdefault.jpg"
+        // No artwork is better than invented artwork: a URL built from the video id is an
+        // unverified guess at an asset that may not exist (`maxresdefault.jpg` is absent for
+        // many videos). Leaving this null lets the surface show its existing glyph fallback.
+        val artworkUrl = resolveArtworkUrl(json)
 
         return TrackMapper.map(
             videoId = videoId,

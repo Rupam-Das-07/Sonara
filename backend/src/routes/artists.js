@@ -2,7 +2,10 @@
 
 const express = require('express');
 const { generateArtistCatalog } = require('../discovery/artistCatalogService');
-const { getFeaturedArtists } = require('../discovery/featuredArtistsService');
+const {
+  getFeaturedArtists,
+  resolveArtistImage,
+} = require('../discovery/featuredArtistsService');
 const { getAdjacency } = require('../discovery/artistAdjacencyMap');
 const { getDefinitionsForArtist } = require('../discovery/PlaylistDefinitions');
 const asyncHandler = require('../middleware/asyncHandler');
@@ -24,6 +27,23 @@ const router = express.Router();
 router.get('/featured', asyncHandler(async (req, res) => {
   const featured = await getFeaturedArtists();
   res.json({ featured });
+}));
+
+/**
+ * GET /image?name=... — best-effort portrait for a locally derived artist.
+ *
+ * Local history intentionally stays on-device; this endpoint receives only the
+ * display name and returns null when the trusted upstream cannot resolve an
+ * image. The Android client uses it only for personal candidates that have no
+ * editorial metadata, so an upstream miss keeps the existing monogram fallback.
+ */
+router.get('/image', asyncHandler(async (req, res) => {
+  const name = typeof req.query.name === 'string' ? req.query.name.trim() : '';
+  if (!name) {
+    return res.status(400).json({ error: 'name is required' });
+  }
+  const imageUrl = await resolveArtistImage(name);
+  return res.json({ imageUrl });
 }));
 
 router.get('/:browseId', asyncHandler(async (req, res, next) => {

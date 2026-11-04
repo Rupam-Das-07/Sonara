@@ -27,6 +27,7 @@ import types
 import unittest
 
 # Make backend/python importable regardless of the working directory.
+_ORIGINAL_SYS_PATH = sys.path[:]
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 
@@ -183,13 +184,60 @@ def _install_fakes():
     sys.modules["requests"] = types.ModuleType("requests")
 
 
-_install_fakes()
+_MISSING = object()
+_ISOLATED_MODULE_NAMES = (
+    "yt_dlp",
+    "yt_dlp.utils",
+    "gevent",
+    "gevent.event",
+    "gevent.lock",
+    "gevent.monkey",
+    "flask",
+    "flask_cors",
+    "requests",
+    "youtube_service",
+    "youtube_audio_api",
+)
+_ORIGINAL_MODULES = {
+    name: sys.modules.get(name, _MISSING)
+    for name in _ISOLATED_MODULE_NAMES
+}
+_FAKE_MODULES = {}
 
-# Import targets AFTER fakes are in place.
-import youtube_service as yserv          # noqa: E402
-import youtube_audio_api as api          # noqa: E402
 
-DOWNLOAD_ERROR = sys.modules["yt_dlp"].utils.DownloadError
+def _restore_import_state():
+    """Restore all import state changed while loading the fake-backed targets."""
+    sys.path[:] = _ORIGINAL_SYS_PATH
+    for name, module in _ORIGINAL_MODULES.items():
+        if module is _MISSING:
+            sys.modules.pop(name, None)
+        else:
+            sys.modules[name] = module
+
+
+try:
+    _install_fakes()
+    _FAKE_MODULES = {
+        name: sys.modules.get(name, _MISSING)
+        for name in _ISOLATED_MODULE_NAMES
+    }
+
+    # Import targets AFTER fakes are in place. The suite keeps these references locally,
+    # while later test modules receive the original dependency/module state.
+    import youtube_service as yserv          # noqa: E402
+    import youtube_audio_api as api          # noqa: E402
+
+    DOWNLOAD_ERROR = sys.modules["yt_dlp"].utils.DownloadError
+finally:
+    _restore_import_state()
+
+
+class TestImportIsolation(unittest.TestCase):
+    """The fake runtime must not leak into later unittest modules."""
+
+    def test_fake_imports_are_restored_after_module_load(self):
+        for name, module in _FAKE_MODULES.items():
+            self.assertIsNot(sys.modules.get(name), module, f"fake module leaked: {name}")
 
 
 def _reset_pool():
@@ -309,7 +357,7 @@ class TestYoutubeDLPool(unittest.TestCase):
         result WITHOUT triggering a second extraction."""
         url = "https://www.youtube.com/watch?v=vidflight00"
         shared = {"title": "shared", "thumbnail": "", "audio_url": "u", "http_headers": {}}
-        ar = sys.modules["gevent"].event.AsyncResult()
+        ar = _FAKE_MODULES["gevent"].event.AsyncResult()
         ar.set(shared)
         yserv._in_flight_extractions[url] = ar
 

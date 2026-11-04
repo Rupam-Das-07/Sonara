@@ -178,4 +178,109 @@ class SonaraDatabaseMigrationTest {
             )
         }
     }
+
+    // ─── MIGRATION 6 → 7 ──────────────────────────────────────────────────────
+    //
+    // Adds `tracks.artistCredits`, the structured artist credit list Featured Artists
+    // affinity uses to attribute a listen to a VERIFIED artist identity instead of
+    // parsing the flat `artist` display string.
+
+    @Test
+    fun migration6To7_hasCorrectVersionNumbers() {
+        assertEquals(6, SonaraDatabase.MIGRATION_6_7.startVersion)
+        assertEquals(7, SonaraDatabase.MIGRATION_6_7.endVersion)
+    }
+
+    @Test
+    fun migration6To7_addsArtistCreditsColumnWithEmptyDefault() {
+        val allSql = captureSql { SonaraDatabase.MIGRATION_6_7.migrate(it) }
+        assertTrue(
+            "Must alter tracks to add artistCredits TEXT NOT NULL DEFAULT ''",
+            allSql.contains("ALTER TABLE `tracks` ADD COLUMN `artistCredits` TEXT NOT NULL DEFAULT ''")
+        )
+    }
+
+    @Test
+    fun migration6To7_defaultIsEmptySoLegacyRowsCarryNoVerifiedIdentity() {
+        val allSql = captureSql { SonaraDatabase.MIGRATION_6_7.migrate(it) }
+        // The default MUST be the empty string. Any non-empty default would decode to a
+        // fabricated credit and could satisfy an identity-gated rule for a pre-7 row.
+        assertTrue(
+            "artistCredits must default to the empty string",
+            allSql.contains("`artistCredits` TEXT NOT NULL DEFAULT ''")
+        )
+        assertFalse(
+            "artistCredits must not be seeded from the flat artist column",
+            allSql.contains("UPDATE `tracks`", ignoreCase = true)
+        )
+    }
+
+    @Test
+    fun migration6To7_zeroDataLoss_noDropOrRecreate() {
+        val allSql = captureSql { SonaraDatabase.MIGRATION_6_7.migrate(it) }
+        assertFalse(
+            "MIGRATION_6_7 must NEVER drop a table",
+            allSql.contains("DROP TABLE", ignoreCase = true)
+        )
+        assertFalse(
+            "MIGRATION_6_7 must not recreate tracks (a pure ALTER preserves every row)",
+            allSql.contains("CREATE TABLE", ignoreCase = true)
+        )
+        assertFalse(
+            "MIGRATION_6_7 must not delete any row",
+            allSql.contains("DELETE FROM", ignoreCase = true)
+        )
+    }
+
+    @Test
+    fun migration6To7_doesNotModifyUnrelatedTables() {
+        val allSql = captureSql { SonaraDatabase.MIGRATION_6_7.migrate(it) }
+        val otherTables = listOf("playlists", "liked_songs", "playback_history", "playlist_tracks", "downloads", "search_history")
+        otherTables.forEach { tableName ->
+            assertFalse(
+                "MIGRATION_6_7 must not ALTER table: $tableName",
+                allSql.contains("ALTER TABLE `$tableName`", ignoreCase = true)
+            )
+            assertFalse(
+                "MIGRATION_6_7 must not DROP table: $tableName",
+                allSql.contains("DROP TABLE `$tableName`", ignoreCase = true)
+            )
+        }
+    }
+
+    @Test
+    fun migration6To7_issuesExactlyOneStatement() {
+        val allSql = captureSql { SonaraDatabase.MIGRATION_6_7.migrate(it) }
+        assertEquals(
+            "A single additive ALTER is the entire migration",
+            1,
+            allSql.lines().count { it.isNotBlank() }
+        )
+    }
+
+    // ─── MIGRATION 7 → 8 ──────────────────────────────────────────────────────
+
+    @Test
+    fun migration7To8_hasCorrectVersionNumbers() {
+        assertEquals(7, SonaraDatabase.MIGRATION_7_8.startVersion)
+        assertEquals(8, SonaraDatabase.MIGRATION_7_8.endVersion)
+    }
+
+    @Test
+    fun migration7To8_addsLegacyDefaultsAndRequiredIndexes() {
+        val allSql = captureSql { SonaraDatabase.MIGRATION_7_8.migrate(it) }
+        assertTrue(allSql.contains("ALTER TABLE `playback_history` ADD COLUMN `sourceSection` TEXT NOT NULL DEFAULT 'LEGACY_UNKNOWN'"))
+        assertTrue(allSql.contains("ALTER TABLE `playback_history` ADD COLUMN `playbackSessionId` TEXT"))
+        assertTrue(allSql.contains("index_playback_history_sourceSection_listenedAt"))
+        assertTrue(allSql.contains("index_playback_history_playbackSessionId"))
+        assertTrue(allSql.contains("CREATE UNIQUE INDEX IF NOT EXISTS `index_playback_history_playbackSessionId`"))
+    }
+
+    @Test
+    fun migration7To8_isAdditiveAndDoesNotRewriteHistory() {
+        val allSql = captureSql { SonaraDatabase.MIGRATION_7_8.migrate(it) }
+        assertFalse(allSql.contains("DROP TABLE", ignoreCase = true))
+        assertFalse(allSql.contains("DELETE FROM", ignoreCase = true))
+        assertFalse(allSql.contains("CREATE TABLE", ignoreCase = true))
+    }
 }

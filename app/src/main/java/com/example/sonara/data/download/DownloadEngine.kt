@@ -13,6 +13,7 @@ import com.example.sonara.domain.model.DownloadFileFormat
 import com.example.sonara.domain.model.DownloadStatus
 import com.example.sonara.domain.model.StreamInfo
 import com.example.sonara.domain.model.Track
+import com.example.sonara.domain.model.soundcloud.SoundcloudSourceIdentity
 import com.example.sonara.domain.ports.StreamResolverPort
 import com.example.sonara.domain.repository.SettingsRepository
 import kotlinx.coroutines.CancellationException
@@ -78,6 +79,17 @@ class DownloadEngine(
         ): Result<ResolvedDownloadFormat> {
             val format = streamInfo.format.lowercase()
             val codec = streamInfo.codec.lowercase()
+            val url = streamInfo.streamUrl.lowercase()
+
+            // HLS stream playlists (.m3u8) cannot be downloaded via direct-file HTTP connection
+            if (format.contains("mpegurl") || format.contains("m3u8") || url.contains(".m3u8")) {
+                return Result.failure(
+                    IllegalArgumentException(
+                        "HLS stream playlists (.m3u8) are unsupported for direct-file download: format=${streamInfo.format}"
+                    )
+                )
+            }
+
             val isWebmSource = format.contains("webm") || codec == "opus"
             val isMp4Source = format.contains("mp4") || format.contains("m4a") || codec == "aac"
 
@@ -201,6 +213,14 @@ class DownloadEngine(
             val trackId = track.id.trim()
             if (trackId.isBlank()) {
                 return@withContext Result.failure(IllegalArgumentException("Track ID cannot be blank"))
+            }
+
+            // SoundCloud tracks stream via HLS and are unsupported for offline direct-file download
+            if (SoundcloudSourceIdentity.isSoundcloudTrackId(trackId)) {
+                Log.w(TAG, "Offline downloading is not supported for SoundCloud track: $trackId")
+                return@withContext Result.failure(
+                    UnsupportedOperationException("Offline downloading is not supported for SoundCloud tracks")
+                )
             }
 
             val sanitizedId = trackId.replace("[^a-zA-Z0-9_-]".toRegex(), "_")

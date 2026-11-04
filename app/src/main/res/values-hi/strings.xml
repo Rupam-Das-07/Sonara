@@ -27,6 +27,26 @@
     <string name="theme_system">सिस्टम डिफ़ॉल्ट</string>
     <string name="theme_dark">डार्क (मिनरल पेट्रोल)</string>
     <string name="theme_light">लाइट (बोन कैनवास)</string>
+    <string name="setting_color_palette">कलर थीम</string>
+    <string name="setting_color_palette_desc">अपनी पसंदीदा सोनारा रंग पैलेट चुनें।</string>
+    <string name="palette_sonara_classic">सोनारा क्लासिक</string>
+    <string name="palette_sonara_classic_desc">एडिटोरियल मिनरल पेट्रोल और बर्न ऑक्साइड</string>
+    <string name="palette_ocean_blue">ओशन ब्लू</string>
+    <string name="palette_ocean_blue_desc">गहरा समुद्री नेवी और सियान ऊर्जा</string>
+    <string name="palette_rose">रोज़</string>
+    <string name="palette_rose_desc">वेलवेट क्रिमसन और वार्म कोरल ब्लूम</string>
+    <string name="palette_forest_green">फॉरेस्ट ग्रीन</string>
+    <string name="palette_forest_green_desc">नॉर्डिक पाइन और एमराल्ड हाइलाइट्स</string>
+    <string name="palette_lavender">लैवेंडर</string>
+    <string name="palette_lavender_desc">म्यूट ट्वाइलाइट पर्पल और लिलाक एक्सेंट</string>
+    <string name="palette_midnight">मिडनाइट</string>
+    <string name="palette_midnight_desc">गहरा ओब्सीडियन नाइट और इलेक्ट्रिक इंडिगो</string>
+    <string name="palette_amoled_black">AMOLED ब्लैक</string>
+    <string name="palette_amoled_black_desc">ओएलईडी बैटरी दक्षता के लिए डीप ब्लैक</string>
+    <string name="palette_dynamic_wallpaper">डायनामिक वॉलपेपर</string>
+    <string name="palette_dynamic_wallpaper_desc">डिवाइस वॉलपेपर से प्राप्त मटेरियल यू रंग।</string>
+    <string name="palette_dynamic_wallpaper_unsupported">एंड्रॉइड 12+ आवश्यक (सोनारा क्लासिक पर डिफॉल्ट)</string>
+    <string name="palette_dynamic_wallpaper_monet_active">मोनेट एक्टिव</string>
     <string name="language_system_default">सिस्टम डिफ़ॉल्ट</string>
 
     <string name="setting_app_language">ऐप की भाषा</string>
@@ -145,9 +165,12 @@
     <!-- Library & Playlists -->
     <string name="library_title">आपकी लाइब्रेरी</string>
     <string name="tab_liked_songs">पसंदीदा गाने</string>
+    <string name="tab_downloads">डाउनलोड</string>
     <string name="tab_playback_history">इतिहास</string>
     <string name="library_liked_empty_title">अभी तक कोई पसंदीदा गाना नहीं</string>
     <string name="library_liked_empty_message">किसी भी गाने को अपने निजी संग्रह में जोड़ने के लिए दिल के आइकन पर टैप करें।</string>
+    <string name="library_downloads_empty_title">कोई डाउनलोड किया गया गाना नहीं</string>
+    <string name="library_downloads_empty_message">ऑफ़लाइन सुनने के लिए डाउनलोड किए गए गाने यहां दिखाई देंगे।</string>
     <string name="library_history_empty_title">कोई प्लेबैक इतिहास नहीं</string>
     <string name="library_history_empty_message">आपके द्वारा चलाए गए गाने यहां आसानी से फिर से चलाने के लिए दिखाई देंगे।</string>
     <string name="playlists_title">आपकी प्लेलिस्ट</string>
@@ -231,4 +254,18 @@
     <string name="import_alternatives_label">वैकल्पिक गाने उपलब्ध हैं</string>
     <string name="import_change_selection">विकल्प चुनें</string>
     <string name="import_view_playlist">प्लेलिस्ट देखें</string>
+
+    <!-- Video Quality & Video Actions -->
+    <string name="video_quality_title">वीडियो क्वालिटी</string>
+    <string name="video_quality_subtitle">रिज़ॉल्यूशन और फ़्रेम दर चुनें</string>
+    <string name="video_quality_auto_desc">आपके कनेक्शन के अनुसार समायोजित होता है</string>
+    <string name="video_quality_preparing">क्वालिटी</string>
+    <string name="video_quality_unsupported_device">डिवाइस द्वारा असमर्थित</string>
+    <string name="action_download">डाउनलोड</string>
+    <string name="action_downloaded">डाउनलोड किया गया</string>
+    <string name="action_downloading">डाउनलोड हो रहा है…</string>
+    <!-- SoundCloud Integration -->
+    <string name="source_soundcloud">साउंडक्लाउड</string>
+    <string name="source_youtube_music">यूट्यूब म्यूज़िक</string>
+    <string name="download_unsupported_soundcloud">साउंडक्लाउड ट्रैक के लिए ऑफ़लाइन डाउनलोड समर्थিত नहीं है</string>
 </resources>

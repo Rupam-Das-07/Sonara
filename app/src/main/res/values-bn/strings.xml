@@ -27,6 +27,26 @@
     <string name="theme_system">সিস্টেম ডিফল্ট</string>
     <string name="theme_dark">ডার্ক (মিনারেল পেট্রল)</string>
     <string name="theme_light">লাইট (বোন ক্যানভাস)</string>
+    <string name="setting_color_palette">কালার থিম</string>
+    <string name="setting_color_palette_desc">আপনার পছন্দের সোনারা কালার প্যালেট নির্বাচন করুন।</string>
+    <string name="palette_sonara_classic">সোনারা ক্লাসিক</string>
+    <string name="palette_sonara_classic_desc">এডিটোরিয়াল মিনারেল পেট্রল ও বার্নট অক্সাইড</string>
+    <string name="palette_ocean_blue">ওশান ব্লু</string>
+    <string name="palette_ocean_blue_desc">গভীর সামুদ্রিক নেভি ও সায়ান এনার্জি</string>
+    <string name="palette_rose">রোজ</string>
+    <string name="palette_rose_desc">ভেলভেট ক্রিমসন ও ওয়ার্ম কোরাল ব্লুম</string>
+    <string name="palette_forest_green">ফরেস্ট গ্রিন</string>
+    <string name="palette_forest_green_desc">নর্ডিক পাইন ও উজ্জ্বল পান্না হাইলাইটস</string>
+    <string name="palette_lavender">ল্যাভেন্ডার</string>
+    <string name="palette_lavender_desc">শান্ত টুইলাইট পার্পল ও লাইলাক এক্সেন্ট</string>
+    <string name="palette_midnight">মিডনাইট</string>
+    <string name="palette_midnight_desc">গভীর অবসিডিয়ান নাইট ও ইলেকট্রিক ইন্ডিগো</string>
+    <string name="palette_amoled_black">অ্যামোলেড ব্ল্যাক</string>
+    <string name="palette_amoled_black_desc">ওলেড ব্যাটারি সাশ্রয়ী নিখুঁত কালো</string>
+    <string name="palette_dynamic_wallpaper">ডায়নামিক ওয়ালপেপার</string>
+    <string name="palette_dynamic_wallpaper_desc">আপনার ডিভাইসের ওয়ালপেপার থেকে প্রাপ্ত মেটেরিয়াল ইউ রঙ।</string>
+    <string name="palette_dynamic_wallpaper_unsupported">অ্যান্ড্রয়েড ১২+ প্রয়োজন (সোনারা ক্লাসিক ডিফল্ট)</string>
+    <string name="palette_dynamic_wallpaper_monet_active">মোনেট সক্রিয়</string>
     <string name="language_system_default">সিস্টেম ডিফল্ট</string>
 
     <string name="setting_app_language">অ্যাপের ভাষা</string>
@@ -145,9 +165,12 @@
     <!-- Library & Playlists -->
     <string name="library_title">আপনার লাইব্রেরি</string>
     <string name="tab_liked_songs">পছন্দের গান</string>
+    <string name="tab_downloads">ডাউনলোড</string>
     <string name="tab_playback_history">ইতিহাস</string>
     <string name="library_liked_empty_title">এখনো কোনো পছন্দের গান নেই</string>
     <string name="library_liked_empty_message">আপনার ব্যক্তিগত সংগ্রহে যোগ করতে যেকোনো গানের হার্ট আইকনে ট্যাপ করুন।</string>
+    <string name="library_downloads_empty_title">কোনো ডাউনলোড করা গান নেই</string>
+    <string name="library_downloads_empty_message">অফলাইনে শোনার জন্য ডাউনলোড করা গান এখানে প্রদর্শিত হবে।</string>
     <string name="library_history_empty_title">কোনো প্লেব্যাক ইতিহাস নেই</string>
     <string name="library_history_empty_message">আপনার বাজানো গানগুলি সহজেই পুনরায় শোনার জন্য এখানে প্রদর্শিত হবে।</string>
     <string name="playlists_title">আপনার প্লেলিস্ট</string>
@@ -231,4 +254,18 @@
     <string name="import_alternatives_label">বিকল্প গান উপলব্ধ</string>
     <string name="import_change_selection">বিকল্প বেছে নিন</string>
     <string name="import_view_playlist">প্লেলিস্ট দেখুন</string>
+
+    <!-- Video Quality & Video Actions -->
+    <string name="video_quality_title">ভিডিও কোয়ালিটি</string>
+    <string name="video_quality_subtitle">রেজোলিউশন ও ফ্রেম রেট নির্বাচন করুন</string>
+    <string name="video_quality_auto_desc">আপনার সংযোগের সাথে সামঞ্জস্য করে</string>
+    <string name="video_quality_preparing">কোয়ালিটি</string>
+    <string name="video_quality_unsupported_device">ডিভাইসে সমর্থিত নয়</string>
+    <string name="action_download">ডাউনলোড</string>
+    <string name="action_downloaded">ডাউনলোড সম্পন্ন</string>
+    <string name="action_downloading">ডাউনলোড হচ্ছে…</string>
+    <!-- SoundCloud Integration -->
+    <string name="source_soundcloud">সাউন্ডক্লাউড</string>
+    <string name="source_youtube_music">ইউটিউব মিউজিক</string>
+    <string name="download_unsupported_soundcloud">সাউন্ডক্লাউড ট্র্যাকের জন্য অফলাইন ডাউনলোড সমর্থিত নয়</string>
 </resources>

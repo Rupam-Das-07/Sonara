@@ -38,6 +38,7 @@ import com.example.sonara.core.ui.components.PhosphorIcons
 import com.example.sonara.core.ui.components.SonaraButton
 import com.example.sonara.core.ui.components.SonaraButtonVariant
 import com.example.sonara.core.ui.theme.SonaraTheme
+import com.example.sonara.core.util.MediaTitleFormatter
 import com.example.sonara.domain.model.DownloadInfo
 import com.example.sonara.domain.model.DownloadStatus
 import com.example.sonara.domain.model.Track
@@ -124,7 +125,7 @@ fun DownloadProgressDialog(
                             Icon(
                                 imageVector = PhosphorIcons.WarningCircle,
                                 contentDescription = "Failed",
-                                tint = Color(0xFFE57373),
+                                tint = colors.error,
                                 modifier = Modifier.size(24.dp)
                             )
                         }
@@ -194,7 +195,7 @@ fun DownloadProgressDialog(
 
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = track.title,
+                            text = MediaTitleFormatter.format(track.title, track.artist),
                             style = typography.body.copy(fontWeight = FontWeight.SemiBold),
                             color = colors.primaryText,
                             maxLines = 1,
@@ -237,7 +238,7 @@ fun DownloadProgressDialog(
                         Text(
                             text = downloadInfo?.failureReason ?: "Network error occurred during stream download.",
                             style = typography.caption,
-                            color = Color(0xFFE57373)
+                            color = colors.error
                         )
                     }
 
@@ -355,7 +356,7 @@ fun DownloadProgressDialog(
                                 onClick = onRemove,
                                 modifier = Modifier.align(Alignment.CenterHorizontally)
                             ) {
-                                Text("Remove Download", color = Color(0xFFE57373), style = typography.buttonLabel)
+                                Text("Remove Download", color = colors.error, style = typography.buttonLabel)
                             }
                         }
                     }

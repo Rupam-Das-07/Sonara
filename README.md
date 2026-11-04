@@ -167,11 +167,21 @@ Sonara/
 
 1. Clone the repository and open it in Android Studio.
 2. Set the backend URL for your build variant.  
-   The backend URL is injected at build time via `BuildConfig.BASE_URL`, which is set in `app/build.gradle.kts`:
-   - **Debug builds** default to `http://192.168.0.4:3002` (a specific LAN IP).  
-     Update the `buildConfigField` in the `debug` block to match your machine's IP:
-     - **Emulator:** `http://10.0.2.2:3002`
-     - **Physical device:** `http://192.168.x.x:3002` (your machine's LAN IP)
+   The backend URL is injected at build time via `BuildConfig.BASE_URL` in `app/build.gradle.kts`.
+   Debug builds default to `http://127.0.0.1:3002`, which is suitable for a USB-connected
+   device or emulator when ADB reverse is configured:
+   ```powershell
+   adb -s <device-serial> reverse tcp:3002 tcp:3002
+   adb -s <device-serial> reverse --list
+   ```
+   Reapply the mapping after reconnecting the device. For a LAN topology instead, pass a
+   per-machine property without editing shared source:
+   ```powershell
+   .\gradlew.bat :app:assembleDebug -PSONARA_DEBUG_BACKEND_URL=http://192.168.x.x:3002
+   ```
+   Emulator-only loopback can use `-PSONARA_DEBUG_BACKEND_URL=http://10.0.2.2:3002`.
+   Debug verification builds can additionally use `-PSONARA_VERIFY_PORTRAITS=true` to bypass
+   the Android portrait cache and log the HTTP request plus Coil's data source and decoded size.
    - **Release builds** require `SONARA_RELEASE_BACKEND_URL` supplied as a Gradle property (`-PSONARA_RELEASE_BACKEND_URL=https://...`) or environment variable. The URL must start with `https://`.
 3. Build and run the `app` module on a device or emulator running Android 8.0 (API 26) or later.
 

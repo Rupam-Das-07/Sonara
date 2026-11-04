@@ -6,6 +6,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.graphics.Color
+import com.example.sonara.domain.model.TrackSource
 
 /**
  * Raw Sonara brand color palette as frozen in DESIGN_SYSTEM_ANDROID.md §2.1.
@@ -44,6 +45,17 @@ object SonaraPalette {
     val WarningLight = Color(0xFF9C6318)
     val ErrorDark = Color(0xFFC04D44)
     val ErrorLight = Color(0xFFA63A32)
+
+    // Source Attribution Badge Colors (YouTube Music & SoundCloud)
+    val YoutubeBadgeContainerDark = Color(0xFF142E22)
+    val YoutubeBadgeTextDark = Color(0xFF76C99B)
+    val YoutubeBadgeContainerLight = Color(0xFFE2EFE7)
+    val YoutubeBadgeTextLight = Color(0xFF1E5B3A)
+
+    val SoundcloudBadgeContainerDark = Color(0xFF361E12)
+    val SoundcloudBadgeTextDark = Color(0xFFFFA366)
+    val SoundcloudBadgeContainerLight = Color(0xFFFBEADB)
+    val SoundcloudBadgeTextLight = Color(0xFFA64612)
 }
 
 /**
@@ -161,3 +173,40 @@ val LightSonaraColors = SonaraColors(
 )
 
 val LocalSonaraColors = compositionLocalOf { DarkSonaraColors }
+
+/**
+ * Theme-aware colors for song source attribution badges.
+ * Ensures consistent, contrast-safe styling across dark and light themes.
+ */
+@Immutable
+data class SourceBadgeColors(
+    val container: Color,
+    val text: Color
+)
+
+object SourceBadgeTheme {
+    fun colorsFor(source: TrackSource, isDark: Boolean): SourceBadgeColors = when (source) {
+        TrackSource.YOUTUBE_MUSIC -> if (isDark) {
+            SourceBadgeColors(
+                container = SonaraPalette.YoutubeBadgeContainerDark,
+                text = SonaraPalette.YoutubeBadgeTextDark
+            )
+        } else {
+            SourceBadgeColors(
+                container = SonaraPalette.YoutubeBadgeContainerLight,
+                text = SonaraPalette.YoutubeBadgeTextLight
+            )
+        }
+        TrackSource.SOUNDCLOUD -> if (isDark) {
+            SourceBadgeColors(
+                container = SonaraPalette.SoundcloudBadgeContainerDark,
+                text = SonaraPalette.SoundcloudBadgeTextDark
+            )
+        } else {
+            SourceBadgeColors(
+                container = SonaraPalette.SoundcloudBadgeContainerLight,
+                text = SonaraPalette.SoundcloudBadgeTextLight
+            )
+        }
+    }
+}

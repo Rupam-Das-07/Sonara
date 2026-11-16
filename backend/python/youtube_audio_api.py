@@ -177,6 +177,10 @@ def _resolve_and_cache_stream(video_id: str) -> dict:
         "title": data.get("title", ""),
         "thumbnail": data.get("thumbnail", ""),
         "audio_url": proxy_url,
+        "format": data.get("format"),
+        "codec": data.get("codec"),
+        "nominalBitrateKbps": data.get("nominalBitrateKbps"),
+        "selectedStream": data.get("selectedStream"),
         "expiresAt": expire,
         "cachedAt": int(time.time()),
     }
@@ -609,6 +613,7 @@ def stream_youtube_audio():
     """
     audio_url = request.args.get("audio_url", "")
     video_id = request.args.get("video_id", "")
+    stream_identity = request.args.get("stream_identity", "")
     
     if not audio_url:
         return "Missing audio_url", 400
@@ -648,6 +653,13 @@ def stream_youtube_audio():
             # 1. Invalidate stale cache entry
             with _stream_url_cache._lock:
                 _stream_url_cache._cache.pop(video_id, None)
+
+            if stream_identity:
+                # A descriptor-bound client must re-resolve before consuming another
+                # URL. Streaming a newly selected format here would retain stale
+                # codec/bitrate in its MediaItem. Legacy unbound clients keep recovery.
+                r.close()
+                return "Stream expired; resolve a fresh descriptor", 410
 
             # 2–4. Re-extract, update headers cache, and rebuild stream-URL cache
             payload = _resolve_and_cache_stream(video_id)

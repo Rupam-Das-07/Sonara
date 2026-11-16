@@ -452,5 +452,52 @@ class TestAudioApiCacheAndExpiry(unittest.TestCase):
         self.assertIsNotNone(cache.get("c"))
 
 
+class TestSelectedAudioMetadata(unittest.TestCase):
+    def setUp(self):
+        _reset_pool()
+
+    def test_auto_keeps_selected_format_metadata_through_api_cache(self):
+        _HOOK["fn"] = lambda *_: {
+            "id": "dQw4w9WgXcQ", "url": "https://r3.googlevideo.com/videoplayback",
+            "ext": "webm", "acodec": "opus", "vcodec": "none", "abr": 137.2,
+        }
+        original = api.get_audio_info
+        try:
+            api.get_audio_info = yserv.get_audio_info
+            payload = api._resolve_and_cache_stream("dQw4w9WgXcQ")
+            self.assertEqual(payload["nominalBitrateKbps"], 137)
+            self.assertEqual(payload["codec"], "opus")
+            self.assertEqual(payload["format"], "audio/webm")
+            self.assertEqual(api._stream_url_cache.get("dQw4w9WgXcQ")["nominalBitrateKbps"], 137)
+        finally:
+            api.get_audio_info = original
+
+    def test_requested_formats_metadata_belongs_to_selected_audio_url(self):
+        _HOOK["fn"] = lambda *_: {
+            "abr": 999, "acodec": "opus", "ext": "webm",
+            "requested_formats": [
+                {"url": "https://x/video", "acodec": "none", "tbr": 5000},
+                {"url": "https://x/audio", "acodec": "mp4a.40.2", "vcodec": "none", "ext": "m4a", "abr": 129.4},
+            ],
+        }
+        result = yserv.get_audio_info("https://youtube.com/watch?v=dQw4w9WgXcQ")
+        self.assertEqual(result["audio_url"], "https://x/audio")
+        self.assertEqual(result["nominalBitrateKbps"], 129)
+        self.assertEqual(result["codec"], "aac")
+        self.assertEqual(result["format"], "audio/mp4")
+
+    def test_missing_invalid_or_muxed_bitrate_is_not_invented(self):
+        for abr, vcodec in [(None, "none"), (0, "none"), (-1, "none"),
+                            (float("nan"), "none"), (float("inf"), "none"),
+                            ("160", "none"), (True, "none"), (137, "avc1")]:
+            with self.subTest(abr=abr, vcodec=vcodec):
+                _HOOK["fn"] = lambda *_: {
+                    "url": "https://x/audio", "acodec": "opus", "ext": "webm",
+                    "vcodec": vcodec, "abr": abr, "tbr": 320,
+                }
+                result = yserv.get_audio_info("https://youtube.com/watch?v=dQw4w9WgXcQ")
+                self.assertIsNone(result["nominalBitrateKbps"])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

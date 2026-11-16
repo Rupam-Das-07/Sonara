@@ -119,11 +119,26 @@ class JioSaavnStreamProvider {
   }
 
   /**
+   * Rewrites bitrate suffixes (_12, _48, _96, _320) to _160.mp4.
+   * @param {string} url
+   * @returns {string|null}
+   */
+  rewriteTo160(url) {
+    if (!url || typeof url !== 'string') return null;
+    if (url.includes('_160.mp4')) return url;
+
+    // Pattern: _(12|48|96|320).mp4
+    const rewritten = url.replace(/_(12|48|96|320)\.mp4(\?.*)?$/i, '_160.mp4$2');
+    return rewritten.includes('_160.mp4') ? rewritten : null;
+  }
+
+  /**
    * Performs lightweight HTTP pre-flight validation on the CDN URL.
    * @param {string} cdnUrl
+   * @param {number} [minContentLength=500000]
    * @returns {Promise<boolean>}
    */
-  async validateCdnResource(cdnUrl) {
+  async validateCdnResource(cdnUrl, minContentLength = 500_000) {
     if (!cdnUrl || !cdnUrl.startsWith('https://')) return false;
 
     try {
@@ -140,12 +155,12 @@ class JioSaavnStreamProvider {
         return false;
       }
 
-      // Check content length if available (must be reasonable audio size, > 500KB)
+      // Check content length if available
       const lengthHeader = res.headers.get('content-length');
       if (lengthHeader) {
         const length = parseInt(lengthHeader, 10);
-        if (!isNaN(length) && length < 500_000) {
-          logger.debug(`[JIOSAAVN_STREAM] Pre-flight HEAD content-length too small: ${length}`);
+        if (!isNaN(length) && length < minContentLength) {
+          logger.debug(`[JIOSAAVN_STREAM] Pre-flight HEAD content-length too small: ${length} < ${minContentLength}`);
           return false;
         }
       }
@@ -158,12 +173,13 @@ class JioSaavnStreamProvider {
   }
 
   /**
-   * Resolves a ~320 kbps AAC stream for a canonical target track.
+   * Resolves an audio stream for a canonical target track according to requested quality.
    *
    * @param {object} target - { videoId, title, artist, duration, durationMs }
+   * @param {'VERY_HIGH'|'HIGH'} [targetQuality='VERY_HIGH']
    * @returns {Promise<object|null>} ResolvedSource or null on any mismatch/failure
    */
-  async resolve(target) {
+  async resolve(target, targetQuality = 'VERY_HIGH') {
     if (!target || !target.videoId || !target.title) {
       return null;
     }
@@ -229,23 +245,27 @@ class JioSaavnStreamProvider {
       const decryptedUrl = this.decryptUrl(encUrl);
       if (!decryptedUrl) continue;
 
-      // Rewrite to 320 kbps
-      const rewrittenUrl = this.rewriteTo320(decryptedUrl);
+      // Rewrite to requested bitrate
+      const isHigh = targetQuality === 'HIGH';
+      const rewrittenUrl = isHigh ? this.rewriteTo160(decryptedUrl) : this.rewriteTo320(decryptedUrl);
       if (!rewrittenUrl) continue;
 
+      const minBytes = isHigh ? 250_000 : 500_000;
+      const expectedBitrate = isHigh ? 160 : 320;
+
       // Validate CDN stream accessibility
-      const isValidCdn = await this.validateCdnResource(rewrittenUrl);
+      const isValidCdn = await this.validateCdnResource(rewrittenUrl, minBytes);
       if (!isValidCdn) {
         logger.debug(`[JIOSAAVN_STREAM] CDN validation failed for ${rewrittenUrl}`);
         continue;
       }
 
-      logger.info(`[JIOSAAVN_STREAM] High-Quality stream resolved for ${target.videoId} (delta: ${matchVerdict.deltaSeconds}s)`);
+      logger.info(`[JIOSAAVN_STREAM] Stream resolved for ${target.videoId} (quality: ${targetQuality}, bitrate: ${expectedBitrate}k, delta: ${matchVerdict.deltaSeconds}s)`);
       return {
         streamUrl: rewrittenUrl,
         format: 'audio/mp4',
         codec: 'aac',
-        bitrate: 320,
+        bitrate: expectedBitrate,
         provider: 'jiosaavn',
         isDirect: true,
         expiresAt: 0, // Unknown/unobserved expiry per Phase 2 Correction Pass

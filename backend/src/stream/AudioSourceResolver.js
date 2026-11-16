@@ -69,12 +69,13 @@ class AudioSourceResolver {
   /**
    * Normalizes incoming quality parameter.
    * @param {string} quality
-   * @returns {'STANDARD'|'HIGH'}
+   * @returns {'STANDARD'|'HIGH'|'VERY_HIGH'}
    */
   normalizeQuality(quality) {
     if (!quality || typeof quality !== 'string') return 'STANDARD';
     const upper = quality.trim().toUpperCase();
-    if (upper === 'HIGH' || upper === 'VERY_HIGH') return 'HIGH';
+    if (upper === 'VERY_HIGH') return 'VERY_HIGH';
+    if (upper === 'HIGH') return 'HIGH';
     return 'STANDARD';
   }
 
@@ -191,47 +192,49 @@ class AudioSourceResolver {
       return source;
     }
 
-    // Path 2: HIGH -> Opportunistic JioSaavn with YouTube fallback
-    logger.debug(`[RESOLVER] Attempting High-Quality resolution for ${videoId}`);
+    // Path 2: HIGH / VERY_HIGH -> Opportunistic JioSaavn with YouTube fallback
+    logger.debug(`[RESOLVER] Attempting ${qualityTier} resolution for ${videoId}`);
+
+    const cacheKey = `${qualityTier}:${videoId}`;
 
     // Check match cache
-    const cachedSource = this.matchCache.get(videoId);
+    const cachedSource = this.matchCache.get(cacheKey);
     if (cachedSource) {
-      logger.debug(`[RESOLVER] High-Quality match cache hit for ${videoId}`);
-      return cachedSource;
+      logger.debug(`[RESOLVER] ${qualityTier} match cache hit for ${videoId}`);
+      return { ...cachedSource };
     }
 
     // Check negative cache
-    const isKnownMiss = this.negativeCache.get(videoId);
+    const isKnownMiss = this.negativeCache.get(cacheKey);
     if (isKnownMiss) {
-      logger.debug(`[RESOLVER] Negative cache hit for ${videoId}; falling back to YouTube immediately`);
+      logger.debug(`[RESOLVER] Negative cache hit for ${qualityTier}:${videoId}; falling back to YouTube immediately`);
       const fallbackSource = await this.youtubeProvider.resolve(target);
       if (fallbackSource) fallbackSource.qualityTier = 'STANDARD';
       return fallbackSource;
     }
 
     // Attempt JioSaavn resolution if metadata is present
-    let highQualitySource = null;
+    let candidateSource = null;
     if (target.title) {
       try {
-        highQualitySource = await this.jiosaavnProvider.resolve(target);
+        candidateSource = await this.jiosaavnProvider.resolve(target, qualityTier);
       } catch (err) {
-        logger.warn(`[RESOLVER] Unexpected JioSaavn provider error for ${videoId}: ${err.message}`);
-        highQualitySource = null;
+        logger.warn(`[RESOLVER] Unexpected JioSaavn provider error for ${videoId} (${qualityTier}): ${err.message}`);
+        candidateSource = null;
       }
     } else {
       logger.debug(`[RESOLVER] Target has no title metadata, skipping JioSaavn for ${videoId}`);
     }
 
-    if (highQualitySource) {
-      highQualitySource.qualityTier = 'HIGH';
-      this.matchCache.set(videoId, highQualitySource);
-      return highQualitySource;
+    if (candidateSource) {
+      candidateSource.qualityTier = qualityTier;
+      this.matchCache.set(cacheKey, candidateSource);
+      return candidateSource;
     }
 
     // JioSaavn unavailable or no match -> record negative cache and fall back to YouTube
-    logger.info(`[RESOLVER] High-Quality unavailable for ${videoId}; falling back to YouTube baseline`);
-    this.negativeCache.set(videoId, true);
+    logger.info(`[RESOLVER] ${qualityTier} unavailable for ${videoId}; falling back to YouTube baseline`);
+    this.negativeCache.set(cacheKey, true);
 
     const fallbackSource = await this.youtubeProvider.resolve(target);
     if (fallbackSource) {
@@ -244,6 +247,10 @@ class AudioSourceResolver {
     this.matchCache.clear();
     this.negativeCache.clear();
     this.standardCache.clear();
+  }
+
+  invalidateStandard(videoId) {
+    this.standardCache.delete(`STANDARD:${videoId}`);
   }
 }
 

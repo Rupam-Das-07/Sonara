@@ -51,11 +51,12 @@ const resolveLimiter = rateLimit({
 });
 
 // ---------------------------------------------------------------------------
-// GET /api/v1/stream/resolve?url={youtube-url}&quality={STANDARD|HIGH}&title=...&artist=...&duration=...
+// GET /api/v1/stream/resolve?url={youtube-url}&quality={STANDARD|HIGH|VERY_HIGH}&title=...&artist=...&duration=...
 //
 // Resolves an audio stream descriptor according to quality preferences:
 // - STANDARD / AUTO: YouTube baseline (Opus in WebM, ~160 kbps)
-// - HIGH / VERY_HIGH: Opportunistic JioSaavn (~320 kbps AAC in MP4) with YouTube fallback
+// - HIGH: Lower high-quality profile (JioSaavn ~160 kbps AAC in MP4 with YouTube fallback)
+// - VERY_HIGH: Target JioSaavn ~320 kbps AAC in MP4 with YouTube fallback
 // ---------------------------------------------------------------------------
 router.get('/resolve', resolveLimiter, asyncHandler(async (req, res, next) => {
   const t0 = Date.now();
@@ -115,6 +116,8 @@ router.get('/resolve', resolveLimiter, asyncHandler(async (req, res, next) => {
       bitrate: source.bitrate,
       qualityTier: source.qualityTier,
       provider: source.provider,
+      nominalBitrateKbps: source.nominalBitrateKbps ?? null,
+      selectedStream: source.selectedStream ?? null,
       isDirect: source.isDirect,
       expiresAt: source.expiresAt,
     });
@@ -163,6 +166,9 @@ router.get('/play', async (req, res, next) => {
   pythonStreamUrl.searchParams.set('video_id', videoId);
   // Forward the full audio_url to Python's stream endpoint as-is (it expects it)
   pythonStreamUrl.searchParams.set('audio_url', audioUrl);
+  if (/^[a-f0-9]{64}$/.test(req.query.stream_identity || '')) {
+    pythonStreamUrl.searchParams.set('stream_identity', req.query.stream_identity);
+  }
 
   // Request-scoped cancellation and deadlines. Header acquisition is bounded;
   // established streams have a byte-inactivity timeout, not a total lifetime cap.
@@ -259,6 +265,10 @@ router.get('/play', async (req, res, next) => {
     if (terminated) return;
 
     if (!pythonRes.ok && pythonRes.status !== 206) {
+      if (pythonRes.status === 410 && req.query.stream_identity) {
+        defaultResolver.invalidateStandard(videoId);
+        return res.status(410).json(Errors.streamUnavailable('Stream expired; resolve again').toJSON());
+      }
       logger.warn('[STREAM/PLAY] Python stream error', { videoId, status: pythonRes.status });
       return next(Errors.streamUnavailable('Audio stream unavailable'));
     }

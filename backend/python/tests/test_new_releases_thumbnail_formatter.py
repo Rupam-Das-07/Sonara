@@ -1,4 +1,4 @@
-"""Focused tests for the New Releases thumbnail formatter.
+"""Focused tests for New Releases thumbnail and shelf artist formatters.
 
 The service imports its runtime dependencies at module import time and creates a
 global ``YTMusic`` instance.  These tests install small stdlib-only fakes before
@@ -102,7 +102,7 @@ def _install_fakes():
     sys.modules["ytmusicapi.mixins.watch"] = mixin_watch
 
 
-class NewReleasesThumbnailFormatterTests(unittest.TestCase):
+class _BaseNewReleasesTest(unittest.TestCase):
     def setUp(self):
         self._original_modules = {
             name: sys.modules.get(name, _MISSING) for name in _FAKE_MODULE_NAMES
@@ -121,6 +121,8 @@ class NewReleasesThumbnailFormatterTests(unittest.TestCase):
             else:
                 sys.modules[name] = module
 
+
+class NewReleasesThumbnailFormatterTests(_BaseNewReleasesTest):
     def _get_new_releases(self, thumbnails):
         item = {
             "browseId": "album-1",
@@ -232,6 +234,96 @@ class NewReleasesThumbnailFormatterTests(unittest.TestCase):
         self.assertEqual(self.service._format_thumbnail_url({"url": "https://img.example/wrong.jpg"}), "")
         self.assertEqual(self.service._format_thumbnail_url("https://img.example/wrong.jpg"), "")
         self.assertEqual(self.service._format_thumbnail_url(17), "")
+
+
+class NewReleaseShelfArtistFormattingTests(_BaseNewReleasesTest):
+    def get_new_releases(self, artists):
+        self.service.yt.explore = {
+            "new_releases": [{
+                "browseId": "MPREb_artist-shape",
+                "audioPlaylistId": "OLAK5uy_artist-shape",
+                "title": "Artist Shape Release",
+                "type": "Single",
+                "artists": artists,
+                "year": "2026",
+                "thumbnails": [{"url": "https://img.example/release.jpg"}],
+                "isExplicit": False,
+            }]
+        }
+        return self.service.get_new_releases()
+
+    def assert_container_shape(self, response):
+        self.assertTrue(response["success"])
+        self.assertEqual(len(response["containers"]), 1)
+        self.assertEqual(
+            set(response["containers"][0]),
+            {
+                "browseId", "audioPlaylistId", "title", "type", "artist",
+                "artists", "year", "thumbnailUrl", "isExplicit",
+            },
+        )
+
+    def test_valid_artist_dictionaries_preserve_names_and_ids(self):
+        response = self.get_new_releases([
+            {"name": "Artist One", "id": "a1"},
+            {"name": "Artist Two", "id": "a2"},
+        ])
+
+        self.assert_container_shape(response)
+        container = response["containers"][0]
+        self.assertEqual(container["artist"], "Artist One, Artist Two")
+        self.assertEqual(container["artists"], [
+            {"name": "Artist One", "id": "a1"},
+            {"name": "Artist Two", "id": "a2"},
+        ])
+
+    def test_missing_or_empty_artists_returns_empty_artist_fields(self):
+        for artists in (None, []):
+            with self.subTest(artists=artists):
+                response = self.get_new_releases(artists)
+                self.assert_container_shape(response)
+                container = response["containers"][0]
+                self.assertEqual(container["artist"], "")
+                self.assertEqual(container["artists"], [])
+
+    def test_malformed_entries_are_ignored_while_valid_entries_survive(self):
+        response = self.get_new_releases([
+            None,
+            {"name": "Valid Artist", "id": "valid-id"},
+            "not-a-dictionary",
+            {"name": "Second Artist", "id": None},
+        ])
+
+        self.assert_container_shape(response)
+        container = response["containers"][0]
+        self.assertEqual(container["artist"], "Valid Artist, Second Artist")
+        self.assertEqual(container["artists"], [
+            {"name": "Valid Artist", "id": "valid-id"},
+            {"name": "Second Artist", "id": ""},
+        ])
+
+    def test_only_malformed_entries_do_not_fail_the_shelf(self):
+        response = self.get_new_releases([None, "bad", 42, [], {"unknown": True}])
+
+        self.assert_container_shape(response)
+        container = response["containers"][0]
+        self.assertEqual(container["artist"], "")
+        self.assertEqual(container["artists"], [])
+
+    def test_missing_or_invalid_names_and_ids_are_ignored_or_normalized(self):
+        response = self.get_new_releases([
+            {"name": None, "id": "id-only"},
+            {"name": "Name Only", "id": 123},
+            {"name": "   ", "id": "   "},
+        ])
+
+        self.assert_container_shape(response)
+        container = response["containers"][0]
+        self.assertEqual(container["artist"], "Name Only")
+        self.assertEqual(container["artists"], [
+            {"name": "", "id": "id-only"},
+            {"name": "Name Only", "id": ""},
+        ])
 
 
 if __name__ == "__main__":

@@ -107,6 +107,55 @@ describe('JioSaavnStreamProvider', () => {
     assert.equal(provider.rewriteTo320('invalid'), null);
   });
 
+  test('URL rewriting transforms bitrates to _160.mp4 with rewriteTo160', () => {
+    const provider = new JioSaavnStreamProvider();
+    assert.equal(
+      provider.rewriteTo160('https://aac.saavncdn.com/test_96.mp4'),
+      'https://aac.saavncdn.com/test_160.mp4'
+    );
+    assert.equal(
+      provider.rewriteTo160('https://aac.saavncdn.com/test_320.mp4'),
+      'https://aac.saavncdn.com/test_160.mp4'
+    );
+    assert.equal(
+      provider.rewriteTo160('https://aac.saavncdn.com/test_160.mp4'),
+      'https://aac.saavncdn.com/test_160.mp4'
+    );
+    assert.equal(provider.rewriteTo160('invalid'), null);
+  });
+
+  test('successful HIGH resolution returns normalized 160k ResolvedSource', async () => {
+    const provider = new JioSaavnStreamProvider({ fetchFn: createMockFetch({ contentLength: 4_000_000 }) });
+    const res = await provider.resolve(target, 'HIGH');
+
+    assert.ok(res);
+    assert.equal(res.provider, 'jiosaavn');
+    assert.equal(res.codec, 'aac');
+    assert.equal(res.bitrate, 160);
+    assert.equal(res.format, 'audio/mp4');
+    assert.equal(res.isDirect, true);
+    assert.equal(res.streamUrl, 'https://aac.saavncdn.com/871/c2febd353f3a076a406fa37510f31f9f_160.mp4');
+  });
+
+  test('successful VERY_HIGH resolution returns normalized 320k ResolvedSource', async () => {
+    const provider = new JioSaavnStreamProvider({ fetchFn: createMockFetch({ contentLength: 8_000_000 }) });
+    const res = await provider.resolve(target, 'VERY_HIGH');
+
+    assert.ok(res);
+    assert.equal(res.provider, 'jiosaavn');
+    assert.equal(res.codec, 'aac');
+    assert.equal(res.bitrate, 320);
+    assert.equal(res.format, 'audio/mp4');
+    assert.equal(res.isDirect, true);
+    assert.equal(res.streamUrl, 'https://aac.saavncdn.com/871/c2febd353f3a076a406fa37510f31f9f_320.mp4');
+  });
+
+  test('HEAD failure on 160k stream returns null and does not return 320k asset', async () => {
+    const provider = new JioSaavnStreamProvider({ fetchFn: createMockFetch({ headFail: true }) });
+    const res = await provider.resolve(target, 'HIGH');
+    assert.equal(res, null);
+  });
+
   test('HEAD pre-flight validation accepts status 200 and 206', async () => {
     const p200 = new JioSaavnStreamProvider({ fetchFn: createMockFetch({ headStatus: 200 }) });
     assert.equal(await p200.validateCdnResource('https://aac.saavncdn.com/test.mp4'), true);

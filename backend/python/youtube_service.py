@@ -10,6 +10,8 @@ Responsibilities:
   - Locate the best audio-only stream URL (no download)
 """
 
+import math
+import hashlib
 import yt_dlp
 import gevent
 import json
@@ -263,18 +265,15 @@ def get_audio_info(url: str) -> dict:
     try:
         # ── 2. Extract info using yt-dlp ─────────────────────────────────────────
         ydl_opts = {
-            "format": "bestaudio/best",
+            # Use yt-dlp's supported default clients. Forcing android hid adaptive
+            # URLs (SABR-only response) and reduced Candyland to muxed itag 18.
+            # Keep the existing bestaudio/best ranking, restricted to direct HTTPS
+            # resources supported by the byte proxy (not an HLS manifest).
+            "format": "bestaudio[protocol=https]/best[protocol=https]",
             "quiet": True,
             "no_warnings": True,
             "noplaylist": True,
-            # Do NOT require login or cookies, use Android API bypass instead
             "extract_flat": False,
-            "extractor_args": {
-                "youtube": {
-                    "player_client": ["android"],
-                    "client": ["android"]
-                }
-            },
             # Use Node.js (already in the production container) for YouTube
             # player JS evaluation. yt-dlp-ejs must be installed.
             "js_runtimes": {"node": {}},
@@ -301,6 +300,7 @@ def get_audio_info(url: str) -> dict:
 
         # ── 4. Get the audio stream URL ──────────────────────────────────────────
         audio_url = info.get("url")
+        selected_audio = info
 
         if not audio_url:
             # Sometimes yt-dlp returns the URL inside requested_formats
@@ -308,6 +308,7 @@ def get_audio_info(url: str) -> dict:
             for fmt in formats:
                 if fmt.get("acodec") and fmt["acodec"] != "none":
                     audio_url = fmt.get("url")
+                    selected_audio = fmt
                     break
 
         if not audio_url:
@@ -316,13 +317,41 @@ def get_audio_info(url: str) -> dict:
         # ── 5. Get the HTTP headers yt-dlp recommends for this stream ──────────
         # YouTube validates the User-Agent against the client type used.
         # e.g. ANDROID_VR streams require a specific User-Agent.
-        http_headers = info.get("http_headers") or {}
+        http_headers = selected_audio.get("http_headers") or info.get("http_headers") or {}
+
+        # Preserve metadata for the exact URL selected above. Never use a requested
+        # quality, itag preset, total muxed bitrate, or a different format's abr.
+        acodec = selected_audio.get("acodec") or ""
+        codec = "aac" if acodec.startswith("mp4a") else acodec
+        audio_only = selected_audio.get("vcodec") == "none"
+        container = {"webm": "audio/webm", "m4a": "audio/mp4", "mp4": "audio/mp4"}.get(
+            selected_audio.get("ext"), ""
+        )
+        if not audio_only:
+            container = container.replace("audio/", "video/")
+        abr = selected_audio.get("abr")
+        nominal_bitrate = (
+            int(abr + 0.5)
+            if audio_only
+            and codec in ("opus", "aac", "mp3")
+            and type(abr) in (int, float) and math.isfinite(abr) and abr >= 1
+            else None
+        )
 
         result_dict = {
             "title": title,
             "thumbnail": thumbnail,
             "audio_url": audio_url,
             "http_headers": http_headers,
+            "format": container,
+            "codec": codec,
+            "nominalBitrateKbps": nominal_bitrate,
+            "selectedStream": {
+                "identity": hashlib.sha256(audio_url.encode()).hexdigest(),
+                "formatId": str(selected_audio.get("format_id") or ""),
+                "codec": codec, "mimeType": container, "isAudioOnly": audio_only,
+                "bitrateKbps": nominal_bitrate,
+            },
         }
         
         result_event.set(result_dict)

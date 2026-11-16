@@ -8,6 +8,7 @@
 
 const { test, describe, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
+const { createHash } = require('node:crypto');
 // Providers capture fetch at construction. Capture a dispatcher so per-test
 // mocks also cover /resolve; refuse an unstubbed call instead of using a network.
 const networkFetch = globalThis.fetch;
@@ -98,6 +99,27 @@ describe('stream route — /resolve', () => {
     assert.equal(getData(), null);
     assert.equal(getError().code, 'STREAM_UNAVAILABLE');
   });
+
+  test('AUTO response exports selected-format bitrate without upgrading STANDARD tier', async (t) => {
+    const handler = getResolveHandler();
+    const { req, res, next, getData, getError } = mockReqRes({ video_id: 'auto137meta', quality: 'AUTO' });
+    t.mock.method(globalThis, 'fetch', async () => ({ ok: true, json: async () => ({
+      audio_url: 'https://r3.googlevideo.com/videoplayback?expire=9999999999',
+      format: 'audio/webm', codec: 'opus', nominalBitrateKbps: 137,
+      selectedStream: { identity: createHash('sha256').update('https://r3.googlevideo.com/videoplayback?expire=9999999999').digest('hex'),
+        formatId: '251', codec: 'opus', mimeType: 'audio/webm', isAudioOnly: true, bitrateKbps: 137 },
+    }) }));
+    handler(req, res, next);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(getError(), null);
+    assert.equal(getData().qualityTier, 'STANDARD');
+    assert.equal(getData().provider, 'youtube');
+    assert.equal(getData().nominalBitrateKbps, 137);
+    assert.equal(getData().bitrate, 137);
+    assert.equal(getData().codec, 'opus');
+    assert.equal(getData().selectedStream.formatId, '251');
+    assert.equal(getData().selectedStream.isAudioOnly, true);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -115,6 +137,25 @@ describe('stream route — /play', () => {
     if (!layer) throw new Error('/play route not found in router stack');
     return layer.route.stack[layer.route.stack.length - 1].handle;
   }
+
+  test('descriptor-bound expiry reaches Android as 410 and invalidates the stale STANDARD cache', async (t) => {
+    let forwarded;
+    const invalidate = t.mock.method(require('../../src/stream/AudioSourceResolver').AudioSourceResolver.prototype, 'invalidateStandard', () => {});
+    t.mock.method(globalThis, 'fetch', async url => {
+      forwarded = new URL(url);
+      return { ok: false, status: 410, body: null };
+    });
+    const { req, res, next, getNextError } = makePlayMocks({ query: {
+      video_id: 'fwWTFuxHYvo', audio_url: 'https://r3.googlevideo.com/videoplayback?itag=251', stream_identity: 'a'.repeat(64)
+    } });
+    let status;
+    res.status = code => { status = code; return res; };
+    await getPlayHandler()(req, res, next);
+    assert.equal(status, 410);
+    assert.equal(getNextError(), null);
+    assert.equal(forwarded.searchParams.get('stream_identity'), 'a'.repeat(64));
+    assert.equal(invalidate.mock.calls[0].arguments[0], 'fwWTFuxHYvo');
+  });
 
   // -------------------------------------------------------------------------
   // Helper: build mock req/res/next suitable for /play.

@@ -41,11 +41,13 @@ describe('AudioSourceResolver', () => {
       this.source = source;
       this.shouldThrow = shouldThrow;
       this.callCount = 0;
+      this.lastQuality = null;
     }
-    async resolve() {
+    async resolve(target, quality) {
       this.callCount++;
+      this.lastQuality = quality;
       if (this.shouldThrow) throw new Error('JioSaavn network crashed');
-      return this.source;
+      return this.source ? { ...this.source } : null;
     }
   }
 
@@ -170,5 +172,98 @@ describe('AudioSourceResolver', () => {
 
     const res = await resolver.resolve(target, 'HIGH');
     assert.equal(res, null);
+  });
+
+  test('normalizeQuality handles VERY_HIGH, HIGH, STANDARD and defaults unknown safely', () => {
+    const resolver = new AudioSourceResolver();
+    assert.equal(resolver.normalizeQuality('VERY_HIGH'), 'VERY_HIGH');
+    assert.equal(resolver.normalizeQuality('very_high'), 'VERY_HIGH');
+    assert.equal(resolver.normalizeQuality('HIGH'), 'HIGH');
+    assert.equal(resolver.normalizeQuality('high'), 'HIGH');
+    assert.equal(resolver.normalizeQuality('STANDARD'), 'STANDARD');
+    assert.equal(resolver.normalizeQuality('AUTO'), 'STANDARD');
+    assert.equal(resolver.normalizeQuality(''), 'STANDARD');
+    assert.equal(resolver.normalizeQuality(null), 'STANDARD');
+    assert.equal(resolver.normalizeQuality('MALFORMED_VALUE'), 'STANDARD');
+  });
+
+  test('VERY_HIGH requests pass VERY_HIGH to JioSaavn and return VERY_HIGH qualityTier', async () => {
+    const jio = new FakeJioProvider(sampleJioSource);
+    const yt = new FakeYtProvider();
+    const resolver = new AudioSourceResolver({ jiosaavnProvider: jio, youtubeProvider: yt });
+
+    const res = await resolver.resolve(target, 'VERY_HIGH');
+
+    assert.equal(jio.callCount, 1);
+    assert.equal(jio.lastQuality, 'VERY_HIGH');
+    assert.equal(yt.callCount, 0);
+    assert.equal(res.provider, 'jiosaavn');
+    assert.equal(res.qualityTier, 'VERY_HIGH');
+  });
+
+  test('HIGH requests pass HIGH to JioSaavn and return HIGH qualityTier', async () => {
+    const sampleJio160 = { ...sampleJioSource, streamUrl: 'https://aac.saavncdn.com/test_160.mp4', bitrate: 160 };
+    const jio = new FakeJioProvider(sampleJio160);
+    const yt = new FakeYtProvider();
+    const resolver = new AudioSourceResolver({ jiosaavnProvider: jio, youtubeProvider: yt });
+
+    const res = await resolver.resolve(target, 'HIGH');
+
+    assert.equal(jio.callCount, 1);
+    assert.equal(jio.lastQuality, 'HIGH');
+    assert.equal(yt.callCount, 0);
+    assert.equal(res.provider, 'jiosaavn');
+    assert.equal(res.bitrate, 160);
+    assert.equal(res.qualityTier, 'HIGH');
+  });
+
+  test('HIGH and VERY_HIGH have isolated match caches and do not cross-pollute', async () => {
+    let requestedQ = null;
+    const jio = {
+      callCount: 0,
+      async resolve(t, q) {
+        this.callCount++;
+        requestedQ = q;
+        if (q === 'VERY_HIGH') {
+          return { ...sampleJioSource, bitrate: 320, streamUrl: 'https://aac.saavncdn.com/test_320.mp4' };
+        } else {
+          return { ...sampleJioSource, bitrate: 160, streamUrl: 'https://aac.saavncdn.com/test_160.mp4' };
+        }
+      }
+    };
+    const yt = new FakeYtProvider();
+    const resolver = new AudioSourceResolver({ jiosaavnProvider: jio, youtubeProvider: yt });
+
+    // 1. Resolve HIGH
+    const resHigh = await resolver.resolve(target, 'HIGH');
+    assert.equal(resHigh.qualityTier, 'HIGH');
+    assert.equal(resHigh.bitrate, 160);
+    assert.equal(jio.callCount, 1);
+
+    // 2. Resolve VERY_HIGH -> must NOT hit HIGH cache!
+    const resVeryHigh = await resolver.resolve(target, 'VERY_HIGH');
+    assert.equal(resVeryHigh.qualityTier, 'VERY_HIGH');
+    assert.equal(resVeryHigh.bitrate, 320);
+    assert.equal(jio.callCount, 2, 'VERY_HIGH must trigger second JioSaavn call instead of serving HIGH cache');
+
+    // 3. Resolve HIGH again -> must hit HIGH cache
+    const resHighCached = await resolver.resolve(target, 'HIGH');
+    assert.equal(resHighCached.qualityTier, 'HIGH');
+    assert.equal(resHighCached.bitrate, 160);
+    assert.equal(jio.callCount, 2, 'Cached HIGH must not increment callCount');
+  });
+
+  test('VERY_HIGH fallback to YouTube returns STANDARD qualityTier and does not claim 320 kbps', async () => {
+    const jio = new FakeJioProvider(null);
+    const yt = new FakeYtProvider();
+    const resolver = new AudioSourceResolver({ jiosaavnProvider: jio, youtubeProvider: yt });
+
+    const res = await resolver.resolve(target, 'VERY_HIGH');
+
+    assert.equal(jio.callCount, 1);
+    assert.equal(yt.callCount, 1);
+    assert.equal(res.provider, 'youtube');
+    assert.equal(res.qualityTier, 'STANDARD');
+    assert.equal(res.bitrate, 160);
   });
 });

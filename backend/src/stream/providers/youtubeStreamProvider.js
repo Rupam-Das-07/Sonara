@@ -12,6 +12,7 @@
 const config = require('../../config/env');
 const { validateVideoId, validateAudioUrl } = require('../streamValidator');
 const logger = require('../../utils/logger');
+const { createHash } = require('node:crypto');
 
 class YouTubeStreamProvider {
   /**
@@ -74,13 +75,26 @@ class YouTubeStreamProvider {
         return null;
       }
 
-      const playPath = `/api/v1/stream/play?video_id=${encodeURIComponent(videoId)}&audio_url=${encodeURIComponent(upstreamAudioUrl)}`;
+      const identity = createHash('sha256').update(upstreamAudioUrl).digest('hex');
+      const descriptor = data.selectedStream;
+      // Reject mismatched descriptors as a unit: no bitrate from another URL.
+      const selectedStream = descriptor?.identity === identity && typeof descriptor.isAudioOnly === 'boolean'
+        ? { ...descriptor } : null;
+      const playPath = `/api/v1/stream/play?video_id=${encodeURIComponent(videoId)}&audio_url=${encodeURIComponent(upstreamAudioUrl)}`
+        + (selectedStream ? `&stream_identity=${identity}` : '');
+
+      // Explicit selected-format metadata only. Older Python responses omitted it;
+      // the previous hard-coded 160 kbps was a preset, not stream telemetry.
+      const nominalBitrateKbps = selectedStream?.isAudioOnly && Number.isInteger(selectedStream.bitrateKbps) && selectedStream.bitrateKbps > 0
+        ? selectedStream.bitrateKbps : null;
 
       return {
         streamUrl: playPath,
-        format: 'audio/webm',
-        codec: 'opus',
-        bitrate: 160,
+        format: selectedStream?.mimeType || data.format || '',
+        codec: selectedStream?.codec || data.codec || '',
+        bitrate: nominalBitrateKbps || 0,
+        nominalBitrateKbps,
+        selectedStream,
         provider: 'youtube',
         isDirect: false,
         expiresAt: 0,

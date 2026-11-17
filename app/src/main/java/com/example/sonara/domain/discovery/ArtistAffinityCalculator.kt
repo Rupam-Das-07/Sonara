@@ -77,15 +77,21 @@ object ArtistAffinityCalculator {
     private val HISTORY_WINDOW_MS: Long = HISTORY_WINDOW_DAYS * 24L * 60L * 60L * 1000L
 
     /**
-     * Playback origins that may influence personalization at all (Phase 2D).
+     * Playback origins that may influence personalization at all.
      *
      * Only deliberate, user-chosen playback counts: a track the user picked out of a Songs
-     * search, or one they had already liked. Everything else — Home, radio autoplay, playlists,
-     * video search, OTHER, and the fail-closed LEGACY_UNKNOWN — is excluded, so listening the
-     * user never chose cannot reshape the shelf.
+     * search, one they had liked, an explicit Quick Picks tap, or an explicit Featured Artists
+     * track selection. Everything else — Home feed recommendations, radio autoplay, playlists,
+     * automatic queue advancement, video search, OTHER, and the fail-closed LEGACY_UNKNOWN —
+     * is excluded, so listening the user never chose cannot reshape the shelf.
      */
     val ELIGIBLE_ORIGINS: Set<PlaybackOrigin> =
-        setOf(PlaybackOrigin.SEARCH_SONGS, PlaybackOrigin.LIKED_SONGS)
+        setOf(
+            PlaybackOrigin.SEARCH_SONGS,
+            PlaybackOrigin.LIKED_SONGS,
+            PlaybackOrigin.QUICK_PICKS,
+            PlaybackOrigin.FEATURED_ARTISTS
+        )
 
     /**
      * The single source of truth for provenance eligibility, shared with

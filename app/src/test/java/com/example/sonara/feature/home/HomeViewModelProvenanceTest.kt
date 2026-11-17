@@ -3,6 +3,8 @@ package com.example.sonara.feature.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Job
 import com.example.sonara.domain.model.ArtistCatalog
 import com.example.sonara.domain.model.AudioQuality
 import com.example.sonara.domain.model.FeaturedArtist
@@ -184,10 +186,11 @@ class HomeViewModelProvenanceTest {
             // delay. The ViewModel is then cleared in finally so its long-lived history observer
             // cannot outlive the test and dispatch onto Main after resetMain().
             advanceUntilIdle()
-            val ready = vm.uiState.first { it.featuredArtists is HomeModule.Ready }
-            return (ready.featuredArtists as HomeModule.Ready<List<FeaturedArtist>>).value
+            val settled = vm.uiState.first { it.featuredArtists != HomeModule.Loading }
+            return (settled.featuredArtists as? HomeModule.Ready<List<FeaturedArtist>>)?.value.orEmpty()
         } finally {
             store.clear()
+            vm.viewModelScope.coroutineContext[Job]?.join()
             advanceUntilIdle()
         }
     }
@@ -228,8 +231,8 @@ class HomeViewModelProvenanceTest {
             shelf.map { it.name }.contains("Hans Zimmer")
         )
         assertEquals(
-            "the editorial roster must be returned unchanged",
-            roster.map { it.name },
+            "ineligible listening must keep the shelf hidden",
+            emptyList<String>(),
             shelf.map { it.name }
         )
         assertTrue(
@@ -275,13 +278,13 @@ class HomeViewModelProvenanceTest {
     }
 
     @Test
-    fun `legacy history leaves the editorial roster intact through the real view model`() = runTest(testDispatcher) {
+    fun `legacy history keeps the shelf hidden through the real view model`() = runTest(testDispatcher) {
         val shelf = shelfFor(plays("Hans Zimmer", PlaybackOrigin.LEGACY_UNKNOWN, 30))
-        assertEquals(roster.map { it.name }, shelf.map { it.name })
+        assertTrue(shelf.isEmpty())
     }
 
     @Test
-    fun `a history read failure falls back to the editorial roster`() = runTest(testDispatcher) {
+    fun `a history read failure cannot substitute the editorial roster`() = runTest(testDispatcher) {
         val failing = object : HistoryRepository {
             override fun getRecentHistory(limit: Int): Flow<List<HistoryItem>> =
                 kotlinx.coroutines.flow.flow { throw IllegalStateException("history unavailable") }
@@ -305,17 +308,18 @@ class HomeViewModelProvenanceTest {
         )
         val shelf = try {
             advanceUntilIdle()
-            val ready = vm.uiState.first { it.featuredArtists is HomeModule.Ready }
+            val ready = vm.uiState.first { it.featuredArtists != HomeModule.Loading }
             @Suppress("UNCHECKED_CAST")
-            (ready.featuredArtists as HomeModule.Ready<List<FeaturedArtist>>).value
+            (ready.featuredArtists as? HomeModule.Ready<List<FeaturedArtist>>)?.value.orEmpty()
         } finally {
             store.clear()
+            vm.viewModelScope.coroutineContext[Job]?.join()
             advanceUntilIdle()
         }
 
         assertEquals(
-            "a local history failure must preserve the editorial roster, not empty the shelf",
-            roster.map { it.name },
+            "a local history failure must keep unverified artist recommendations hidden",
+            emptyList<String>(),
             shelf.map { it.name }
         )
     }
@@ -344,6 +348,7 @@ class HomeViewModelProvenanceTest {
             assertTrue(cancellationPropagated)
         } finally {
             store.clear()
+            vm.viewModelScope.coroutineContext[Job]?.join()
             advanceUntilIdle()
         }
     }

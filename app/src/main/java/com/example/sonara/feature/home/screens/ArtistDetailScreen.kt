@@ -27,6 +27,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
@@ -34,8 +35,6 @@ import com.example.sonara.core.ui.components.PhosphorIcons
 import com.example.sonara.core.ui.components.ShimmerBox
 import com.example.sonara.core.ui.components.SonaraButton
 import com.example.sonara.core.ui.components.SonaraButtonVariant
-import com.example.sonara.core.ui.components.SonaraIconButton
-import com.example.sonara.core.ui.components.SonaraIconButtonVariant
 import com.example.sonara.core.ui.components.TrackRow
 import com.example.sonara.core.ui.theme.SonaraTheme
 import com.example.sonara.domain.model.FeaturedArtist
@@ -51,14 +50,14 @@ import com.example.sonara.feature.home.components.PlaylistGridTile
  *
  * Visual Architecture:
  * 1. 16:9 atmospheric artwork header with smooth gradient dissolve (matches CuratedPlaylistDetailScreen)
- * 2. Contextual back navigation row overlaid at top of artwork
+ * 2. System back navigation; the shell supplies the status-bar inset above the artwork
  * 3. Artist name (Clash Display Bold, left-aligned, max 2 lines)
  * 4. Genre + track count metadata (secondaryBody, secondaryText)
  * 5. Play All primary action button (left-aligned)
  * 6. Artist Playlists shelf (LazyRow of PlaylistGridTile)
  * 7. Popular Songs (TrackRow list)
  *
- * No global Sonara Top Bar — screen owns its single contextual header.
+ * No toolbar; artwork is the first scrolling item below the shell's safe top inset.
  */
 @Composable
 fun ArtistDetailScreen(
@@ -71,7 +70,8 @@ fun ArtistDetailScreen(
     onPlaylistClick: (PlaylistSummary) -> Unit = {},
     onToggleLike: (Track, Boolean) -> Unit,
     isLiked: (String) -> Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onTrackLongClick: (Track, List<Track>) -> Unit = { _, _ -> }
 ) {
     BackHandler(onBack = onBack)
 
@@ -86,46 +86,13 @@ fun ArtistDetailScreen(
         contentPadding = PaddingValues(bottom = dimensions.space2Xl),
         verticalArrangement = Arrangement.spacedBy(dimensions.spaceMd)
     ) {
-        // ── 1. Top navigation bar ───────────────────────────────────────────────────────────────
-        item(key = "artist-header-nav") {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(
-                        start = dimensions.spaceLg,
-                        end = dimensions.spaceLg,
-                        top = dimensions.spaceSm
-                    ),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                SonaraIconButton(
-                    onClick = onBack,
-                    contentDescription = "Back to Home",
-                    variant = SonaraIconButtonVariant.Ghost,
-                    size = dimensions.minTouchTarget
-                ) {
-                    Icon(
-                        imageVector = PhosphorIcons.ArrowLeft,
-                        contentDescription = null,
-                        tint = colors.primaryText,
-                        modifier = Modifier.size(dimensions.iconMedium)
-                    )
-                }
-                Text(
-                    text = "Artist",
-                    style = typography.sectionTitle,
-                    color = colors.primaryText,
-                    modifier = Modifier.padding(start = dimensions.spaceSm)
-                )
-            }
-        }
-
         // ── 2. Large Artist Artwork Header with Soft Gradient Dissolve ───────────────────────────
         item(key = "artist-large-header") {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(16f / 9f)
+                    .testTag("artist-hero")
                     .clip(RoundedCornerShape(bottomStart = 12.dp, bottomEnd = 12.dp))
                     .background(colors.surfaceVariant),
                 contentAlignment = Alignment.Center
@@ -298,6 +265,7 @@ fun ArtistDetailScreen(
                                 track = track,
                                 isLiked = isLiked(track.id),
                                 onPlay = { onPlayTrackWithContext(track, tracksModule.value) },
+                                onLongClick = { onTrackLongClick(track, tracksModule.value) },
                                 onToggleLike = { liked -> onToggleLike(track, liked) }
                             )
                         }
@@ -305,7 +273,7 @@ fun ArtistDetailScreen(
                 }
             }
 
-            HomeModule.Hidden -> {
+            HomeModule.Hidden, HomeModule.NoListeningHistory -> {
                 item(key = "tracks-hidden") {
                     Text(
                         text = "Unable to load songs for ${artist.name}.",

@@ -49,6 +49,10 @@ class PlaybackQueueEngine(
     private val _upcomingQueue = mutableListOf<QueueEntry>()
     val upcomingQueue: List<Track> get() = _upcomingQueue.map { it.track }
 
+    // Remaining entries in their unshuffled order. Unlike the repeat-all snapshot,
+    // this excludes consumed entries and includes Previous and explicit Play Next inserts.
+    private val _canonicalUpcomingQueue = mutableListOf<QueueEntry>()
+
     private val _sessionBackStack = mutableListOf<QueueEntry>()
     val sessionBackStack: List<Track> get() = _sessionBackStack.map { it.track }
 
@@ -62,6 +66,9 @@ class PlaybackQueueEngine(
 
     private var _repeatMode: Int = 0 // 0 = Off, 1 = Repeat All, 2 = Repeat One
     val repeatMode: Int get() = _repeatMode
+
+    // A stale-ID retry does not move the queue and must retain its actual recovery direction.
+    private var lastSelectionWasPrevious = false
 
     /**
      * Provenance of the CURRENT playback context (Phase 2B).
@@ -122,6 +129,7 @@ class PlaybackQueueEngine(
             _currentTrack = initialTracks.first()
             val entries = initialTracks.map { QueueEntry(it, PlaybackOrigin.LEGACY_UNKNOWN) }
             _upcomingQueue.addAll(entries.drop(1))
+            _canonicalUpcomingQueue.addAll(_upcomingQueue)
             _sessionSnapshot.addAll(entries)
         }
     }
@@ -134,13 +142,19 @@ class PlaybackQueueEngine(
         track: Track,
         contextQueue: List<Track> = emptyList(),
         pushCurrentToBackStack: Boolean = true,
-        origin: PlaybackOrigin = PlaybackOrigin.LEGACY_UNKNOWN
+        origin: PlaybackOrigin = PlaybackOrigin.LEGACY_UNKNOWN,
+        upcomingOrigin: PlaybackOrigin = when (origin) {
+            PlaybackOrigin.QUICK_PICKS,
+            PlaybackOrigin.FEATURED_ARTISTS -> PlaybackOrigin.HOME
+            else -> origin
+        }
     ) {
         val prev = _currentTrack
         if (pushCurrentToBackStack && prev != null && prev.id != track.id) {
             pushToBackStack(prev)
         }
         _currentTrack = track
+        lastSelectionWasPrevious = false
         // Queue and provenance are replaced together, so a new context can never inherit
         // the previous one's origin. An omitted origin fails closed to LEGACY_UNKNOWN.
         _currentOrigin = origin
@@ -150,18 +164,21 @@ class PlaybackQueueEngine(
             _upcomingQueue.clear()
             if (trackIndex >= 0) {
                 _upcomingQueue.addAll(
-                    contextQueue.drop(trackIndex + 1).map { QueueEntry(it, origin) }
+                    contextQueue.drop(trackIndex + 1).map { QueueEntry(it, upcomingOrigin) }
                 )
             } else {
-                _upcomingQueue.addAll(contextQueue.map { QueueEntry(it, origin) })
+                _upcomingQueue.addAll(contextQueue.map { QueueEntry(it, upcomingOrigin) })
             }
             _sessionSnapshot.clear()
-            _sessionSnapshot.addAll(contextQueue.map { QueueEntry(it, origin) })
+            _sessionSnapshot.addAll(contextQueue.map { QueueEntry(it, upcomingOrigin) })
         } else {
             _upcomingQueue.clear()
             _sessionSnapshot.clear()
             _sessionSnapshot.add(QueueEntry(track, origin))
         }
+
+        _canonicalUpcomingQueue.clear()
+        _canonicalUpcomingQueue.addAll(_upcomingQueue)
 
         // On manual context switch, apply shuffle if currently enabled
         if (_isShuffled && _upcomingQueue.size > 1) {
@@ -196,9 +213,11 @@ class PlaybackQueueEngine(
         if (_upcomingQueue.firstOrNull()?.track?.id == track.id) return
 
         _upcomingQueue.removeAll { it.track.id == track.id }
+        _canonicalUpcomingQueue.removeAll { it.track.id == track.id }
         _recommendationCache.removeAll { it.track.id == track.id }
         val entry = QueueEntry(track, origin)
         _upcomingQueue.add(0, entry)
+        _canonicalUpcomingQueue.add(0, entry)
 
         if (_sessionSnapshot.isNotEmpty()) {
             if (track.id != _currentTrack?.id) {
@@ -241,9 +260,10 @@ class PlaybackQueueEngine(
             if (curr != null) {
                 pushToBackStack(curr)
             }
-            val next = _upcomingQueue.removeAt(0)
+            val next = removeUpcomingAt(0)
             _currentTrack = next.track
             _currentOrigin = next.origin
+            lastSelectionWasPrevious = false
             onQueueChanged?.invoke()
             return NextTrackDecision.PlayTrack(next.track)
         }
@@ -251,6 +271,8 @@ class PlaybackQueueEngine(
         // 3. Repeat All (mode 1) with session snapshot
         if (_repeatMode == 1 && _sessionSnapshot.isNotEmpty()) {
             _upcomingQueue.addAll(_sessionSnapshot)
+            _canonicalUpcomingQueue.clear()
+            _canonicalUpcomingQueue.addAll(_upcomingQueue)
             if (_isShuffled && _upcomingQueue.size > 1) {
                 _upcomingQueue.shuffle()
             }
@@ -258,9 +280,10 @@ class PlaybackQueueEngine(
                 if (curr != null) {
                     pushToBackStack(curr)
                 }
-                val next = _upcomingQueue.removeAt(0)
+                val next = removeUpcomingAt(0)
                 _currentTrack = next.track
                 _currentOrigin = next.origin
+                lastSelectionWasPrevious = false
                 onQueueChanged?.invoke()
                 return NextTrackDecision.PlayTrack(next.track)
             }
@@ -276,6 +299,7 @@ class PlaybackQueueEngine(
             // Recommendation entries are staged with RADIO_AUTOPLAY, so they can never
             // inherit the eligible origin of the track that requested them.
             _currentOrigin = next.origin
+            lastSelectionWasPrevious = false
             onQueueChanged?.invoke()
             return NextTrackDecision.PlayTrack(next.track)
         }
@@ -312,12 +336,50 @@ class PlaybackQueueEngine(
         val prev = _sessionBackStack.removeAt(_sessionBackStack.size - 1)
         val curr = _currentTrack
         if (curr != null) {
-            _upcomingQueue.add(0, QueueEntry(curr, _currentOrigin))
+            val entry = QueueEntry(curr, _currentOrigin)
+            _upcomingQueue.add(0, entry)
+            _canonicalUpcomingQueue.add(0, entry)
         }
         _currentTrack = prev.track
         _currentOrigin = prev.origin
+        lastSelectionWasPrevious = true
         onQueueChanged?.invoke()
         return PreviousTrackDecision.PlayTrack(prev.track)
+    }
+
+    /**
+     * Finish a failed service selection while retaining the item actually loaded in the player.
+     * A failed forward target was visited, not played: do not leave it in playback back history.
+     * The session snapshot, remaining queue, recommendation order and repeat/shuffle modes survive.
+     * A failed Previous restores the entries that Previous had just removed from that history.
+     */
+    @Synchronized
+    internal fun recoverFailedTransition(
+        failedTrackId: String,
+        retainedTrackId: String
+    ): Boolean {
+        if (_currentTrack?.id != failedTrackId) return false
+        if (failedTrackId == retainedTrackId) return true
+        val retained = if (lastSelectionWasPrevious) {
+            val index = _upcomingQueue.indexOfFirst { it.track.id == retainedTrackId }
+            if (index < 0) return false
+            val entry = _upcomingQueue[index]
+            _currentTrack?.let { pushToBackStack(it) }
+            _upcomingQueue.take(index).forEach { pushEntryToBackStack(it) }
+            repeat(index + 1) { removeUpcomingAt(0) }
+            entry
+        } else {
+            val index = _sessionBackStack.indexOfLast { it.track.id == retainedTrackId }
+            if (index < 0) return false
+            val entry = _sessionBackStack[index]
+            _sessionBackStack.subList(index, _sessionBackStack.size).clear()
+            entry
+        }
+        _currentTrack = retained.track
+        _currentOrigin = retained.origin
+        lastSelectionWasPrevious = false
+        onQueueChanged?.invoke()
+        return true
     }
 
     /**
@@ -369,6 +431,9 @@ class PlaybackQueueEngine(
         _isShuffled = !_isShuffled
         if (_isShuffled && _upcomingQueue.size > 1) {
             _upcomingQueue.shuffle()
+        } else if (!_isShuffled) {
+            _upcomingQueue.clear()
+            _upcomingQueue.addAll(_canonicalUpcomingQueue)
         }
         onQueueChanged?.invoke()
         return _isShuffled
@@ -381,10 +446,21 @@ class PlaybackQueueEngine(
         return _repeatMode
     }
 
+    private fun removeUpcomingAt(index: Int): QueueEntry {
+        val entry = _upcomingQueue.removeAt(index)
+        // Match the occurrence, not its track ID: an explicit replay can share an ID.
+        val canonicalIndex = _canonicalUpcomingQueue.indexOfFirst { it === entry }
+        if (canonicalIndex >= 0) _canonicalUpcomingQueue.removeAt(canonicalIndex)
+        return entry
+    }
+
     private fun pushToBackStack(track: Track) {
+        pushEntryToBackStack(QueueEntry(track, _currentOrigin))
+    }
+
+    private fun pushEntryToBackStack(entry: QueueEntry) {
         val last = _sessionBackStack.lastOrNull()
-        val entry = QueueEntry(track, _currentOrigin)
-        if (last?.track?.id != track.id || last.origin != entry.origin) {
+        if (last?.track?.id != entry.track.id || last.origin != entry.origin) {
             _sessionBackStack.add(entry)
             if (_sessionBackStack.size > 100) {
                 _sessionBackStack.removeAt(0)
@@ -395,8 +471,10 @@ class PlaybackQueueEngine(
     @Synchronized
     fun clear() {
         _currentTrack = null
+        lastSelectionWasPrevious = false
         _upcomingQueue.clear()
         _sessionBackStack.clear()
+        _canonicalUpcomingQueue.clear()
         _recommendationCache.clear()
         _sessionSnapshot.clear()
         _currentOrigin = PlaybackOrigin.LEGACY_UNKNOWN

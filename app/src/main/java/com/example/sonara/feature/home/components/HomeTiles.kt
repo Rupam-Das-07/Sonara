@@ -3,6 +3,8 @@ package com.example.sonara.feature.home.components
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -343,13 +345,15 @@ fun PlaylistTile(
  * 56dp artwork + track title (strongest) + artist (quieter, + optional duration) + favorite + play affordance.
  * Flat on canvas — no card containers, no borders, no background blocks.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun QuickPickRow(
     track: Track,
     onPlay: () -> Unit,
     onToggleLike: (Boolean) -> Unit,
     isLiked: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onLongClick: (() -> Unit)? = null
 ) {
     val colors = SonaraTheme.colors
     val typography = SonaraTheme.typography
@@ -361,7 +365,7 @@ fun QuickPickRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clickable(onClick = onPlay)
+            .combinedClickable(onClick = onPlay, onLongClick = onLongClick)
             .padding(vertical = dimensions.spaceXs),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(dimensions.spaceMd)

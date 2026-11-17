@@ -250,9 +250,9 @@ class FeaturedArtistSelectorTest {
 
     // ================================================================== CASE 6
 
-    /** CASE 6 — several strong personal artists can enter, up to the cap. */
+    /** CASE 6 — five personal candidates plus editorial backfill (5 personal + 3 editorial). */
     @Test
-    fun `multiple strong personal artists can enter up to the cap`() {
+    fun `five personal candidates plus editorial backfill`() {
         val result = FeaturedArtistSelector.select(
             editorial = editorialRoster,
             history = history(
@@ -266,46 +266,130 @@ class FeaturedArtistSelectorTest {
         )
 
         val personalCount = result.count { r -> editorialRoster.none { it.id == r.id } }
-        assertEquals(
-            "personal entries must be capped at MAX_PERSONAL_SLOTS",
-            FeaturedArtistSelector.MAX_PERSONAL_SLOTS,
-            personalCount
+        val editorialCount = result.count { r -> editorialRoster.any { it.id == r.id } }
+        assertEquals(FeaturedArtistSelector.TARGET_SIZE, result.size)
+        assertEquals("5 personal candidates enter without a 3-slot cap", 5, personalCount)
+        assertEquals("3 editorial backfill candidates fill the remaining slots", 3, editorialCount)
+        assertTrue(
+            "all five personal artists win slots",
+            names(result).containsAll(listOf("Hans Zimmer", "Ludovico Einaudi", "Max Richter", "Olafur Arnalds", "Nils Frahm"))
         )
-        assertTrue("the three strongest personal artists win the slots",
-            names(result).containsAll(listOf("Hans Zimmer", "Ludovico Einaudi", "Max Richter")))
-        assertFalse("weaker personal artists do not get in", names(result).contains("Nils Frahm"))
     }
 
     // ================================================================== CASE 7
 
-    /**
-     * CASE 7 — a weak personal artist must not displace everything. Editorial keeps the
-     * majority of the shelf even with personal expansion.
-     */
+    /** CASE 7 — eight personal candidates occupy all eight slots with zero editorial backfill. */
     @Test
-    fun `personal artists never take over the shelf`() {
+    fun `eight personal candidates occupying all eight slots`() {
         val result = FeaturedArtistSelector.select(
             editorial = editorialRoster,
             history = history(
                 sessions("Hans Zimmer", n = 30, daysAgo = 1, completed = true),
-                sessions("Ludovico Einaudi", n = 30, daysAgo = 1, completed = true),
-                sessions("Max Richter", n = 30, daysAgo = 1, completed = true),
-                sessions("Olafur Arnalds", n = 30, daysAgo = 1, completed = true),
-                sessions("Nils Frahm", n = 30, daysAgo = 1, completed = true),
-                sessions("Joe Hisaishi", n = 30, daysAgo = 1, completed = true)
+                sessions("Ludovico Einaudi", n = 25, daysAgo = 2, completed = true),
+                sessions("Max Richter", n = 20, daysAgo = 3, completed = true),
+                sessions("Olafur Arnalds", n = 18, daysAgo = 4, completed = true),
+                sessions("Nils Frahm", n = 15, daysAgo = 5, completed = true),
+                sessions("Joe Hisaishi", n = 12, daysAgo = 6, completed = true),
+                sessions("Yann Tiersen", n = 10, daysAgo = 7, completed = true),
+                sessions("Ennio Morricone", n = 8, daysAgo = 8, completed = true)
             ),
             nowMs = NOW
         )
 
-        val editorialSurvivors = result.count { r -> editorialRoster.any { it.id == r.id } }
+        val personalCount = result.count { r -> editorialRoster.none { it.id == r.id } }
+        val editorialCount = result.count { r -> editorialRoster.any { it.id == r.id } }
         assertEquals(FeaturedArtistSelector.TARGET_SIZE, result.size)
-        assertTrue(
-            "even with six dominant personal artists, editorial must keep the majority (got $editorialSurvivors)",
-            editorialSurvivors >= FeaturedArtistSelector.TARGET_SIZE - FeaturedArtistSelector.MAX_PERSONAL_SLOTS
-        )
+        assertEquals("all 8 shelf slots belong to qualifying personal artists", 8, personalCount)
+        assertEquals("zero editorial backfill when personal candidates reach 8", 0, editorialCount)
     }
 
-    /** CASE 7b — one artist alone cannot occupy multiple slots. */
+    /** CASE 7b — more than eight personal candidates selecting the top eight. */
+    @Test
+    fun `more than eight personal candidates selecting the top eight`() {
+        val result = FeaturedArtistSelector.select(
+            editorial = editorialRoster,
+            history = history(
+                sessions("Artist 1", n = 30, daysAgo = 1, completed = true),
+                sessions("Artist 2", n = 28, daysAgo = 1, completed = true),
+                sessions("Artist 3", n = 26, daysAgo = 1, completed = true),
+                sessions("Artist 4", n = 24, daysAgo = 1, completed = true),
+                sessions("Artist 5", n = 22, daysAgo = 1, completed = true),
+                sessions("Artist 6", n = 20, daysAgo = 1, completed = true),
+                sessions("Artist 7", n = 18, daysAgo = 1, completed = true),
+                sessions("Artist 8", n = 16, daysAgo = 1, completed = true),
+                sessions("Artist 9", n = 14, daysAgo = 1, completed = true),
+                sessions("Artist 10", n = 12, daysAgo = 1, completed = true),
+                sessions("Artist 11", n = 10, daysAgo = 1, completed = true),
+                sessions("Artist 12", n = 8, daysAgo = 1, completed = true)
+            ),
+            nowMs = NOW
+        )
+
+        assertEquals(FeaturedArtistSelector.TARGET_SIZE, result.size)
+        assertTrue(names(result).containsAll((1..8).map { "Artist $it" }))
+        assertFalse("weaker candidates outside top 8 are omitted", names(result).contains("Artist 9"))
+        assertFalse(names(result).contains("Artist 12"))
+        val editorialCount = result.count { r -> editorialRoster.any { it.id == r.id } }
+        assertEquals(0, editorialCount)
+    }
+
+    /** CASE 7c — one personal candidate plus editorial backfill (1 personal + 7 editorial). */
+    @Test
+    fun `one personal candidate plus editorial backfill`() {
+        val result = FeaturedArtistSelector.select(
+            editorial = editorialRoster,
+            history = history(sessions("Hans Zimmer", n = 10, daysAgo = 1, completed = true)),
+            nowMs = NOW
+        )
+
+        val personalCount = result.count { r -> editorialRoster.none { it.id == r.id } }
+        val editorialCount = result.count { r -> editorialRoster.any { it.id == r.id } }
+        assertEquals(FeaturedArtistSelector.TARGET_SIZE, result.size)
+        assertEquals(1, personalCount)
+        assertEquals(7, editorialCount)
+        assertEquals("Hans Zimmer", result.first().name)
+    }
+
+    /** CASE 7d — three personal candidates plus editorial backfill (3 personal + 5 editorial). */
+    @Test
+    fun `three personal candidates plus editorial backfill`() {
+        val result = FeaturedArtistSelector.select(
+            editorial = editorialRoster,
+            history = history(
+                sessions("Hans Zimmer", n = 10, daysAgo = 1, completed = true),
+                sessions("Ludovico Einaudi", n = 8, daysAgo = 2, completed = true),
+                sessions("Max Richter", n = 6, daysAgo = 3, completed = true)
+            ),
+            nowMs = NOW
+        )
+
+        val personalCount = result.count { r -> editorialRoster.none { it.id == r.id } }
+        val editorialCount = result.count { r -> editorialRoster.any { it.id == r.id } }
+        assertEquals(FeaturedArtistSelector.TARGET_SIZE, result.size)
+        assertEquals(3, personalCount)
+        assertEquals(5, editorialCount)
+        assertTrue(names(result).containsAll(listOf("Hans Zimmer", "Ludovico Einaudi", "Max Richter")))
+    }
+
+    /** CASE 7e — personal artists not being displaced by editorial popularity. */
+    @Test
+    fun `personal artists not being displaced by editorial popularity`() {
+        val result = FeaturedArtistSelector.select(
+            editorial = editorialRoster,
+            history = history(
+                sessions("Indie Artist 1", n = 5, daysAgo = 1, completed = true),
+                sessions("Indie Artist 2", n = 4, daysAgo = 2, completed = true)
+            ),
+            nowMs = NOW
+        )
+
+        // Editorial artists with 0 plays must not push Indie Artist 1 and 2 off the front.
+        assertEquals(FeaturedArtistSelector.TARGET_SIZE, result.size)
+        assertEquals("Indie Artist 1", result[0].name)
+        assertEquals("Indie Artist 2", result[1].name)
+    }
+
+    /** CASE 7f — one artist alone cannot occupy multiple slots. */
     @Test
     fun `a single dominant artist occupies exactly one slot`() {
         val result = FeaturedArtistSelector.select(
@@ -319,11 +403,23 @@ class FeaturedArtistSelectorTest {
 
     // ================================================================== CASE 8
 
-    /** CASE 8 — cold start: no history at all preserves the editorial roster exactly. */
+    /** CASE 8 — cold start must not substitute an editorial roster for personal signals. */
     @Test
-    fun `no history preserves the editorial roster exactly`() {
+    fun `no history produces no featured artists`() {
         val result = FeaturedArtistSelector.select(editorialRoster, emptyList(), NOW)
-        assertEquals(editorialRoster, result)
+        assertTrue(result.isEmpty())
+    }
+
+    @Test fun `existing affinity threshold gates visibility without changing membership thresholds`() {
+        assertEquals(2, ArtistAffinityCalculator.MIN_QUALIFYING_EVENTS)
+        assertEquals(3, FeaturedArtistSelector.MIN_PERSONAL_CANDIDATE_EVENTS)
+        for (origin in listOf(PlaybackOrigin.SEARCH_SONGS, PlaybackOrigin.LIKED_SONGS)) {
+            assertTrue(FeaturedArtistSelector.select(editorialRoster,
+                sessions("Arijit Singh", 1, sourceSection = origin), NOW).isEmpty())
+            val eligible = sessions("Arijit Singh", 2, sourceSection = origin)
+            assertEquals(ArtistAffinityCalculator.personalize(editorialRoster, eligible, NOW),
+                FeaturedArtistSelector.select(editorialRoster, eligible, NOW))
+        }
     }
 
     /**
@@ -363,7 +459,7 @@ class FeaturedArtistSelectorTest {
         val result = FeaturedArtistSelector.select(editorialRoster, stale, NOW)
 
         assertFalse("out-of-window listening must not create membership", names(result).contains("Hans Zimmer"))
-        assertEquals(editorialRoster.size, result.size)
+        assertTrue(result.isEmpty())
     }
 
     /** CASE 9b — only in-window sessions count toward the membership threshold. */
@@ -391,7 +487,7 @@ class FeaturedArtistSelectorTest {
             nowMs = NOW
         )
         assertFalse(names(result).contains("Some Random Artist"))
-        assertEquals(editorialRoster.size, result.size)
+        assertTrue(result.isEmpty())
     }
 
     /**
@@ -511,11 +607,10 @@ class FeaturedArtistSelectorTest {
 
     /**
      * CASE 12 / 13 — robustness: unusable history rows (blank or punctuation-only artist
-     * strings) are skipped without breaking the shelf, and the editorial roster always
-     * remains available.
+     * strings) do not make an editorial-only shelf eligible.
      */
     @Test
-    fun `unusable history rows cannot break the shelf and editorial remains available`() {
+    fun `unusable history rows keep the shelf hidden`() {
         val junk = history(
             sessions("", n = 5, daysAgo = 1),
             sessions("   ", n = 5, daysAgo = 1),
@@ -523,9 +618,7 @@ class FeaturedArtistSelectorTest {
         )
         val result = FeaturedArtistSelector.select(editorialRoster, junk, NOW)
 
-        assertEquals("the editorial roster is still served", editorialRoster.size, result.size)
-        assertTrue("and still contains the editorial artists",
-            names(result).containsAll(editorialRoster.map { it.name }))
+        assertTrue(result.isEmpty())
     }
 
     /** CASE 13b — an empty editorial roster still yields the user's own artists. */

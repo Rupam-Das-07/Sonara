@@ -18,11 +18,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.example.sonara.R
 import com.example.sonara.core.ui.components.PhosphorIcons
 import com.example.sonara.core.ui.components.ShimmerBox
 import com.example.sonara.core.ui.components.SonaraLoadingIndicator
+import com.example.sonara.core.ui.components.SonaraEmptyState
 import com.example.sonara.core.ui.components.TrackRow
 import com.example.sonara.core.ui.theme.SonaraTheme
 import com.example.sonara.core.util.MediaTitleFormatter
@@ -53,8 +55,9 @@ fun LazyListScope.featuredArtistsModule(
     onSeeAllClick: () -> Unit = {}
 ) {
     when (module) {
-        HomeModule.Hidden -> Unit
-        HomeModule.Loading -> item(key = "featured-loading") { FeaturedArtistsSkeleton() }
+        HomeModule.Hidden, HomeModule.NoListeningHistory -> Unit
+        // Membership is not established while loading; keep the Home shelf hidden.
+        HomeModule.Loading -> Unit
         is HomeModule.Ready -> item(key = "featured-artists") {
             val dimensions = SonaraTheme.dimensions
             val totalArtists = module.value
@@ -137,7 +140,7 @@ fun LazyListScope.curatedPlaylistsModule(
     onSeeAllClick: () -> Unit = {}
 ) {
     when (module) {
-        HomeModule.Hidden -> Unit
+        HomeModule.Hidden, HomeModule.NoListeningHistory -> Unit
         HomeModule.Loading -> item(key = "curated-loading") { CuratedPlaylistsSkeleton() }
         is HomeModule.Ready -> item(key = "curated-playlists") {
             val dimensions = SonaraTheme.dimensions
@@ -225,10 +228,11 @@ fun LazyListScope.quickPicksModule(
     onPlayTrack: (Track) -> Unit,
     onPlayTrackWithContext: (Track, List<Track>) -> Unit = { track, _ -> onPlayTrack(track) },
     onToggleLike: (Track, Boolean) -> Unit,
-    isLiked: (String) -> Boolean
+    isLiked: (String) -> Boolean,
+    onTrackLongClick: (Track, List<Track>) -> Unit = { _, _ -> }
 ) {
     when (module) {
-        HomeModule.Hidden -> Unit
+        HomeModule.Hidden, HomeModule.NoListeningHistory -> Unit
         HomeModule.Loading -> item(key = "quickpicks-loading") { QuickPicksSkeleton() }
         is HomeModule.Ready -> item(key = "quick-picks") {
             val dimensions = SonaraTheme.dimensions
@@ -244,6 +248,7 @@ fun LazyListScope.quickPicksModule(
                         QuickPickRow(
                             track = track,
                              onPlay = { onPlayTrackWithContext(track, module.value) },
+                            onLongClick = { onTrackLongClick(track, module.value) },
                             onToggleLike = { liked -> onToggleLike(track, liked) },
                             isLiked = isLiked(track.id)
                         )
@@ -287,11 +292,24 @@ fun LazyListScope.becauseYouListenedModule(
     onPlayTrack: (Track) -> Unit,
     onPlayTrackWithContext: (Track, List<Track>) -> Unit = { track, _ -> onPlayTrack(track) },
     onToggleLike: (Track, Boolean) -> Unit,
-    isLiked: (String) -> Boolean
+    isLiked: (String) -> Boolean,
+    onTrackLongClick: (Track, List<Track>) -> Unit = { _, _ -> }
 ) {
     when (module) {
         HomeModule.Hidden -> Unit
-        HomeModule.Loading -> item(key = "bylt-loading") { QuickPicksSkeleton() }
+        HomeModule.NoListeningHistory -> item(key = "bylt-empty") {
+            Column {
+                HomeSectionHeader(title = stringResource(R.string.home_because_you_listen_to))
+                SonaraEmptyState(
+                    title = stringResource(R.string.home_bylt_empty_title),
+                    message = stringResource(R.string.home_bylt_empty_message),
+                    modifier = Modifier.testTag("bylt-empty")
+                )
+            }
+        }
+        HomeModule.Loading -> item(key = "bylt-loading") {
+            Box(Modifier.testTag("bylt-loading")) { QuickPicksSkeleton() }
+        }
         is HomeModule.Ready -> item(key = "bylt") {
             val dimensions = SonaraTheme.dimensions
             Column(verticalArrangement = Arrangement.spacedBy(dimensions.spaceSm)) {
@@ -304,6 +322,7 @@ fun LazyListScope.becauseYouListenedModule(
                             track = track,
                             isLiked = isLiked(track.id),
                              onPlay = { onPlayTrackWithContext(track, module.value.tracks) },
+                            onLongClick = { onTrackLongClick(track, module.value.tracks) },
                             onToggleLike = { liked -> onToggleLike(track, liked) }
                         )
                     }

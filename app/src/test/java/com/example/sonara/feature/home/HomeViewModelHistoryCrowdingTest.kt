@@ -212,8 +212,13 @@ class HomeViewModelHistoryCrowdingTest {
                 history.requestedOrigins.single()
             )
             assertEquals(
-                "the authoritative policy has not been widened",
-                setOf(PlaybackOrigin.SEARCH_SONGS, PlaybackOrigin.LIKED_SONGS),
+                "the authoritative policy includes exactly the deliberate origins",
+                setOf(
+                    PlaybackOrigin.SEARCH_SONGS,
+                    PlaybackOrigin.LIKED_SONGS,
+                    PlaybackOrigin.QUICK_PICKS,
+                    PlaybackOrigin.FEATURED_ARTISTS
+                ),
                 ArtistAffinityCalculator.ELIGIBLE_ORIGINS
             )
         }

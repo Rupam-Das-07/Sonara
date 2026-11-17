@@ -14,7 +14,9 @@ enum class PlaybackOrigin {
     PLAYLIST,
     VIDEO_SEARCH,
     OTHER,
-    LEGACY_UNKNOWN;
+    LEGACY_UNKNOWN,
+    QUICK_PICKS,
+    FEATURED_ARTISTS;
 
     companion object {
         fun fromStorage(value: String?): PlaybackOrigin = value

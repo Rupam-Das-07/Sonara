@@ -69,7 +69,8 @@ fun CuratedPlaylistDetailScreen(
     onPlayTrackWithContext: (Track, List<Track>) -> Unit = { track, _ -> onPlayTrack(track) },
     onToggleLike: (Track, Boolean) -> Unit,
     isLiked: (String) -> Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onTrackLongClick: (Track, List<Track>) -> Unit = { _, _ -> }
 ) {
     BackHandler(onBack = onBack)
 
@@ -263,6 +264,7 @@ fun CuratedPlaylistDetailScreen(
                                 track = track,
                                 isLiked = isLiked(track.id),
                                  onPlay = { onPlayTrackWithContext(track, tracks) },
+                                onLongClick = { onTrackLongClick(track, tracks) },
                                 onToggleLike = { liked -> onToggleLike(track, liked) }
                             )
                         }
@@ -270,7 +272,7 @@ fun CuratedPlaylistDetailScreen(
                 }
             }
 
-            HomeModule.Hidden -> {
+            HomeModule.Hidden, HomeModule.NoListeningHistory -> {
                 item(key = "playlist-tracks-hidden") {
                     Text(
                         text = "Unable to load tracks for ${playlist.name}.",

@@ -13,7 +13,9 @@ import com.example.sonara.domain.repository.HistoryRepository
 import com.example.sonara.domain.repository.LibraryRepository
 import com.example.sonara.domain.repository.SettingsRepository
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
@@ -33,7 +35,7 @@ import kotlinx.coroutines.withContext
  * Hero baseline is derived from the persisted playback session (the real re-entry
  * source); live playback is overlaid downstream via [resolveConsoleHero] so this
  * ViewModel never duplicates playback ownership. Nothing here fabricates content:
- * empty or failed loads become [HomeModule.Hidden].
+ * empty or failed loads become [HomeModule.Hidden], except BYLT's explicit no-history prompt.
  */
 class HomeViewModel(
     private val discoveryRepository: DiscoveryRepository,
@@ -50,9 +52,17 @@ class HomeViewModel(
 
     /** Guards redundant "Because You Listened To" reloads as history emits. */
     private var lastByltSeedId: String? = null
+    private var hasObservedByltSeed = false
+    private var byltGeneration = 0L
+    private var byltJob: Job? = null
 
     /** Monotonic generation for Featured Artists loads; only the newest load may publish. */
     private var featuredArtistsRefreshGeneration = 0L
+
+    /** Debounced job for reactive history-driven Featured Artists updates. */
+    private var featuredArtistsDebounceJob: Job? = null
+    private var lastFeaturedArtistsHistorySignature: String? = null
+    private var hasObservedFeaturedArtistsHistory = false
 
     /**
      * How many pull-to-refresh passes are currently in flight.
@@ -85,21 +95,40 @@ class HomeViewModel(
         viewModelScope.launch {
             try {
                 collectHistoryUpdates(historyRepository.getRecentHistory(limit = 10)) { history ->
-                    val seed = history.firstOrNull()?.track
-                    if (seed?.id != lastByltSeedId) {
-                        lastByltSeedId = seed?.id
-                        refreshBecauseYouListened(seed)
-                    }
+                    refreshBecauseYouListened(history.firstOrNull()?.track)
+                    handleReactiveHistoryUpdateForFeaturedArtists(history)
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
-                // History is an optional Home module. A local read failure must not cancel the
-                // ViewModel's sibling loaders or prevent the editorial Featured Artists roster
-                // from becoming available.
-                _uiState.update { it.copy(becauseYouListened = HomeModule.Hidden) }
-                recomputeDerived()
+                // A failed history read is not evidence that the library is empty.
+                hideBecauseYouListened()
             }
+        }
+    }
+
+    private fun handleReactiveHistoryUpdateForFeaturedArtists(
+        history: List<com.example.sonara.domain.model.HistoryItem>
+    ) {
+        val signature = history.take(5).joinToString("|") { "${it.id}:${it.completed}:${it.sourceSection.name}" }
+        if (!hasObservedFeaturedArtistsHistory) {
+            hasObservedFeaturedArtistsHistory = true
+            lastFeaturedArtistsHistorySignature = signature
+            return
+        }
+        if (signature == lastFeaturedArtistsHistorySignature) {
+            return
+        }
+        lastFeaturedArtistsHistorySignature = signature
+        scheduleFeaturedArtistsRecalculation()
+    }
+
+    private fun scheduleFeaturedArtistsRecalculation() {
+        featuredArtistsDebounceJob?.cancel()
+        featuredArtistsDebounceJob = viewModelScope.launch {
+            delay(300L)
+            val generation = nextFeaturedArtistsRefreshGeneration()
+            refreshFeaturedArtists(generation)
         }
     }
 
@@ -122,28 +151,20 @@ class HomeViewModel(
 
     private suspend fun refreshFeaturedArtists(generation: Long) {
         _uiState.update { it.copy(featuredArtists = HomeModule.Loading) }
-        discoveryRepository.getFeaturedArtists().fold(
-            onSuccess = { list ->
-                // The backend roster stays authoritative for artist METADATA, but no
-                // longer for membership alone: artists the user genuinely listens to can
-                // now also enter the shelf (see FeaturedArtistSelector).
-                val ranked = personalizeFeaturedArtists(list)
-                if (generation == featuredArtistsRefreshGeneration) {
-                    _uiState.update {
-                        it.copy(
-                            featuredArtists = if (ranked.isEmpty()) HomeModule.Hidden
-                            else HomeModule.Ready(ranked)
-                        )
-                    }
-                }
-            },
-            onFailure = { e ->
-                if (generation == featuredArtistsRefreshGeneration) {
-                    noteNetworkError(e)
-                    _uiState.update { it.copy(featuredArtists = HomeModule.Hidden) }
-                }
+        val editorialResult = discoveryRepository.getFeaturedArtists()
+        val editorialRoster = editorialResult.getOrElse { e ->
+            noteNetworkError(e)
+            emptyList()
+        }
+        val ranked = personalizeFeaturedArtists(editorialRoster)
+        if (generation == featuredArtistsRefreshGeneration) {
+            _uiState.update {
+                it.copy(
+                    featuredArtists = if (ranked.isEmpty()) HomeModule.Hidden
+                    else HomeModule.Ready(ranked)
+                )
             }
-        )
+        }
         if (generation == featuredArtistsRefreshGeneration) recomputeDerived()
     }
 
@@ -151,11 +172,9 @@ class HomeViewModel(
      * Builds the Featured Artists shelf from the editorial roster PLUS the artists the
      * user actually listens to, ranked by local listening affinity.
      *
-     * Runs ONLY on a Featured Artists refresh (Home load / pull-to-refresh), never per
-     * track play, so personalization drifts slowly and the existing 15-minute Featured
-     * Artists session cache is respected rather than bypassed. History is read once per
-     * pass ([kotlinx.coroutines.flow.first] on the Room-backed flow — a one-shot read,
-     * not a long-lived observer), and the fold runs off the main thread.
+     * Runs on Featured Artists initial load, pull-to-refresh, or debounced reactive
+     * history updates. History is read from the Room-backed flow, and the fold runs
+     * off the main thread.
      *
      * Selection is purely local. Portrait enrichment is the only network work: it sends
      * the selected artist name, never history rows, counts, scores, or timestamps. Each
@@ -164,7 +183,6 @@ class HomeViewModel(
     private suspend fun personalizeFeaturedArtists(
         roster: List<FeaturedArtist>
     ): List<FeaturedArtist> {
-        if (roster.isEmpty()) return roster
         val selected = try {
             // One clock reading bounds the query AND drives the policy, so the SQL cut-off can
             // never disagree with the in-memory fold about which rows are too far in the future.
@@ -191,9 +209,8 @@ class HomeViewModel(
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
-            // Local history problems should preserve the editorial roster. Image failures
-            // are handled independently below and must not take this fallback path.
-            return roster
+            // Without readable personal signals, do not substitute an editorial roster.
+            return emptyList()
         }
 
         // Only locally-derived entries have neither browseId nor portrait metadata. Editorial
@@ -242,29 +259,59 @@ class HomeViewModel(
         recomputeDerived()
     }
 
-    private suspend fun refreshBecauseYouListened(seed: Track?) {
-        if (seed == null || seed.id.isBlank()) {
-            _uiState.update { it.copy(becauseYouListened = HomeModule.Hidden) }
+    private fun refreshBecauseYouListened(candidate: Track?, force: Boolean = false): Job? {
+        val seed = candidate?.takeIf { it.id.isNotBlank() }
+        if (hasObservedByltSeed && seed?.id == lastByltSeedId) {
+            // History emissions and a concurrent refresh share an in-flight request.
+            if (byltJob?.isActive == true) return byltJob
+            if (!force) return null
+        }
+        hasObservedByltSeed = true
+        lastByltSeedId = seed?.id
+        val generation = ++byltGeneration
+        byltJob?.cancel()
+        byltJob = null
+        if (seed == null) {
+            _uiState.update { it.copy(becauseYouListened = HomeModule.NoListeningHistory) }
             recomputeDerived()
-            return
+            return null
         }
         _uiState.update { it.copy(becauseYouListened = HomeModule.Loading) }
-        discoveryRepository.getRelatedTracks(seed.id).fold(
-            onSuccess = { related ->
-                // Never recommend the seed back to the listener.
-                val tracks = related.filter { it.id != seed.id }
-                _uiState.update {
-                    it.copy(
-                        becauseYouListened = if (tracks.isEmpty()) HomeModule.Hidden
-                        else HomeModule.Ready(BecauseYouListenedData(seed.title, tracks))
-                    )
-                }
-            },
-            onFailure = { e ->
+        return viewModelScope.launch {
+            try {
+                val result = discoveryRepository.getRelatedTracks(seed.id)
+                // Some providers finish despite cancellation; only the current seed may publish.
+                if (generation != byltGeneration) return@launch
+                result.fold(
+                    onSuccess = { related ->
+                        val tracks = related.filter { it.id != seed.id }
+                        _uiState.update {
+                            it.copy(becauseYouListened = if (tracks.isEmpty()) HomeModule.Hidden
+                                else HomeModule.Ready(BecauseYouListenedData(seed.title, tracks)))
+                        }
+                    },
+                    onFailure = { e ->
+                        if (e is CancellationException) throw e
+                        noteNetworkError(e)
+                        _uiState.update { it.copy(becauseYouListened = HomeModule.Hidden) }
+                    }
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (generation != byltGeneration) return@launch
                 noteNetworkError(e)
                 _uiState.update { it.copy(becauseYouListened = HomeModule.Hidden) }
             }
-        )
+            recomputeDerived()
+        }.also { byltJob = it }
+    }
+
+    private fun hideBecauseYouListened() {
+        ++byltGeneration
+        byltJob?.cancel()
+        byltJob = null
+        _uiState.update { it.copy(becauseYouListened = HomeModule.Hidden) }
         recomputeDerived()
     }
 
@@ -322,6 +369,7 @@ class HomeViewModel(
 
     /** Pull-to-refresh: reload every module (Quick Picks rotates) and re-derive. */
     fun refresh() {
+        featuredArtistsDebounceJob?.cancel()
         val featuredArtistsGeneration = nextFeaturedArtistsRefreshGeneration()
         viewModelScope.launch {
             networkErrorSeen = false
@@ -329,6 +377,7 @@ class HomeViewModel(
             _uiState.update { it.copy(isRefreshing = true) }
             var completedNormally = false
             try {
+                val byltBeforeHistoryRead = byltGeneration
                 val history = try {
                     historyRepository.getRecentHistory(limit = 10).first()
                 } catch (e: CancellationException) {
@@ -342,7 +391,14 @@ class HomeViewModel(
                     launch { refreshPlaylists() },
                     launch { refreshQuickPicks(refresh = true) },
                     launch { refreshHero() },
-                    launch { refreshBecauseYouListened(seed) }
+                    launch {
+                        // A slower snapshot read cannot reselect a seed superseded by the observer.
+                        if (byltBeforeHistoryRead == byltGeneration ||
+                            (history != null && seed?.id == lastByltSeedId)) {
+                            if (history == null) hideBecauseYouListened()
+                            else refreshBecauseYouListened(seed, force = true)?.join()
+                        }
+                    }
                 )
                 jobs.joinAll()
                 completedNormally = true

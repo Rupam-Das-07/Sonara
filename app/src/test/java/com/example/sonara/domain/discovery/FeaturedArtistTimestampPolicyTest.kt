@@ -159,8 +159,8 @@ class FeaturedArtistTimestampPolicyTest {
 
         assertFalse("a clock anomaly must not buy a shelf slot", admitted(history, "Hans Zimmer"))
         assertEquals(
-            "the editorial roster must be returned unchanged",
-            roster.map { it.name },
+            "rejected timestamps must not enable the editorial shelf",
+            emptyList<String>(),
             FeaturedArtistSelector.select(roster, history, now).map { it.name }
         )
     }
@@ -265,14 +265,18 @@ class FeaturedArtistTimestampPolicyTest {
     @Test
     fun `provenance eligibility is unchanged by the timestamp policy`() {
         assertEquals(
-            setOf(PlaybackOrigin.SEARCH_SONGS, PlaybackOrigin.LIKED_SONGS),
+            setOf(
+                PlaybackOrigin.SEARCH_SONGS,
+                PlaybackOrigin.LIKED_SONGS,
+                PlaybackOrigin.QUICK_PICKS,
+                PlaybackOrigin.FEATURED_ARTISTS
+            ),
             ArtistAffinityCalculator.ELIGIBLE_ORIGINS
         )
 
         // A perfectly timed row from an ineligible origin is still ineligible.
         for (origin in PlaybackOrigin.values()) {
-            val eligibleOrigin =
-                origin == PlaybackOrigin.SEARCH_SONGS || origin == PlaybackOrigin.LIKED_SONGS
+            val eligibleOrigin = origin in ArtistAffinityCalculator.ELIGIBLE_ORIGINS
             val history = events("Hans Zimmer", now - minuteMs, 4, origin)
             assertEquals(
                 "origin=$origin scoring",

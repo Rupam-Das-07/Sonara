@@ -144,7 +144,7 @@ fun CuratedPlaylistsScreen(
                 }
             }
 
-            HomeModule.Hidden -> {
+            HomeModule.Hidden, HomeModule.NoListeningHistory -> {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()

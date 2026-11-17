@@ -179,9 +179,8 @@ class ArtistIdentityDiscoveryTest {
         val history = plays("अरिजीत सिंह", 3) + plays("অরিজিৎ সিং", 3) + plays("कि", 3) + plays("क़", 3)
         val result = FeaturedArtistSelector.select(roster, history, now)
         assertEquals(FeaturedArtistSelector.TARGET_SIZE, result.size)
-        assertEquals(listOf("अरिजीत सिंह", "অরিজিৎ সিং", "कि"), result.take(3).map { it.name })
-        assertFalse(result.any { it.name == "क़" })
-        assertEquals(roster.take(5), result.drop(FeaturedArtistSelector.MAX_PERSONAL_SLOTS))
+        assertEquals(listOf("अरिजीत सिंह", "অরিজিৎ সিং", "कि", "क़"), result.take(4).map { it.name })
+        assertEquals(roster.take(4), result.drop(4))
         assertEquals(result, FeaturedArtistSelector.select(roster, history, now))
     }
 }

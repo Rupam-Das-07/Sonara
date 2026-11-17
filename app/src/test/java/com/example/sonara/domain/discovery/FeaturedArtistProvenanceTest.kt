@@ -101,8 +101,8 @@ class FeaturedArtistProvenanceTest {
             ArtistAffinityCalculator.calculateAffinity(history, now).isEmpty()
         )
         assertEquals(
-            "radio autoplay must not reorder or expand the shelf",
-            names(roster),
+            "radio autoplay must not enable the shelf",
+            emptyList<String>(),
             names(FeaturedArtistSelector.select(roster, history, now))
         )
     }
@@ -127,7 +127,7 @@ class FeaturedArtistProvenanceTest {
                 "$origin must never admit a personal artist",
                 names(shelf).contains("Hans Zimmer")
             )
-            assertEquals("$origin must leave the editorial roster untouched", names(roster), names(shelf))
+            assertTrue("$origin must keep the shelf hidden", shelf.isEmpty())
         }
     }
 
@@ -140,8 +140,8 @@ class FeaturedArtistProvenanceTest {
             ArtistAffinityCalculator.calculateAffinity(history, now).isEmpty()
         )
         assertEquals(
-            "a legacy-only device shows the editorial roster unchanged (documented cold start)",
-            names(roster),
+            "a legacy-only device has no qualifying affinity and keeps the shelf hidden",
+            emptyList<String>(),
             names(FeaturedArtistSelector.select(roster, history, now))
         )
     }
@@ -279,10 +279,10 @@ class FeaturedArtistProvenanceTest {
     }
 
     @Test
-    fun `empty and all-ineligible history both fall back to the editorial roster`() {
-        assertEquals(names(roster), names(FeaturedArtistSelector.select(roster, emptyList(), now)))
+    fun `empty and all-ineligible history both keep the shelf hidden`() {
+        assertTrue(FeaturedArtistSelector.select(roster, emptyList(), now).isEmpty())
         val allIneligible = ineligible.flatMap { plays("Someone Else", it, 6) }
-        assertEquals(names(roster), names(FeaturedArtistSelector.select(roster, allIneligible, now)))
+        assertTrue(FeaturedArtistSelector.select(roster, allIneligible, now).isEmpty())
     }
 
     @Test
@@ -298,16 +298,21 @@ class FeaturedArtistProvenanceTest {
     // ------------------------------------------------------------- [property]
 
     @Test
-    fun `property - exactly two origins are eligible and the predicate agrees for every value`() {
+    fun `property - exactly four deliberate origins are eligible and the predicate agrees for every value`() {
         assertEquals(
-            setOf(PlaybackOrigin.SEARCH_SONGS, PlaybackOrigin.LIKED_SONGS),
+            setOf(
+                PlaybackOrigin.SEARCH_SONGS,
+                PlaybackOrigin.LIKED_SONGS,
+                PlaybackOrigin.QUICK_PICKS,
+                PlaybackOrigin.FEATURED_ARTISTS
+            ),
             ArtistAffinityCalculator.ELIGIBLE_ORIGINS
         )
 
         var eligibleCount = 0
         for (origin in PlaybackOrigin.values()) {
             val item = play("Artist A", origin)
-            val expected = origin == PlaybackOrigin.SEARCH_SONGS || origin == PlaybackOrigin.LIKED_SONGS
+            val expected = origin in ArtistAffinityCalculator.ELIGIBLE_ORIGINS
             assertEquals(
                 "eligibility for $origin",
                 expected,
@@ -320,7 +325,7 @@ class FeaturedArtistProvenanceTest {
             assertEquals("scoring behaviour for $origin", expected, scored)
             if (expected) eligibleCount++
         }
-        assertEquals("a new enum value must not become eligible by accident", 2, eligibleCount)
-        assertEquals("all eight origins were covered", 8, PlaybackOrigin.values().size)
+        assertEquals("a new enum value must not become eligible by accident", 4, eligibleCount)
+        assertEquals("all ten origins were covered", 10, PlaybackOrigin.values().size)
     }
 }

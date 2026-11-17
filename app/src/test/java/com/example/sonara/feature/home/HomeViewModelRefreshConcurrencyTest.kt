@@ -3,6 +3,8 @@ package com.example.sonara.feature.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Job
 import com.example.sonara.domain.model.AppLanguage
 import com.example.sonara.domain.model.ArtistCatalog
 import com.example.sonara.domain.model.AudioQuality
@@ -27,6 +29,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -84,6 +87,7 @@ class HomeViewModelRefreshConcurrencyTest {
             assertTrue(discovery.featuredCalls >= 2)
         } finally {
             store.clear()
+            viewModel.viewModelScope.coroutineContext[Job]?.join()
             advanceUntilIdle()
         }
     }
@@ -139,12 +143,14 @@ class HomeViewModelRefreshConcurrencyTest {
                 // Only when the last refresh finishes may the spinner clear.
                 secondRefresh.complete(Result.success(listOf(artist("b"))))
                 advanceUntilIdle()
+                viewModel.uiState.first { !it.isRefreshing }
                 assertFalse(
                     "the spinner must clear once no refresh is in flight",
                     viewModel.uiState.value.isRefreshing
                 )
             } finally {
                 store.clear()
+            viewModel.viewModelScope.coroutineContext[Job]?.join()
                 advanceUntilIdle()
             }
         }
@@ -169,16 +175,18 @@ class HomeViewModelRefreshConcurrencyTest {
 
             onlyRefresh.complete(Result.success(listOf(artist("only"))))
             advanceUntilIdle()
+            viewModel.uiState.first { !it.isRefreshing }
             assertFalse(viewModel.uiState.value.isRefreshing)
         } finally {
             store.clear()
+            viewModel.viewModelScope.coroutineContext[Job]?.join()
             advanceUntilIdle()
         }
     }
 
     @Suppress("UNCHECKED_CAST")
-    private fun readyArtists(viewModel: HomeViewModel): List<FeaturedArtist> {
-        val module = viewModel.uiState.value.featuredArtists
+    private suspend fun readyArtists(viewModel: HomeViewModel): List<FeaturedArtist> {
+        val module = viewModel.uiState.first { it.featuredArtists is HomeModule.Ready }.featuredArtists
         assertTrue("Featured Artists must be ready", module is HomeModule.Ready<*>)
         return (module as HomeModule.Ready<List<FeaturedArtist>>).value
     }
@@ -200,7 +208,7 @@ class HomeViewModelRefreshConcurrencyTest {
                 @Suppress("UNCHECKED_CAST")
                 return HomeViewModel(
                     discoveryRepository = discovery,
-                    historyRepository = FailingHistoryRepository(),
+                    historyRepository = EligibleHistoryRepository(),
                     libraryRepository = EmptyLibraryRepository(),
                     settingsRepository = EmptySettingsRepository()
                 ) as T
@@ -264,10 +272,15 @@ class HomeViewModelRefreshConcurrencyTest {
         override suspend fun getRelatedTracks(seedVideoId: String): Result<List<Track>> = Result.success(emptyList())
     }
 
-    private class FailingHistoryRepository : HistoryRepository {
-        override fun getRecentHistory(limit: Int): Flow<List<HistoryItem>> = flow {
-            throw IllegalStateException("history unavailable for concurrency fixture")
-        }
+    private class EligibleHistoryRepository : HistoryRepository {
+        // Visibility requires the existing two-event affinity threshold. Keep the
+        // concurrency fixture eligible without introducing a BYLT seed.
+        override fun getRecentHistory(limit: Int): Flow<List<HistoryItem>> = flowOf(
+            if (limit == com.example.sonara.domain.discovery.ArtistAffinityCalculator.HISTORY_SAMPLE_LIMIT)
+                (0..1).map { HistoryItem(it.toLong(), Track("$it", "Song", "Signal artist"),
+                    System.currentTimeMillis(), true, PlaybackOrigin.SEARCH_SONGS) }
+            else emptyList()
+        )
 
         override suspend fun recordHistory(track: Track, completed: Boolean): Long = 0L
 

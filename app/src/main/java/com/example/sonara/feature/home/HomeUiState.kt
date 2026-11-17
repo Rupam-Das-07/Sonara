@@ -14,6 +14,7 @@ import com.example.sonara.feature.player.PlayerUiState
  *
  *  - [Loading] initial fetch in flight (render a skeleton)
  *  - [Ready]   fetch succeeded with usable content
+ *  - [NoListeningHistory] BYLT has no seed; show its explicit listening prompt.
  *  - [Hidden]  fetch failed OR returned nothing usable → the module self-hides.
  *              Per the Phase 5C data contract we never substitute fabricated or
  *              placeholder content, so "nothing real to show" means "show nothing".
@@ -22,6 +23,7 @@ sealed interface HomeModule<out T> {
     data object Loading : HomeModule<Nothing>
     data class Ready<T>(val value: T) : HomeModule<T>
     data object Hidden : HomeModule<Nothing>
+    data object NoListeningHistory : HomeModule<BecauseYouListenedData>
 }
 
 /**
@@ -41,7 +43,7 @@ data class ResumableSession(
 
 /**
  * "Because You Listened To {seedTitle}" payload. Truthful and seed-based — the
- * whole module is hidden when there is no seed or no related content, and it is
+ * module shows a listening prompt when there is no seed, hides when no related content exists, and is
  * never relabelled as generic "Recommended For You".
  */
 data class BecauseYouListenedData(

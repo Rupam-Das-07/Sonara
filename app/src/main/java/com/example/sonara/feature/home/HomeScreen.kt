@@ -77,7 +77,8 @@ fun HomeScreen(
     onToggleLike: (Track, Boolean) -> Unit,
     isLiked: (String) -> Boolean,
     contentPadding: PaddingValues = PaddingValues(),
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onTrackLongClick: (Track, PlaybackOrigin, List<Track>) -> Unit = { _, _, _ -> }
 ) {
     val currentMode = resolveHomeViewMode(state)
     // Home's internal Feed ↔ detail/catalog transition. It uses the SAME frozen depth primitives as
@@ -112,12 +113,11 @@ fun HomeScreen(
                     onRefreshQuickPicks = onRefreshQuickPicks,
                     onPlayTrack = onPlayTrack,
                     onPlayTrackWithOrigin = onPlayTrackWithOrigin,
-                    onPlayTrackWithContext = { track, context ->
-                        onPlayTrackWithContext(track, PlaybackOrigin.HOME, context)
-                    },
+                    onPlayTrackWithContext = onPlayTrackWithContext,
                     onToggleLike = onToggleLike,
                     isLiked = isLiked,
-                    contentPadding = contentPadding
+                    contentPadding = contentPadding,
+                    onTrackLongClick = onTrackLongClick
                 )
             }
 
@@ -145,9 +145,12 @@ fun HomeScreen(
                     tracksModule = state.artistDetailTracks,
                     playlistsModule = state.artistDetailPlaylists,
                     onBack = onBackFromDetail,
-                    onPlayTrack = { track -> onPlayTrackWithOrigin(track, PlaybackOrigin.HOME) },
+                    onPlayTrack = { track -> onPlayTrackWithOrigin(track, PlaybackOrigin.FEATURED_ARTISTS) },
+                    onTrackLongClick = { track, context ->
+                        onTrackLongClick(track, PlaybackOrigin.FEATURED_ARTISTS, context)
+                    },
                     onPlayTrackWithContext = { track, context ->
-                        onPlayTrackWithContext(track, PlaybackOrigin.HOME, context)
+                        onPlayTrackWithContext(track, PlaybackOrigin.FEATURED_ARTISTS, context)
                     },
                     onPlaylistClick = onPlaylistClick,
                     onToggleLike = onToggleLike,
@@ -162,6 +165,9 @@ fun HomeScreen(
                     detailModule = state.selectedPlaylistDetail,
                     onBack = onBackFromDetail,
                     onPlayTrack = { track -> onPlayTrackWithOrigin(track, PlaybackOrigin.PLAYLIST) },
+                    onTrackLongClick = { track, context ->
+                        onTrackLongClick(track, PlaybackOrigin.PLAYLIST, context)
+                    },
                     onPlayTrackWithContext = { track, context ->
                         onPlayTrackWithContext(track, PlaybackOrigin.PLAYLIST, context)
                     },
@@ -185,11 +191,12 @@ private fun HomeFeed(
     onRefreshQuickPicks: () -> Unit,
     onPlayTrack: (Track) -> Unit,
     onPlayTrackWithOrigin: (Track, PlaybackOrigin) -> Unit = { track, _ -> onPlayTrack(track) },
-    onPlayTrackWithContext: (Track, List<Track>) -> Unit = { track, _ -> onPlayTrack(track) },
+    onPlayTrackWithContext: (Track, PlaybackOrigin, List<Track>) -> Unit = { track, origin, _ -> onPlayTrackWithOrigin(track, origin) },
     onToggleLike: (Track, Boolean) -> Unit,
     isLiked: (String) -> Boolean,
     contentPadding: PaddingValues = PaddingValues(),
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onTrackLongClick: (Track, PlaybackOrigin, List<Track>) -> Unit = { _, _, _ -> }
 ) {
     val dimensions = SonaraTheme.dimensions
 
@@ -226,21 +233,27 @@ private fun HomeFeed(
         // 4. Quick Picks (56dp compact vertical list)
         quickPicksModule(
             module = state.quickPicks,
-            onPlayTrack = { track -> onPlayTrackWithOrigin(track, PlaybackOrigin.HOME) },
+            onPlayTrack = { track -> onPlayTrackWithOrigin(track, PlaybackOrigin.QUICK_PICKS) },
             onPlayTrackWithContext = { track, context ->
-                onPlayTrackWithContext(track, context)
+                onPlayTrackWithContext(track, PlaybackOrigin.QUICK_PICKS, context)
             },
             onToggleLike = onToggleLike,
             isLiked = isLiked,
-            onRefresh = onRefreshQuickPicks
+            onRefresh = onRefreshQuickPicks,
+            onTrackLongClick = { track, context ->
+                onTrackLongClick(track, PlaybackOrigin.QUICK_PICKS, context)
+            }
         )
 
         // 5. Because You Listen To…
         becauseYouListenedModule(
             module = state.becauseYouListened,
+            onTrackLongClick = { track, context ->
+                onTrackLongClick(track, PlaybackOrigin.HOME, context)
+            },
             onPlayTrack = { track -> onPlayTrackWithOrigin(track, PlaybackOrigin.HOME) },
             onPlayTrackWithContext = { track, context ->
-                onPlayTrackWithContext(track, context)
+                onPlayTrackWithContext(track, PlaybackOrigin.HOME, context)
             },
             onToggleLike = onToggleLike,
             isLiked = isLiked

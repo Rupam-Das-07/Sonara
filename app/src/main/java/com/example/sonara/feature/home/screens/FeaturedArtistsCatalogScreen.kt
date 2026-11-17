@@ -91,7 +91,7 @@ fun FeaturedArtistsCatalogScreen(
         }
 
         when (artistsModule) {
-            HomeModule.Hidden -> {
+            HomeModule.Hidden, HomeModule.NoListeningHistory -> {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
                         text = "No artists available.",

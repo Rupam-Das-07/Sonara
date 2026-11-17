@@ -51,13 +51,11 @@ object FeaturedArtistSelector {
     const val TARGET_SIZE: Int = 8
 
     /**
-     * Hard cap on how many of [TARGET_SIZE] slots personal-only artists may occupy.
-     *
-     * This is what keeps Featured Artists a discovery surface: at least
-     * `TARGET_SIZE - MAX_PERSONAL_SLOTS` editorial artists always survive, so heavy
-     * listening can reshape the shelf but never take it over.
+     * Maximum slots personal artists may occupy. Personal candidates can now expand
+     * to occupy the entire shelf (up to [TARGET_SIZE]) when sufficient qualifying
+     * personal listening exists.
      */
-    const val MAX_PERSONAL_SLOTS: Int = 3
+    const val MAX_PERSONAL_SLOTS: Int = TARGET_SIZE
 
     /**
      * Qualifying in-window listening sessions an artist needs before they may ENTER
@@ -165,25 +163,23 @@ object FeaturedArtistSelector {
      *
      * Behaviour, stated as rules:
      *
-     *  1. **Cold start / no qualifying personal artist** — the editorial roster is
-     *     returned through [ArtistAffinityCalculator.personalize], i.e. byte-for-byte
-     *     today's behaviour (order may still be personalized; membership is not).
-     *     Featured Artists is never emptied by this selector.
-     *  2. **Expansion** — personal artists not already on the roster become candidates
-     *     with `imageUrl = null`, which the Home tile already renders as a typographic
-     *     monogram. At most [MAX_PERSONAL_SLOTS] are admitted, strongest first.
-     *  3. **Dedupe** — an artist present in both sets appears ONCE and keeps the richer
-     *     editorial metadata (real portrait, genre, browseId) while still receiving the
-     *     personal affinity it earned.
-     *  4. **Ranking** — the unified pool is ordered by local affinity, descending. The
-     *     sort is stable, so equal scores keep pool order: editorial first, in the
-     *     backend's editorial order. Zero-history editorial artists score exactly 0 —
-     *     no affinity is ever fabricated for them — so they rank last and are the ones
-     *     a strong personal artist displaces.
-     *  5. **Bound** — an expanded result is capped at [TARGET_SIZE], guaranteeing at
-     *     least `TARGET_SIZE - MAX_PERSONAL_SLOTS` editorial artists survive.
+     *  1. **Cold start / no qualifying affinity** — hide the shelf until the user has
+     *     accumulated qualifying personal listening. Once eligible, personal artists
+     *     lead the shelf.
+     *  2. **Personal Primacy & Full Expansion** — qualifying personal artists (clearing
+     *     [MIN_PERSONAL_CANDIDATE_EVENTS]) can occupy up to all [TARGET_SIZE] (8) positions.
+     *     Editorial presets must never displace or dilute qualifying personal artists.
+     *  3. **Editorial Backfill** — editorial candidates fill only positions that cannot
+     *     be filled by qualifying personal candidates (e.g. 8 - K slots). If 8 or more
+     *     qualifying personal artists exist, zero editorial backfill is added.
+     *  4. **Dedupe** — an artist present in both personal listening and editorial roster
+     *     appears ONCE, preserves richer editorial metadata (portrait, genre, browseId),
+     *     and retains their earned personal affinity ranking.
+     *  5. **Ranking** — personal candidates are ordered by local affinity, descending.
+     *     Editorial backfill follows them, preserving editorial order (with any partial-history
+     *     editorial artists prioritized).
      *
-     * @param editorial backend roster; authoritative for metadata, no longer for membership.
+     * @param editorial backend roster; authoritative for metadata, backfill only.
      * @param history   local playback history, newest first.
      * @param nowMs     caller-supplied "now" so the result is deterministic.
      */
@@ -192,9 +188,10 @@ object FeaturedArtistSelector {
         history: List<HistoryItem>,
         nowMs: Long
     ): List<FeaturedArtist> {
-        if (history.isEmpty()) return editorial
+        if (history.isEmpty()) return emptyList()
 
         val affinity = ArtistAffinityCalculator.calculateAffinity(history, nowMs)
+        if (affinity.isEmpty()) return emptyList()
 
         val editorialKeys = editorial.mapNotNull { ArtistIdentity.nameKey(it.name) }.toSet()
         val ambiguousKeys = ArtistIdentity.ambiguousEditorialKeys(editorial)
@@ -210,7 +207,7 @@ object FeaturedArtistSelector {
             // dedupe above prevents, but between personal candidates. distinctBy keeps
             // the first, which after the sort is the strongest.
             .distinctBy { ArtistIdentity.nameKey(it.nameKey) }
-            .take(MAX_PERSONAL_SLOTS)
+            .take(TARGET_SIZE)
 
         // Editorial IDs are opaque and immutable. Disambiguate only generated local IDs,
         // including collisions between two different names with the same lossy slug.
@@ -239,13 +236,33 @@ object FeaturedArtistSelector {
             )
         }
 
-        // Nothing to add: fall through to the existing, already-tested re-rank so the
-        // no-expansion path stays identical to today.
+        // Nothing to add: fall through to the existing re-rank so the no-expansion path stays consistent.
         if (personalOnly.isEmpty()) {
             return ArtistAffinityCalculator.personalize(editorial, history, nowMs)
         }
 
-        return (editorial + personalOnly)
+        // If no editorial candidates exist (backend empty/offline), return all qualifying personal candidates.
+        if (editorial.isEmpty()) {
+            return personalOnly.take(TARGET_SIZE)
+        }
+
+        // Prioritize personal candidates: they take up to personalOnly.size slots.
+        // Editorial candidates only fill positions that cannot be filled by qualifying personal candidates (TARGET_SIZE - personalOnly.size).
+        val backfillSlotsNeeded = TARGET_SIZE - personalOnly.size
+        val editorialBackfill = if (backfillSlotsNeeded > 0) {
+            val personalKeys = personalOnly.mapNotNull { ArtistIdentity.nameKey(it.name) }.toSet()
+            editorial
+                .filter { ArtistIdentity.nameKey(it.name) !in personalKeys }
+                .sortedByDescending {
+                    if (ArtistIdentity.nameKey(it.name) in ambiguousKeys) 0f
+                    else ArtistAffinityCalculator.lookupAffinity(affinity, it.name) ?: 0f
+                }
+                .take(backfillSlotsNeeded)
+        } else {
+            emptyList()
+        }
+
+        return (editorialBackfill + personalOnly)
             .sortedByDescending {
                 if (ArtistIdentity.nameKey(it.name) in ambiguousKeys) 0f
                 else ArtistAffinityCalculator.lookupAffinity(affinity, it.name) ?: 0f

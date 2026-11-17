@@ -2,6 +2,7 @@ package com.example.sonara
 
 import android.content.Context
 import com.example.sonara.data.download.DownloadEngine
+import com.example.sonara.data.download.VideoDownloadEngine
 import com.example.sonara.data.local.db.SonaraDatabase
 import com.example.sonara.data.local.preferences.UserPreferencesDataStore
 import com.example.sonara.data.repository.DiscoveryRepositoryImpl
@@ -159,10 +160,20 @@ class AppContainer(context: Context) {
         )
     }
 
+    val videoDownloadEngine: VideoDownloadEngine by lazy {
+        VideoDownloadEngine(
+            context = context.applicationContext,
+            downloadDao = database.downloadDao(),
+            trackDao = database.trackDao(),
+            videoExtractor = videoExtractor
+        )
+    }
+
     val downloadRepository: DownloadRepository by lazy {
         DownloadRepositoryImpl(
             downloadDao = database.downloadDao(),
-            downloadEngine = downloadEngine
+            downloadEngine = downloadEngine,
+            videoDownloadEngine = videoDownloadEngine
         )
     }
 

@@ -36,6 +36,8 @@ import com.example.sonara.data.local.db.entity.TrackEntity
  *   v6 → v7: Added structured `artistCredits` to `tracks` (see [MIGRATION_6_7]).
  *   v7 → v8: Added playback provenance and session identity to `playback_history`
  *            (see [MIGRATION_7_8]).
+ *   v8 → v9: Added video download metadata (`mediaType`, `resolutionHeight`, `frameRate`,
+ *            `videoCodec`, `audioCodec`, `container`) to `downloads` table (see [MIGRATION_8_9]).
  */
 @Database(
     entities = [
@@ -47,7 +49,7 @@ import com.example.sonara.data.local.db.entity.TrackEntity
         DownloadEntity::class,
         SearchHistoryEntity::class
     ],
-    version = 8,
+    version = 9,
     exportSchema = false
 )
 abstract class SonaraDatabase : RoomDatabase() {
@@ -315,6 +317,29 @@ abstract class SonaraDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * 8 -> 9: adds video download metadata columns to `downloads`.
+         *
+         * Data preservation: Pure additive ALTERs with safe defaults.
+         * Existing audio downloads default to mediaType = 'AUDIO' and container = 'unknown',
+         * with backfilled container inferred from localFilePath extension (.webm, .m4a, .mp4, .mp3, .opus).
+         */
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `downloads` ADD COLUMN `mediaType` TEXT NOT NULL DEFAULT 'AUDIO'")
+                db.execSQL("ALTER TABLE `downloads` ADD COLUMN `resolutionHeight` INTEGER")
+                db.execSQL("ALTER TABLE `downloads` ADD COLUMN `frameRate` INTEGER")
+                db.execSQL("ALTER TABLE `downloads` ADD COLUMN `videoCodec` TEXT")
+                db.execSQL("ALTER TABLE `downloads` ADD COLUMN `audioCodec` TEXT")
+                db.execSQL("ALTER TABLE `downloads` ADD COLUMN `container` TEXT NOT NULL DEFAULT 'unknown'")
+                db.execSQL("UPDATE `downloads` SET `container` = 'webm' WHERE LOWER(`localFilePath`) LIKE '%.webm'")
+                db.execSQL("UPDATE `downloads` SET `container` = 'm4a' WHERE LOWER(`localFilePath`) LIKE '%.m4a'")
+                db.execSQL("UPDATE `downloads` SET `container` = 'mp4' WHERE LOWER(`localFilePath`) LIKE '%.mp4'")
+                db.execSQL("UPDATE `downloads` SET `container` = 'mp3' WHERE LOWER(`localFilePath`) LIKE '%.mp3'")
+                db.execSQL("UPDATE `downloads` SET `container` = 'opus' WHERE LOWER(`localFilePath`) LIKE '%.opus'")
+            }
+        }
+
         @Volatile
         private var instance: SonaraDatabase? = null
 
@@ -332,7 +357,8 @@ abstract class SonaraDatabase : RoomDatabase() {
                         MIGRATION_4_5,
                         MIGRATION_5_6,
                         MIGRATION_6_7,
-                        MIGRATION_7_8
+                        MIGRATION_7_8,
+                        MIGRATION_8_9
                     )
                     .build()
                     .also { instance = it }

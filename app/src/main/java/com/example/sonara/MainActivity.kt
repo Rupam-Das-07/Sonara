@@ -115,7 +115,8 @@ class MainActivity : ComponentActivity() {
                     transitionManager = appContainer.transitionManager,
                     settingsRepository = appContainer.settingsRepository,
                     playbackRouteCoordinator = appContainer.playbackRouteCoordinator,
-                    highResRepository = appContainer.highResVideoRepository
+                    highResRepository = appContainer.highResVideoRepository,
+                    downloadRepository = appContainer.downloadRepository
                 ) as T
         })[VideoPlaybackViewModel::class.java]
 

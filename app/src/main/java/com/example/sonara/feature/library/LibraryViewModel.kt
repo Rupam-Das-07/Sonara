@@ -3,7 +3,9 @@ package com.example.sonara.feature.library
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.sonara.domain.model.DownloadStatus
+import com.example.sonara.domain.model.DownloadWithTrack
 import com.example.sonara.domain.model.Track
+import com.example.sonara.domain.model.video.download.ActiveDownloadProgress
 import com.example.sonara.domain.repository.DownloadRepository
 import com.example.sonara.domain.repository.HistoryRepository
 import com.example.sonara.domain.repository.LibraryRepository
@@ -58,16 +60,36 @@ class LibraryViewModel(
         }
     }
 
+    private val activeDownloadsFlow: Flow<List<DownloadWithTrack>> = if (downloadRepository == null) {
+        flowOf(emptyList())
+    } else {
+        downloadRepository.observeDownloadsWithTrack().map { list ->
+            list.filter {
+                it.download.status == DownloadStatus.DOWNLOADING || it.download.status == DownloadStatus.QUEUED
+            }
+        }
+    }
+
+    private val activeProgressFlow: Flow<Map<String, ActiveDownloadProgress>> = if (downloadRepository == null) {
+        flowOf(emptyMap())
+    } else {
+        downloadRepository.observeAllActiveProgress()
+    }
+
     val uiState: StateFlow<LibraryUiState> = combine(
         libraryRepository.getLikedSongs(),
         historyRepository.getRecentHistory(50),
-        downloadedTracksFlow,
+        combine(downloadedTracksFlow, activeDownloadsFlow, activeProgressFlow) { completed, active, progress ->
+            Triple(completed, active, progress)
+        },
         _selectedTab
-    ) { liked, history, downloads, tab ->
+    ) { liked, history, downloadData, tab ->
         LibraryUiState(
             likedSongs = liked,
             history = history,
-            downloads = downloads,
+            downloads = downloadData.first,
+            activeDownloads = downloadData.second,
+            activeProgressMap = downloadData.third,
             selectedTab = tab
         )
     }.stateIn(

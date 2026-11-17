@@ -60,8 +60,28 @@ interface DownloadDao {
     @Query("UPDATE downloads SET downloadedBytes = :downloadedBytes, totalBytes = :totalBytes, status = :status WHERE trackId = :trackId")
     suspend fun updateProgress(trackId: String, downloadedBytes: Long, totalBytes: Long, status: String)
 
-    @Query("UPDATE downloads SET localFilePath = :localFilePath, mimeType = :mimeType, quality = :quality WHERE trackId = :trackId")
-    suspend fun updateFileInfo(trackId: String, localFilePath: String, mimeType: String, quality: String)
+    @Query("UPDATE downloads SET localFilePath = :localFilePath, mimeType = :mimeType, quality = :quality, container = :container WHERE trackId = :trackId")
+    suspend fun updateFileInfo(
+        trackId: String,
+        localFilePath: String,
+        mimeType: String,
+        quality: String,
+        container: String = "unknown"
+    )
+
+    @Query("UPDATE downloads SET localFilePath = :localFilePath, mimeType = :mimeType, quality = :quality, mediaType = :mediaType, resolutionHeight = :resolutionHeight, frameRate = :frameRate, videoCodec = :videoCodec, audioCodec = :audioCodec, container = :container WHERE trackId = :trackId")
+    suspend fun updateVideoFileInfo(
+        trackId: String,
+        localFilePath: String,
+        mimeType: String,
+        quality: String,
+        mediaType: String,
+        resolutionHeight: Int?,
+        frameRate: Int?,
+        videoCodec: String?,
+        audioCodec: String?,
+        container: String
+    )
 
     @Query("UPDATE downloads SET localFilePath = :localFilePath, mimeType = :mimeType WHERE trackId = :trackId")
     suspend fun updateFileInfoLegacy(trackId: String, localFilePath: String, mimeType: String)

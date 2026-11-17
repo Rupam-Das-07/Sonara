@@ -49,6 +49,7 @@ import kotlinx.coroutines.delay
 fun DownloadProgressDialog(
     track: Track,
     downloadInfo: DownloadInfo?,
+    activeProgress: com.example.sonara.domain.model.video.download.ActiveDownloadProgress? = null,
     onCancel: () -> Unit,
     onRetry: () -> Unit,
     onRemove: () -> Unit,
@@ -278,11 +279,15 @@ fun DownloadProgressDialog(
 
                     DownloadStatus.DOWNLOADING -> {
                         Column(verticalArrangement = Arrangement.spacedBy(dimensions.spaceXs)) {
-                            val progressFraction = downloadInfo?.progressFraction ?: 0f
-                            val totalBytes = downloadInfo?.totalBytes ?: 0L
-                            val downloadedBytes = downloadInfo?.downloadedBytes ?: 0L
+                            val isRemuxing = activeProgress?.stage == com.example.sonara.domain.model.video.download.DownloadStage.REMUXING
+                            val progressFraction = activeProgress?.progressFraction ?: downloadInfo?.progressFraction ?: 0f
+                            val totalBytes = (activeProgress?.totalBytes?.takeIf { it > 0 } ?: downloadInfo?.totalBytes ?: 0L)
+                            val downloadedBytes = (activeProgress?.downloadedBytes ?: downloadInfo?.downloadedBytes ?: 0L)
+                            val speedFormatted = activeProgress?.speedFormatted
+                            val etaFormatted = activeProgress?.etaFormatted
+                            val stageDesc = activeProgress?.stageDescription ?: if (downloadInfo?.isVideo == true) "Downloading video..." else "Connecting and downloading stream..."
 
-                            if (totalBytes > 0L) {
+                            if (totalBytes > 0L && !isRemuxing) {
                                 LinearProgressIndicator(
                                     progress = { progressFraction },
                                     modifier = Modifier
@@ -309,6 +314,50 @@ fun DownloadProgressDialog(
                                         color = colors.primaryText
                                     )
                                 }
+
+                                if (speedFormatted != null || etaFormatted != null) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(
+                                            text = speedFormatted.orEmpty(),
+                                            style = typography.caption.copy(fontSize = 11.sp),
+                                            color = colors.accent
+                                        )
+                                        Text(
+                                            text = etaFormatted.orEmpty(),
+                                            style = typography.caption.copy(fontSize = 11.sp),
+                                            color = colors.secondaryText
+                                        )
+                                    }
+                                }
+                            } else if (isRemuxing) {
+                                if (progressFraction > 0f) {
+                                    LinearProgressIndicator(
+                                        progress = { progressFraction },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(8.dp)
+                                            .clip(RoundedCornerShape(4.dp)),
+                                        color = colors.accent,
+                                        trackColor = colors.surfaceVariant
+                                    )
+                                } else {
+                                    LinearProgressIndicator(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(8.dp)
+                                            .clip(RoundedCornerShape(4.dp)),
+                                        color = colors.accent,
+                                        trackColor = colors.surfaceVariant
+                                    )
+                                }
+                                Text(
+                                    text = stageDesc,
+                                    style = typography.caption,
+                                    color = colors.accent
+                                )
                             } else {
                                 LinearProgressIndicator(
                                     modifier = Modifier
@@ -319,7 +368,7 @@ fun DownloadProgressDialog(
                                     trackColor = colors.surfaceVariant
                                 )
                                 Text(
-                                    text = "Connecting and downloading audio stream...",
+                                    text = stageDesc,
                                     style = typography.caption,
                                     color = colors.secondaryText
                                 )

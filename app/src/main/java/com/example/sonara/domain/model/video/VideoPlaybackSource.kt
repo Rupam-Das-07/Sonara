@@ -21,5 +21,6 @@ data class VideoPlaybackSource(
     val videoOnlyStreams: List<VideoPlaybackStream> = emptyList(),
     val audioOnlyStreams: List<VideoPlaybackStream> = emptyList(),
     val isLive: Boolean = false,
-    val isUpcoming: Boolean = false
+    val isUpcoming: Boolean = false,
+    val progressiveStreams: List<VideoPlaybackStream> = emptyList()
 )

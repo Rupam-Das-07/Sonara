@@ -192,6 +192,12 @@ fun SonaraAppRoot(
     val activeVideoViewCount by videoPlaybackViewModel.activeViewCount.collectAsState()
     val activeVideoIsLive by videoPlaybackViewModel.activeIsLive.collectAsState()
     val activeVideoIsUpcoming by videoPlaybackViewModel.activeIsUpcoming.collectAsState()
+    val activeProgressMap by playerViewModel.activeProgressMap.collectAsState()
+    val isVideoDownloadSheetOpen by videoPlaybackViewModel.isVideoDownloadSheetOpen.collectAsState()
+    val availableDownloadOptions by videoPlaybackViewModel.availableDownloadOptions.collectAsState()
+    val selectedDownloadOption by videoPlaybackViewModel.selectedDownloadOption.collectAsState()
+    val downloadPreselectionResult by videoPlaybackViewModel.downloadPreselectionResult.collectAsState()
+    val isExtractingDownloadOptions by videoPlaybackViewModel.isExtractingDownloadOptions.collectAsState()
     val videoQualityState = if (
         videoPlaybackState.route == com.example.sonara.feature.video.VideoPlaybackRoute.MEDIA3 ||
             videoPlaybackState.route == com.example.sonara.feature.video.VideoPlaybackRoute.RESOLVING
@@ -866,7 +872,14 @@ fun SonaraAppRoot(
                         album = presentedPlayerState.albumTitle,
                         artworkUrl = presentedPlayerState.artworkUrl
                     )
-                    if (SoundcloudSourceIdentity.isSoundcloudTrackId(currentTrack.id)) {
+                    if (activeVideoTrack != null) {
+                        val downloadInfo = downloadsMap[currentTrack.id]
+                        if (downloadInfo != null && (downloadInfo.status == com.example.sonara.domain.model.DownloadStatus.DOWNLOADING || downloadInfo.status == com.example.sonara.domain.model.DownloadStatus.DOWNLOADED)) {
+                            activeDownloadTrack = currentTrack
+                        } else {
+                            videoPlaybackViewModel.onOpenDownloadSheet()
+                        }
+                    } else if (SoundcloudSourceIdentity.isSoundcloudTrackId(currentTrack.id)) {
                         Toast.makeText(context, R.string.download_unsupported_soundcloud, Toast.LENGTH_SHORT).show()
                     } else {
                         activeDownloadTrack = currentTrack
@@ -900,6 +913,7 @@ fun SonaraAppRoot(
                 DownloadProgressDialog(
                     track = track,
                     downloadInfo = downloadInfo,
+                    activeProgress = activeProgressMap[track.id],
                     onCancel = {
                         playerViewModel.cancelDownload(track.id)
                         activeDownloadTrack = null
@@ -918,6 +932,21 @@ fun SonaraAppRoot(
                     onDismiss = {
                         activeDownloadTrack = null
                     }
+                )
+            }
+
+
+            // Centralized VideoDownloadBottomSheet
+            if (isVideoDownloadSheetOpen && activeVideoTrack != null) {
+                com.example.sonara.feature.video.download.VideoDownloadBottomSheet(
+                    track = activeVideoTrack!!,
+                    availableOptions = availableDownloadOptions,
+                    selectedOption = selectedDownloadOption,
+                    preselectionResult = downloadPreselectionResult,
+                    isLoadingOptions = isExtractingDownloadOptions,
+                    onSelectOption = videoPlaybackViewModel::selectDownloadOption,
+                    onConfirmDownload = videoPlaybackViewModel::confirmVideoDownload,
+                    onDismiss = videoPlaybackViewModel::dismissDownloadSheet
                 )
             }
 

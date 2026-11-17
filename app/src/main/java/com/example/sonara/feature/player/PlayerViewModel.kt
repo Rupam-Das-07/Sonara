@@ -8,6 +8,7 @@ import com.example.sonara.domain.model.AudioQuality
 import com.example.sonara.domain.model.DownloadInfo
 import com.example.sonara.domain.model.PlaybackOrigin
 import com.example.sonara.domain.model.Track
+import com.example.sonara.domain.model.video.download.ActiveDownloadProgress
 import com.example.sonara.domain.model.soundcloud.SoundcloudSourceIdentity
 import com.example.sonara.domain.ports.StreamResolverPort
 import com.example.sonara.domain.repository.DiscoveryRepository
@@ -92,6 +93,10 @@ class PlayerViewModel(
     private val _downloads = MutableStateFlow<Map<String, DownloadInfo>>(emptyMap())
     val downloads: StateFlow<Map<String, DownloadInfo>> = _downloads.asStateFlow()
 
+    // Reactive map of trackId -> ActiveDownloadProgress (live speed, ETA, stage)
+    private val _activeProgressMap = MutableStateFlow<Map<String, ActiveDownloadProgress>>(emptyMap())
+    val activeProgressMap: StateFlow<Map<String, ActiveDownloadProgress>> = _activeProgressMap.asStateFlow()
+
     // Observable audio output routing state (authoritative device list and active route)
     val audioOutputState: StateFlow<com.example.sonara.domain.model.AudioOutputState> =
         audioOutputRepository?.outputState
@@ -121,6 +126,11 @@ class PlayerViewModel(
             viewModelScope.launch {
                 repo.observeAllDownloads().collect { list ->
                     _downloads.value = list.associateBy { it.trackId }
+                }
+            }
+            viewModelScope.launch {
+                repo.observeAllActiveProgress().collect { map ->
+                    _activeProgressMap.value = map
                 }
             }
         }

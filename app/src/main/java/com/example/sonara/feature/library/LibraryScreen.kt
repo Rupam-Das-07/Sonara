@@ -23,6 +23,15 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Icon
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.Surface
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.sp
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -65,6 +74,8 @@ fun LibraryScreen(
     modifier: Modifier = Modifier
 ) {
     val dimensions = SonaraTheme.dimensions
+    val colors = SonaraTheme.colors
+    val typography = SonaraTheme.typography
     val reduceMotion = LocalReduceMotion.current
 
     // Hoist list states so switching tabs preserves scroll position
@@ -189,7 +200,7 @@ fun LibraryScreen(
                     }
                 }
                 LibraryTab.DOWNLOADS -> {
-                    if (state.downloads.isEmpty()) {
+                    if (state.downloads.isEmpty() && state.activeDownloads.isEmpty()) {
                         SonaraEmptyState(
                             title = stringResource(R.string.library_downloads_empty_title),
                             message = stringResource(R.string.library_downloads_empty_message)
@@ -200,6 +211,42 @@ fun LibraryScreen(
                             modifier = Modifier.fillMaxSize(),
                             verticalArrangement = Arrangement.spacedBy(dimensions.spaceSm)
                         ) {
+                            if (state.activeDownloads.isNotEmpty()) {
+                                item(key = "active_downloads_header") {
+                                    Text(
+                                        text = "DOWNLOADING",
+                                        style = typography.caption.copy(
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = colors.accent
+                                        ),
+                                        modifier = Modifier.padding(horizontal = dimensions.spaceMd, vertical = dimensions.spaceXs)
+                                    )
+                                }
+                                items(state.activeDownloads, key = { "active_${it.download.trackId}" }) { item ->
+                                    val track = item.track
+                                    val progress = state.activeProgressMap[item.download.trackId]
+                                    ActiveDownloadCard(
+                                        track = track,
+                                        download = item.download,
+                                        progress = progress,
+                                        onCancel = { onRemoveDownload?.invoke(item.download.trackId) }
+                                    )
+                                }
+                                if (state.downloads.isNotEmpty()) {
+                                    item(key = "completed_downloads_header") {
+                                        Text(
+                                            text = "DOWNLOADED",
+                                            style = typography.caption.copy(
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = colors.secondaryText
+                                            ),
+                                            modifier = Modifier.padding(horizontal = dimensions.spaceMd, vertical = dimensions.spaceXs)
+                                        )
+                                    }
+                                }
+                            }
                             items(state.downloads, key = { it.id }) { track ->
                                 TrackRowItem(
                                     track = track,
@@ -277,4 +324,113 @@ fun TrackRowItem(
         trailingContent = trailingContent,
         isVideo = isVideo
     )
+}
+
+@Composable
+private fun ActiveDownloadCard(
+    track: Track?,
+    download: com.example.sonara.domain.model.DownloadInfo,
+    progress: com.example.sonara.domain.model.video.download.ActiveDownloadProgress?,
+    onCancel: () -> Unit
+) {
+    val colors = SonaraTheme.colors
+    val typography = SonaraTheme.typography
+    val dimensions = SonaraTheme.dimensions
+
+    val title = track?.title ?: download.trackId
+    val artist = track?.artist ?: if (download.isVideo) "Video Download" else "Audio Download"
+    val progressFraction = progress?.progressFraction ?: download.progressFraction
+    val speed = progress?.speedFormatted
+    val eta = progress?.etaFormatted
+    val stageDesc = progress?.stageDescription ?: if (download.isVideo) "Downloading video..." else "Downloading audio..."
+
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = colors.surfaceVariant.copy(alpha = 0.5f),
+        border = BorderStroke(1.dp, colors.surfaceVariant),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = dimensions.spaceMd, vertical = 2.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = title,
+                        style = typography.body.copy(fontWeight = FontWeight.SemiBold),
+                        color = colors.primaryText,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = "$artist • $stageDesc",
+                        style = typography.caption.copy(fontSize = 11.5.sp),
+                        color = colors.secondaryText,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                SonaraIconButton(
+                    onClick = onCancel,
+                    contentDescription = "Cancel download",
+                    variant = SonaraIconButtonVariant.Ghost,
+                    size = 32.dp
+                ) {
+                    Icon(
+                        imageVector = PhosphorIcons.X,
+                        contentDescription = "Cancel",
+                        tint = colors.secondaryText,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+
+            if (progressFraction > 0f) {
+                LinearProgressIndicator(
+                    progress = { progressFraction },
+                    color = colors.accent,
+                    trackColor = colors.surface,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                )
+            } else {
+                LinearProgressIndicator(
+                    color = colors.accent,
+                    trackColor = colors.surface,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                )
+            }
+
+            if (speed != null || eta != null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = speed.orEmpty(),
+                        style = typography.caption.copy(fontSize = 10.5.sp),
+                        color = colors.accent
+                    )
+                    Text(
+                        text = eta.orEmpty(),
+                        style = typography.caption.copy(fontSize = 10.5.sp),
+                        color = colors.secondaryText
+                    )
+                }
+            }
+        }
+    }
 }

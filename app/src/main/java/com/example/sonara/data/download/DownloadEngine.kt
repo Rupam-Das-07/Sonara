@@ -13,6 +13,8 @@ import com.example.sonara.domain.model.DownloadFileFormat
 import com.example.sonara.domain.model.DownloadStatus
 import com.example.sonara.domain.model.StreamInfo
 import com.example.sonara.domain.model.Track
+import com.example.sonara.domain.model.video.download.ActiveDownloadProgress
+import com.example.sonara.domain.model.video.download.DownloadStage
 import com.example.sonara.domain.model.soundcloud.SoundcloudSourceIdentity
 import com.example.sonara.domain.ports.StreamResolverPort
 import com.example.sonara.domain.repository.SettingsRepository
@@ -23,7 +25,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -139,7 +147,7 @@ class DownloadEngine(
 
             return when {
                 tier == "VERY_HIGH" -> AudioQuality.VERY_HIGH
-                tier == "HIGH" && (provider == "jiosaavn" || bitrate >= 250) -> AudioQuality.VERY_HIGH
+                tier == "HIGH" && bitrate >= 250 -> AudioQuality.VERY_HIGH
                 else -> AudioQuality.HIGH
             }
         }
@@ -148,6 +156,15 @@ class DownloadEngine(
     private val mutex = Mutex()
     private val activeDownloadJobs = ConcurrentHashMap<String, Job>()
     private val activeConnections = ConcurrentHashMap<String, HttpURLConnection>()
+    private val _activeProgressMap = MutableStateFlow<Map<String, ActiveDownloadProgress>>(emptyMap())
+    val activeProgressMap: StateFlow<Map<String, ActiveDownloadProgress>> = _activeProgressMap.asStateFlow()
+
+    fun observeActiveProgress(trackId: String): Flow<ActiveDownloadProgress?> =
+        activeProgressMap.map { it[trackId] }.distinctUntilChanged()
+
+    fun observeAllActiveProgress(): Flow<Map<String, ActiveDownloadProgress>> =
+        activeProgressMap
+
     val downloadsDir: File by lazy {
         File(context.filesDir, "sonara_downloads").apply {
             if (!exists()) mkdirs()
@@ -358,8 +375,8 @@ class DownloadEngine(
             val tempFile = File(downloadsDir, "$sanitizedId.${resolvedFormat.extension}.download")
             currentTempFile = tempFile
 
-            // Update database with resolved localFilePath, mimeType, and actual quality
-            downloadDao.updateFileInfo(trackId, targetFile.absolutePath, resolvedFormat.mimeType, actualQuality.name)
+            // Update database with resolved localFilePath, mimeType, actual quality, and container format
+            downloadDao.updateFileInfo(trackId, targetFile.absolutePath, resolvedFormat.mimeType, actualQuality.name, resolvedFormat.extension)
 
             val streamUrl = streamInfo.streamUrl
             Log.d(TAG, "Starting download for ${track.title} [${resolvedFormat.extension}, ${resolvedFormat.mimeType}, ${actualQuality.name}] from $streamUrl to ${tempFile.absolutePath}")
@@ -400,12 +417,35 @@ class DownloadEngine(
                 var bytesRead = 0
                 var totalDownloaded = 0L
                 var lastProgressUpdate = System.currentTimeMillis()
+                val progressTracker = DownloadProgressTracker()
 
                 while (currentCoroutineContext().isActive && activeDownloadJobs.containsKey(trackId) && inputStream.read(buffer).also { bytesRead = it } != -1) {
                     outputStream.write(buffer, 0, bytesRead)
                     totalDownloaded += bytesRead
 
                     val now = System.currentTimeMillis()
+                    val metrics = progressTracker.update(totalDownloaded, now)
+                    val etaSec = DownloadProgressTracker.calculateEtaSeconds(totalDownloaded, contentLength, metrics.bytesPerSecond)
+                    val fraction = if (contentLength > 0) (totalDownloaded.toFloat() / contentLength.toFloat()).coerceIn(0f, 1f) else null
+
+                    _activeProgressMap.value = _activeProgressMap.value.toMutableMap().apply {
+                        put(
+                            trackId,
+                            ActiveDownloadProgress(
+                                trackId = trackId,
+                                stage = DownloadStage.DOWNLOADING,
+                                downloadedBytes = totalDownloaded,
+                                totalBytes = contentLength,
+                                progressFraction = fraction,
+                                bytesPerSecond = metrics.bytesPerSecond,
+                                etaSeconds = etaSec,
+                                speedFormatted = metrics.speedFormatted,
+                                etaFormatted = DownloadProgressTracker.formatEta(etaSec),
+                                stageDescription = "Downloading audio..."
+                            )
+                        )
+                    }
+
                     if (now - lastProgressUpdate > 200 || (contentLength > 0 && totalDownloaded == contentLength)) {
                         downloadDao.updateProgress(trackId, totalDownloaded, contentLength, DownloadStatus.DOWNLOADING.name)
                         lastProgressUpdate = now
@@ -449,6 +489,19 @@ class DownloadEngine(
                     }
                     downloadDao.updateProgress(trackId, targetFile.length(), targetFile.length(), DownloadStatus.DOWNLOADED.name)
                     downloadDao.markCompleted(trackId, System.currentTimeMillis(), DownloadStatus.DOWNLOADED.name)
+                    _activeProgressMap.value = _activeProgressMap.value.toMutableMap().apply {
+                        put(
+                            trackId,
+                            ActiveDownloadProgress(
+                                trackId = trackId,
+                                stage = DownloadStage.COMPLETED,
+                                downloadedBytes = targetFile.length(),
+                                totalBytes = targetFile.length(),
+                                progressFraction = 1f,
+                                stageDescription = "Download completed"
+                            )
+                        )
+                    }
                     Log.i(TAG, "Successfully verified and committed download: ${track.title} (${targetFile.length()} bytes, ${resolvedFormat.extension}, ${actualQuality.name})")
                 } else {
                     val errorMsg = "Failed to commit downloaded file to final storage"
@@ -468,10 +521,32 @@ class DownloadEngine(
             Log.d(TAG, "Download cancelled for $trackId")
             currentTempFile?.let { cleanupFile(it) }
             downloadDao.markFailed(trackId, "Cancelled", DownloadStatus.CANCELLED.name)
+            _activeProgressMap.value = _activeProgressMap.value.toMutableMap().apply {
+                put(
+                    trackId,
+                    ActiveDownloadProgress(
+                        trackId = trackId,
+                        stage = DownloadStage.CANCELLED,
+                        stageDescription = "Download cancelled"
+                    )
+                )
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Download error for $trackId: ${e.message}")
             currentTempFile?.let { cleanupFile(it) }
-            downloadDao.markFailed(trackId, e.message ?: "Unknown download error")
+            val errorMsg = e.message ?: "Unknown download error"
+            downloadDao.markFailed(trackId, errorMsg)
+            _activeProgressMap.value = _activeProgressMap.value.toMutableMap().apply {
+                put(
+                    trackId,
+                    ActiveDownloadProgress(
+                        trackId = trackId,
+                        stage = DownloadStage.FAILED,
+                        errorMessage = errorMsg,
+                        stageDescription = "Download failed"
+                    )
+                )
+            }
         } finally {
             activeConnections.remove(trackId)
             activeDownloadJobs.remove(trackId)
@@ -574,7 +649,7 @@ class DownloadEngine(
             val (file, mime) = validPhysical
             downloadDao.updateProgress(trackId, file.length(), file.length(), DownloadStatus.DOWNLOADED.name)
             val physicalQuality = if (mime == "audio/mp4") AudioQuality.VERY_HIGH.name else AudioQuality.HIGH.name
-            downloadDao.updateFileInfo(trackId, file.absolutePath, mime, physicalQuality)
+            downloadDao.updateFileInfo(trackId, file.absolutePath, mime, physicalQuality, file.extension)
             downloadDao.markCompleted(trackId, System.currentTimeMillis(), DownloadStatus.DOWNLOADED.name)
             return@withContext file.absolutePath
         }

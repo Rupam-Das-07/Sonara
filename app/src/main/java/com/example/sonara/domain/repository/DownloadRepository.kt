@@ -27,4 +27,18 @@ interface DownloadRepository {
     suspend fun removeDownload(trackId: String): Result<Unit>
     suspend fun removeAllDownloads(): Result<Unit>
     suspend fun getDownloadedFileUri(trackId: String): String?
+
+    /** Live in-memory progress for active audio or video download. */
+    fun observeActiveProgress(trackId: String): Flow<com.example.sonara.domain.model.video.download.ActiveDownloadProgress?> =
+        kotlinx.coroutines.flow.flowOf(null)
+
+    /** All active downloads across the app with live speed and ETA. */
+    fun observeAllActiveProgress(): Flow<Map<String, com.example.sonara.domain.model.video.download.ActiveDownloadProgress>> =
+        kotlinx.coroutines.flow.flowOf(emptyMap())
+
+    /** Enqueue a video download with structured quality and container parameters. */
+    suspend fun enqueueVideoDownload(
+        track: Track,
+        option: com.example.sonara.domain.model.video.download.VideoDownloadOption
+    ): Result<Unit> = Result.success(Unit)
 }

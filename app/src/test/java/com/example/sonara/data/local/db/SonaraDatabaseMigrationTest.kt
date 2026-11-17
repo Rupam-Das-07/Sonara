@@ -283,4 +283,49 @@ class SonaraDatabaseMigrationTest {
         assertFalse(allSql.contains("DELETE FROM", ignoreCase = true))
         assertFalse(allSql.contains("CREATE TABLE", ignoreCase = true))
     }
+
+    // ─── MIGRATION 8 → 9 ──────────────────────────────────────────────────────
+
+    @Test
+    fun migration8To9_hasCorrectVersionNumbers() {
+        assertEquals(8, SonaraDatabase.MIGRATION_8_9.startVersion)
+        assertEquals(9, SonaraDatabase.MIGRATION_8_9.endVersion)
+    }
+
+    @Test
+    fun migration8To9_addsVideoDownloadMetadataColumnsWithDefaults() {
+        val allSql = captureSql { SonaraDatabase.MIGRATION_8_9.migrate(it) }
+        assertTrue(allSql.contains("ALTER TABLE `downloads` ADD COLUMN `mediaType` TEXT NOT NULL DEFAULT 'AUDIO'"))
+        assertTrue(allSql.contains("ALTER TABLE `downloads` ADD COLUMN `resolutionHeight` INTEGER"))
+        assertTrue(allSql.contains("ALTER TABLE `downloads` ADD COLUMN `frameRate` INTEGER"))
+        assertTrue(allSql.contains("ALTER TABLE `downloads` ADD COLUMN `videoCodec` TEXT"))
+        assertTrue(allSql.contains("ALTER TABLE `downloads` ADD COLUMN `audioCodec` TEXT"))
+        assertTrue(allSql.contains("ALTER TABLE `downloads` ADD COLUMN `container` TEXT NOT NULL DEFAULT 'unknown'"))
+        assertTrue(allSql.contains("UPDATE `downloads` SET `container` = 'webm' WHERE LOWER(`localFilePath`) LIKE '%.webm'"))
+        assertTrue(allSql.contains("UPDATE `downloads` SET `container` = 'm4a' WHERE LOWER(`localFilePath`) LIKE '%.m4a'"))
+        assertTrue(allSql.contains("UPDATE `downloads` SET `container` = 'mp4' WHERE LOWER(`localFilePath`) LIKE '%.mp4'"))
+        assertTrue(allSql.contains("UPDATE `downloads` SET `container` = 'mp3' WHERE LOWER(`localFilePath`) LIKE '%.mp3'"))
+        assertTrue(allSql.contains("UPDATE `downloads` SET `container` = 'opus' WHERE LOWER(`localFilePath`) LIKE '%.opus'"))
+    }
+
+    @Test
+    fun migration8To9_isAdditiveAndPreservesExistingDownloads() {
+        val allSql = captureSql { SonaraDatabase.MIGRATION_8_9.migrate(it) }
+        assertFalse(allSql.contains("DROP TABLE", ignoreCase = true))
+        assertFalse(allSql.contains("DELETE FROM", ignoreCase = true))
+        assertFalse(allSql.contains("CREATE TABLE", ignoreCase = true))
+    }
+
+    @Test
+    fun migration8To9_incursNoDataLossForLegacyAudioRows() {
+        val allSql = captureSql { SonaraDatabase.MIGRATION_8_9.migrate(it) }
+        // Verify all 5 known extension updates are executed
+        val extensions = listOf("webm", "m4a", "mp4", "mp3", "opus")
+        extensions.forEach { ext ->
+            assertTrue(
+                "Must backfill container for .$ext",
+                allSql.contains("UPDATE `downloads` SET `container` = '$ext' WHERE LOWER(`localFilePath`) LIKE '%.$ext'")
+            )
+        }
+    }
 }

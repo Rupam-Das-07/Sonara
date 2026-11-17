@@ -125,6 +125,11 @@ internal object NewPipeExtractionMapper {
             .sortedWith(
                 compareByDescending<VideoPlaybackStream> { it.bitrateKbps ?: 0 }
             )
+        val progressive = info.getVideoStreams().orEmpty().mapNotNull { it.toPlaybackStream() }
+            .sortedWith(
+                compareByDescending<VideoPlaybackStream> { it.height ?: 0 }
+                    .thenByDescending { it.bitrateKbps ?: 0 }
+            )
 
         return Result.success(
             VideoPlaybackSource(
@@ -142,7 +147,8 @@ internal object NewPipeExtractionMapper {
                 videoOnlyStreams = sortedVideoOnly,
                 audioOnlyStreams = audioOnly,
                 isLive = metadata.isLive,
-                isUpcoming = metadata.isUpcoming
+                isUpcoming = metadata.isUpcoming,
+                progressiveStreams = progressive
             )
         )
     }

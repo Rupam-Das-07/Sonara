@@ -9,7 +9,7 @@ import com.example.sonara.domain.model.DownloadInfo
 import com.example.sonara.domain.model.DownloadStatus
 
 /**
- * Local Room entity storing offline track download records.
+ * Local Room entity storing offline track download records (audio and video).
  * Cascades on delete if the parent track is removed.
  */
 @Entity(
@@ -37,7 +37,13 @@ data class DownloadEntity(
     val mimeType: String = "audio/webm",
     val createdAt: Long = System.currentTimeMillis(),
     val completedAt: Long? = null,
-    val failureReason: String? = null
+    val failureReason: String? = null,
+    val mediaType: String = "AUDIO",
+    val resolutionHeight: Int? = null,
+    val frameRate: Int? = null,
+    val videoCodec: String? = null,
+    val audioCodec: String? = null,
+    val container: String = "unknown"
 ) {
     fun toDomain(): DownloadInfo = DownloadInfo(
         trackId = trackId,
@@ -49,7 +55,13 @@ data class DownloadEntity(
         mimeType = mimeType,
         createdAt = createdAt,
         completedAt = completedAt,
-        failureReason = failureReason
+        failureReason = failureReason,
+        mediaType = mediaType,
+        resolutionHeight = resolutionHeight,
+        frameRate = frameRate,
+        videoCodec = videoCodec,
+        audioCodec = audioCodec,
+        container = container
     )
 
     companion object {
@@ -63,7 +75,13 @@ data class DownloadEntity(
             mimeType = info.mimeType,
             createdAt = info.createdAt,
             completedAt = info.completedAt,
-            failureReason = info.failureReason
+            failureReason = info.failureReason,
+            mediaType = info.mediaType,
+            resolutionHeight = info.resolutionHeight,
+            frameRate = info.frameRate,
+            videoCodec = info.videoCodec,
+            audioCodec = info.audioCodec,
+            container = info.container
         )
     }
 }

@@ -18,7 +18,12 @@ import com.example.sonara.domain.model.video.VideoDiscoveryResult
 import com.example.sonara.domain.model.video.evaluateVideoEmbeddingEligibility
 import com.example.sonara.domain.model.video.HighResVideoDiscovery
 import com.example.sonara.domain.model.video.toExternalDescriptor
+import com.example.sonara.domain.model.video.download.DownloadPreselectionResult
+import com.example.sonara.domain.model.video.download.PlaybackQualitySnapshot
+import com.example.sonara.domain.model.video.download.VideoDownloadOption
+import com.example.sonara.domain.model.video.download.VideoStreamOptionResolver
 import com.example.sonara.domain.ports.VideoExtractionPort
+import com.example.sonara.domain.repository.DownloadRepository
 import com.example.sonara.domain.repository.HighResVideoRepository
 import com.example.sonara.domain.repository.SettingsRepository
 import com.example.sonara.playback.client.MediaControllerClient
@@ -63,7 +68,8 @@ class VideoPlaybackViewModel(
     private val transitionManager: TransitionManager? = null,
     private val settingsRepository: SettingsRepository? = null,
     private val playbackRouteCoordinator: com.example.sonara.playback.controller.PlaybackRouteCoordinator? = null,
-    private val highResRepository: HighResVideoRepository? = null
+    private val highResRepository: HighResVideoRepository? = null,
+    private val downloadRepository: DownloadRepository? = null
 ) : ViewModel() {
     private companion object {
         const val TAG = "VideoPlaybackViewModel"
@@ -111,6 +117,93 @@ class VideoPlaybackViewModel(
     val videoMuted: StateFlow<Boolean> = _videoMuted.asStateFlow()
     private val _playback = MutableStateFlow(VideoPlaybackIntegrationState())
     val playback: StateFlow<VideoPlaybackIntegrationState> = _playback.asStateFlow()
+
+    private val _isVideoDownloadSheetOpen = MutableStateFlow(false)
+    val isVideoDownloadSheetOpen: StateFlow<Boolean> = _isVideoDownloadSheetOpen.asStateFlow()
+
+    private val _availableDownloadOptions = MutableStateFlow<List<VideoDownloadOption>>(emptyList())
+    val availableDownloadOptions: StateFlow<List<VideoDownloadOption>> = _availableDownloadOptions.asStateFlow()
+
+    private val _selectedDownloadOption = MutableStateFlow<VideoDownloadOption?>(null)
+    val selectedDownloadOption: StateFlow<VideoDownloadOption?> = _selectedDownloadOption.asStateFlow()
+
+    private val _downloadPreselectionResult = MutableStateFlow<DownloadPreselectionResult?>(null)
+    val downloadPreselectionResult: StateFlow<DownloadPreselectionResult?> = _downloadPreselectionResult.asStateFlow()
+
+    private val _isExtractingDownloadOptions = MutableStateFlow(false)
+    val isExtractingDownloadOptions: StateFlow<Boolean> = _isExtractingDownloadOptions.asStateFlow()
+
+    fun onOpenDownloadSheet() {
+        val track = queueEngine.snapshot().current ?: return
+        _isVideoDownloadSheetOpen.value = true
+        _isExtractingDownloadOptions.value = true
+
+        val currentRoute = _playback.value.route
+        val isIFrame = currentRoute == VideoPlaybackRoute.IFRAME
+        val ctrlState = media3State.value
+        val renderedH = if (isIFrame) null else ctrlState.selectedVideoHeight
+        val renderedF = if (isIFrame) null else ctrlState.selectedVideoFps
+
+        val snapshot = PlaybackQualitySnapshot(
+            renderedHeight = renderedH,
+            renderedWidth = ctrlState.videoSize.width.takeIf { it > 0 },
+            renderedFps = renderedF,
+            isActualTelemetry = !isIFrame && renderedH != null && renderedH > 0,
+            sourceRoute = if (isIFrame) "IFRAME" else "MEDIA3"
+        )
+
+        viewModelScope.launch(ioDispatcher) {
+            try {
+                val source = activeMedia3Source ?: videoExtractor?.let { extractor ->
+                    val status = backendClient.getVideoStatus(track.id).getOrNull()
+                    if (status != null) extractor.extractPlaybackSource(track.id, status).getOrNull() else null
+                }
+
+                val options = if (source != null) {
+                    VideoStreamOptionResolver.resolveDownloadOptions(source, track.durationMs)
+                } else {
+                    emptyList()
+                }
+
+                _availableDownloadOptions.value = options
+
+                if (options.isNotEmpty()) {
+                    val preselected = VideoStreamOptionResolver.preselectOption(
+                        options = options,
+                        snapshot = snapshot,
+                        defaultQuality = defaultVideoQuality
+                    )
+                    _downloadPreselectionResult.value = preselected
+                    _selectedDownloadOption.value = preselected.selectedOption
+                } else {
+                    _downloadPreselectionResult.value = null
+                    _selectedDownloadOption.value = null
+                }
+            } catch (t: Throwable) {
+                Log.e(TAG, "Error resolving download options for ${track.id}: ${t.message}", t)
+            } finally {
+                _isExtractingDownloadOptions.value = false
+            }
+        }
+    }
+
+    fun selectDownloadOption(option: VideoDownloadOption) {
+        _selectedDownloadOption.value = option
+    }
+
+    fun dismissDownloadSheet() {
+        _isVideoDownloadSheetOpen.value = false
+    }
+
+    fun confirmVideoDownload() {
+        val track = queueEngine.snapshot().current ?: return
+        val option = _selectedDownloadOption.value ?: return
+        _isVideoDownloadSheetOpen.value = false
+        viewModelScope.launch(ioDispatcher) {
+            downloadRepository?.enqueueVideoDownload(track, option)
+        }
+    }
+
     val media3State: StateFlow<MediaControllerState> = mediaControllerClient?.controllerState
         ?: MutableStateFlow(MediaControllerState()).asStateFlow()
     val currentMedia3PlayerFlow: StateFlow<Player?> = mediaControllerClient?.currentPlayerState

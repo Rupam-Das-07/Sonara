@@ -20,5 +20,7 @@ interface PlaylistRepository {
     suspend fun reorderTracks(playlistId: String, orderedTrackIds: List<String>): Result<Unit>
     suspend fun isTrackInPlaylist(playlistId: String, trackId: String): Boolean
     suspend fun importPlaylist(name: String, tracks: List<Track>): Result<com.example.sonara.domain.model.ImportPlaylistResult>
+    suspend fun setPlaylistCustomCover(playlistId: String, contentUri: String): Result<Unit>
+    suspend fun removePlaylistCustomCover(playlistId: String): Result<Unit>
 }
 

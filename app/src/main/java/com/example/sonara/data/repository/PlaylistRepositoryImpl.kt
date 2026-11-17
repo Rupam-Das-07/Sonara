@@ -5,6 +5,7 @@ import com.example.sonara.data.local.db.dao.TrackDao
 import com.example.sonara.data.local.db.entity.PlaylistEntity
 import com.example.sonara.data.local.db.entity.PlaylistTrackCrossRefEntity
 import com.example.sonara.data.local.db.entity.TrackEntity
+import com.example.sonara.data.playlist.PlaylistImageStore
 import com.example.sonara.domain.model.PlaylistDetail
 import com.example.sonara.domain.model.PlaylistOrigin
 import com.example.sonara.domain.model.PlaylistSummary
@@ -23,7 +24,8 @@ import java.util.UUID
 class PlaylistRepositoryImpl(
     private val playlistDao: PlaylistDao,
     private val trackDao: TrackDao,
-    private val database: SonaraDatabase? = null
+    private val database: SonaraDatabase? = null,
+    private val playlistImageStore: PlaylistImageStore? = null
 ) : PlaylistRepository {
 
     override fun getUserPlaylists(): Flow<List<PlaylistSummary>> {
@@ -31,13 +33,16 @@ class PlaylistRepositoryImpl(
             entities.map { entity ->
                 val trackCount = playlistDao.getTrackCount(entity.id)
                 val firstArtwork = playlistDao.getFirstTrackArtwork(entity.id)
+                val resolvedCover = playlistImageStore?.resolve(entity.customCoverPath)
+                val hasCustom = resolvedCover != null
                 PlaylistSummary(
                     id = entity.id,
                     name = entity.name,
                     description = "",
-                    coverImage = firstArtwork,
+                    coverImage = resolvedCover ?: firstArtwork,
                     size = trackCount,
-                    origin = PlaylistOrigin.fromString(entity.origin)
+                    origin = PlaylistOrigin.fromString(entity.origin),
+                    hasCustomCover = hasCustom
                 )
             }
         }
@@ -52,12 +57,15 @@ class PlaylistRepositoryImpl(
                 null
             } else {
                 val tracks = trackEntities.map { it.toDomain() }
+                val resolvedCover = playlistImageStore?.resolve(playlistEntity.customCoverPath)
+                val hasCustom = resolvedCover != null
                 PlaylistDetail(
                     id = playlistEntity.id,
                     name = playlistEntity.name,
                     description = "",
-                    coverImage = tracks.firstOrNull()?.artworkUrl,
-                    tracks = tracks
+                    coverImage = resolvedCover ?: tracks.firstOrNull()?.artworkUrl,
+                    tracks = tracks,
+                    hasCustomCover = hasCustom
                 )
             }
         }
@@ -106,7 +114,12 @@ class PlaylistRepositoryImpl(
 
     override suspend fun deletePlaylist(playlistId: String): Result<Unit> = withContext(Dispatchers.IO) {
         try {
+            val entity = playlistDao.getPlaylistByIdSync(playlistId)
+            val coverToDelete = entity?.customCoverPath
             playlistDao.deletePlaylist(playlistId)
+            if (!coverToDelete.isNullOrBlank()) {
+                playlistImageStore?.delete(coverToDelete)
+            }
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -142,7 +155,6 @@ class PlaylistRepositoryImpl(
             Result.failure(e)
         }
     }
-
     override suspend fun removeTrackFromPlaylist(playlistId: String, trackId: String): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             playlistDao.deletePlaylistTrack(playlistId, trackId)
@@ -232,6 +244,60 @@ class PlaylistRepositoryImpl(
                     collapsedDuplicates = collapsedDuplicates
                 )
             )
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun setPlaylistCustomCover(playlistId: String, contentUri: String): Result<Unit> = withContext(Dispatchers.IO) {
+        val imageStore = playlistImageStore
+            ?: return@withContext Result.failure(IllegalStateException("Playlist image store is not configured"))
+        try {
+            val entity = playlistDao.getPlaylistByIdSync(playlistId)
+                ?: return@withContext Result.failure(IllegalArgumentException("Playlist not found"))
+            if (entity.origin != PlaylistOrigin.USER.name) {
+                return@withContext Result.failure(IllegalStateException("Only user-created playlists support custom covers"))
+            }
+
+            // 1. Import and validate new file first
+            val newCoverName = imageStore.importImage(contentUri)
+            val oldCoverPath = entity.customCoverPath
+
+            try {
+                // 2. Update database reference
+                playlistDao.updateCustomCoverPath(playlistId, newCoverName)
+
+                // 3. Clean up previous custom cover only after successful database update
+                if (!oldCoverPath.isNullOrBlank() && oldCoverPath != newCoverName) {
+                    imageStore.delete(oldCoverPath)
+                }
+                Result.success(Unit)
+            } catch (dbError: Throwable) {
+                // If saving fails, remove newly imported file and preserve old cover
+                imageStore.delete(newCoverName)
+                Result.failure(dbError)
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun removePlaylistCustomCover(playlistId: String): Result<Unit> = withContext(Dispatchers.IO) {
+        val imageStore = playlistImageStore
+            ?: return@withContext Result.failure(IllegalStateException("Playlist image store is not configured"))
+        try {
+            val entity = playlistDao.getPlaylistByIdSync(playlistId)
+                ?: return@withContext Result.failure(IllegalArgumentException("Playlist not found"))
+            if (entity.origin != PlaylistOrigin.USER.name) {
+                return@withContext Result.failure(IllegalStateException("Only user-created playlists support custom covers"))
+            }
+
+            val oldCoverPath = entity.customCoverPath
+            playlistDao.updateCustomCoverPath(playlistId, null)
+            if (!oldCoverPath.isNullOrBlank()) {
+                imageStore.delete(oldCoverPath)
+            }
+            Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
         }

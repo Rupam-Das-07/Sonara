@@ -142,7 +142,9 @@ class SonaraMigrationInstrumentedTest {
                 SonaraDatabase.MIGRATION_4_5,
                 SonaraDatabase.MIGRATION_5_6,
                 SonaraDatabase.MIGRATION_6_7,
-                SonaraDatabase.MIGRATION_7_8
+                SonaraDatabase.MIGRATION_7_8,
+                SonaraDatabase.MIGRATION_8_9,
+                SonaraDatabase.MIGRATION_9_10
             )
             .build()
         try {
@@ -178,7 +180,9 @@ class SonaraMigrationInstrumentedTest {
                 SonaraDatabase.MIGRATION_4_5,
                 SonaraDatabase.MIGRATION_5_6,
                 SonaraDatabase.MIGRATION_6_7,
-                SonaraDatabase.MIGRATION_7_8
+                SonaraDatabase.MIGRATION_7_8,
+                SonaraDatabase.MIGRATION_8_9,
+                SonaraDatabase.MIGRATION_9_10
             )
             .build()
         try {
@@ -224,7 +228,9 @@ class SonaraMigrationInstrumentedTest {
                 SonaraDatabase.MIGRATION_4_5,
                 SonaraDatabase.MIGRATION_5_6,
                 SonaraDatabase.MIGRATION_6_7,
-                SonaraDatabase.MIGRATION_7_8
+                SonaraDatabase.MIGRATION_7_8,
+                SonaraDatabase.MIGRATION_8_9,
+                SonaraDatabase.MIGRATION_9_10
             )
             .build()
         try {
@@ -311,7 +317,9 @@ class SonaraMigrationInstrumentedTest {
                 SonaraDatabase.MIGRATION_4_5,
                 SonaraDatabase.MIGRATION_5_6,
                 SonaraDatabase.MIGRATION_6_7,
-                SonaraDatabase.MIGRATION_7_8
+                SonaraDatabase.MIGRATION_7_8,
+                SonaraDatabase.MIGRATION_8_9,
+                SonaraDatabase.MIGRATION_9_10
             )
             .build()
         try {
@@ -360,7 +368,9 @@ class SonaraMigrationInstrumentedTest {
                 SonaraDatabase.MIGRATION_4_5,
                 SonaraDatabase.MIGRATION_5_6,
                 SonaraDatabase.MIGRATION_6_7,
-                SonaraDatabase.MIGRATION_7_8
+                SonaraDatabase.MIGRATION_7_8,
+                SonaraDatabase.MIGRATION_8_9,
+                SonaraDatabase.MIGRATION_9_10
             )
             .build()
         try {
@@ -410,7 +420,9 @@ class SonaraMigrationInstrumentedTest {
                 SonaraDatabase.MIGRATION_4_5,
                 SonaraDatabase.MIGRATION_5_6,
                 SonaraDatabase.MIGRATION_6_7,
-                SonaraDatabase.MIGRATION_7_8
+                SonaraDatabase.MIGRATION_7_8,
+                SonaraDatabase.MIGRATION_8_9,
+                SonaraDatabase.MIGRATION_9_10
             )
             .build()
         try {
@@ -418,6 +430,107 @@ class SonaraMigrationInstrumentedTest {
                 val item = roomDb.historyDao().getRecentHistory(10).first().single()
                 assertEquals("LEGACY_UNKNOWN", item.sourceSection)
                 assertEquals(null, item.playbackSessionId)
+            }
+        } finally {
+            roomDb.close()
+        }
+    }
+
+    // ─── MIGRATION 9 → 10 (Custom playlist cover) ──────────────────────────────────────────
+
+    @Test
+    fun migration9to10_addsCustomCoverPathColumn_withNullDefaultsAndPreservesExistingData() {
+        buildV5Database()
+
+        val rawHelper = openRawHelper(version = 5)
+        try {
+            val raw = rawHelper.writableDatabase
+            SonaraDatabase.MIGRATION_5_6.migrate(raw)
+            SonaraDatabase.MIGRATION_6_7.migrate(raw)
+            SonaraDatabase.MIGRATION_7_8.migrate(raw)
+            SonaraDatabase.MIGRATION_8_9.migrate(raw)
+            raw.version = 9
+
+            // Precondition: v9 playlists table must NOT have customCoverPath
+            assertFalse(
+                "Precondition: v9 playlists table must lack customCoverPath",
+                raw.hasColumn("playlists", "customCoverPath")
+            )
+
+            // Seed user playlist in v9
+            raw.execSQL(
+                "INSERT INTO `playlists` (`id`,`name`,`createdAt`,`updatedAt`,`origin`) VALUES ('p_test','My Playlist',1700000000000,1700000000000,'USER')"
+            )
+
+            // Execute real MIGRATION_9_10
+            SonaraDatabase.MIGRATION_9_10.migrate(raw)
+            raw.version = 10
+
+            // Postcondition: customCoverPath column added
+            assertTrue(
+                "customCoverPath column must exist after MIGRATION_9_10",
+                raw.hasColumn("playlists", "customCoverPath")
+            )
+
+            // Existing playlist row survived with NULL customCoverPath
+            raw.query("SELECT `id`, `name`, `origin`, `customCoverPath` FROM `playlists` WHERE `id`='p_test'").use { c ->
+                assertTrue("Existing playlist row must survive", c.moveToFirst())
+                assertEquals("p_test", c.getString(0))
+                assertEquals("My Playlist", c.getString(1))
+                assertEquals("USER", c.getString(2))
+                assertTrue("customCoverPath must default to null", c.isNull(3))
+            }
+        } finally {
+            rawHelper.close()
+        }
+    }
+
+    @Test
+    fun migration9to10_roomOpensAndValidatesUpgradedDatabase_andValidatesVersion10Schema() {
+        buildV5Database()
+
+        val rawHelper = openRawHelper(version = 5)
+        try {
+            val raw = rawHelper.writableDatabase
+            SonaraDatabase.MIGRATION_5_6.migrate(raw)
+            SonaraDatabase.MIGRATION_6_7.migrate(raw)
+            SonaraDatabase.MIGRATION_7_8.migrate(raw)
+            SonaraDatabase.MIGRATION_8_9.migrate(raw)
+            raw.version = 9
+
+            raw.execSQL(
+                "INSERT INTO `playlists` (`id`,`name`,`createdAt`,`updatedAt`,`origin`) VALUES ('p_legacy','Legacy Playlist',1000,2000,'USER')"
+            )
+        } finally {
+            rawHelper.close()
+        }
+
+        // Room opens the v9 database and automatically applies MIGRATION_9_10 to reach v10
+        val roomDb = Room.databaseBuilder(context, SonaraDatabase::class.java, TEST_DB)
+            .addMigrations(
+                SonaraDatabase.MIGRATION_1_2,
+                SonaraDatabase.MIGRATION_2_3,
+                SonaraDatabase.MIGRATION_3_4,
+                SonaraDatabase.MIGRATION_4_5,
+                SonaraDatabase.MIGRATION_5_6,
+                SonaraDatabase.MIGRATION_6_7,
+                SonaraDatabase.MIGRATION_7_8,
+                SonaraDatabase.MIGRATION_8_9,
+                SonaraDatabase.MIGRATION_9_10
+            )
+            .build()
+
+        try {
+            runBlocking {
+                val legacy = roomDb.playlistDao().getPlaylistByIdSync("p_legacy")
+                assertNotNull("Legacy playlist must be present after Room migration", legacy)
+                assertEquals("Legacy Playlist", legacy?.name)
+                assertEquals(null, legacy?.customCoverPath)
+
+                // Verify that Room can write a new customCoverPath
+                roomDb.playlistDao().updateCustomCoverPath("p_legacy", "cover_test.jpg", 3000)
+                val updated = roomDb.playlistDao().getPlaylistByIdSync("p_legacy")
+                assertEquals("cover_test.jpg", updated?.customCoverPath)
             }
         } finally {
             roomDb.close()

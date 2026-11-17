@@ -44,6 +44,9 @@ interface PlaylistDao {
     @Query("UPDATE playlists SET name = :newName, updatedAt = :updatedAt WHERE id = :playlistId")
     suspend fun updatePlaylistName(playlistId: String, newName: String, updatedAt: Long = System.currentTimeMillis())
 
+    @Query("UPDATE playlists SET customCoverPath = :customCoverPath, updatedAt = :updatedAt WHERE id = :playlistId")
+    suspend fun updateCustomCoverPath(playlistId: String, customCoverPath: String?, updatedAt: Long = System.currentTimeMillis())
+
     @Query("UPDATE playlists SET updatedAt = :updatedAt WHERE id = :playlistId")
     suspend fun updatePlaylistTimestamp(playlistId: String, updatedAt: Long = System.currentTimeMillis())
 

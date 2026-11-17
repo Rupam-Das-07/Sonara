@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -53,6 +54,7 @@ fun PlaylistsScreen(
     onRenamePlaylist: (PlaylistSummary) -> Unit,
     onDeletePlaylist: (PlaylistSummary) -> Unit,
     onImportPlaylist: () -> Unit = {},
+    contentPadding: PaddingValues = PaddingValues(),
     modifier: Modifier = Modifier
 ) {
     val colors = SonaraTheme.colors
@@ -62,7 +64,11 @@ fun PlaylistsScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(horizontal = dimensions.spaceLg)
+            .padding(
+                top = contentPadding.calculateTopPadding(),
+                start = dimensions.spaceLg,
+                end = dimensions.spaceLg
+            )
     ) {
         Spacer(modifier = Modifier.height(dimensions.spaceSm))
 
@@ -121,7 +127,11 @@ fun PlaylistsScreen(
             }
         } else {
             LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(dimensions.spaceSm)
+                verticalArrangement = Arrangement.spacedBy(dimensions.spaceSm),
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(
+                    bottom = contentPadding.calculateBottomPadding() + dimensions.spaceLg
+                )
             ) {
                 // Section 1: YOUR PLAYLISTS (frozen first order)
                 item(key = "header_your_playlists") {
@@ -154,7 +164,7 @@ fun PlaylistsScreen(
                 if (spotifyPlaylists.isNotEmpty()) {
                     item(key = "header_spotify_playlists") {
                         Spacer(modifier = Modifier.height(dimensions.spaceMd))
-                        PlaylistSectionHeader(title = "IMPORTED FROM SPOTIFY")
+                        PlaylistSectionHeader(title = "IMPORTED PLAYLISTS")
                     }
                     items(spotifyPlaylists, key = { it.id }) { playlist ->
                         PlaylistRowItem(

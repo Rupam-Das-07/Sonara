@@ -38,6 +38,8 @@ import com.example.sonara.data.local.db.entity.TrackEntity
  *            (see [MIGRATION_7_8]).
  *   v8 → v9: Added video download metadata (`mediaType`, `resolutionHeight`, `frameRate`,
  *            `videoCodec`, `audioCodec`, `container`) to `downloads` table (see [MIGRATION_8_9]).
+ *   v9 → v10: Added nullable `customCoverPath` to `playlists` table for user playlist
+ *             custom covers (see [MIGRATION_9_10]).
  */
 @Database(
     entities = [
@@ -49,7 +51,7 @@ import com.example.sonara.data.local.db.entity.TrackEntity
         DownloadEntity::class,
         SearchHistoryEntity::class
     ],
-    version = 9,
+    version = 10,
     exportSchema = false
 )
 abstract class SonaraDatabase : RoomDatabase() {
@@ -340,6 +342,19 @@ abstract class SonaraDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Explicit zero-loss migration from v9 to v10.
+         *
+         * Adds nullable `customCoverPath` to `playlists` table to persist custom cover artwork.
+         * All existing user-created and imported playlists default to NULL, cleanly retaining
+         * dynamic first-track artwork fallback with zero data loss.
+         */
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `playlists` ADD COLUMN `customCoverPath` TEXT")
+            }
+        }
+
         @Volatile
         private var instance: SonaraDatabase? = null
 
@@ -358,7 +373,8 @@ abstract class SonaraDatabase : RoomDatabase() {
                         MIGRATION_5_6,
                         MIGRATION_6_7,
                         MIGRATION_7_8,
-                        MIGRATION_8_9
+                        MIGRATION_8_9,
+                        MIGRATION_9_10
                     )
                     .build()
                     .also { instance = it }

@@ -32,6 +32,7 @@ class PlaylistViewModel(
     private val _playlistToDelete = MutableStateFlow<PlaylistSummary?>(null)
     private val _trackToRemove = MutableStateFlow<Pair<String, Track>?>(null)
     private val _feedbackMessage = MutableStateFlow<String?>(null)
+    private val _isCoverUpdating = MutableStateFlow(false)
 
     private var detailJob: Job? = null
 
@@ -47,7 +48,8 @@ class PlaylistViewModel(
         _playlistToRename,
         _playlistToDelete,
         _trackToRemove,
-        _feedbackMessage
+        _feedbackMessage,
+        _isCoverUpdating
     ) { args: Array<Any?> ->
         @Suppress("UNCHECKED_CAST")
         PlaylistUiState(
@@ -62,7 +64,8 @@ class PlaylistViewModel(
             playlistToRename = args[8] as PlaylistSummary?,
             playlistToDelete = args[9] as PlaylistSummary?,
             trackToRemove = args[10] as Pair<String, Track>?,
-            feedbackMessage = args[11] as String?
+            feedbackMessage = args[11] as String?,
+            isCoverUpdating = args[12] as Boolean
         )
     }.stateIn(
         scope = viewModelScope,
@@ -282,5 +285,39 @@ class PlaylistViewModel(
 
     fun clearFeedbackMessage() {
         _feedbackMessage.value = null
+    }
+
+    fun setCustomCover(playlistId: String, contentUri: String) {
+        if (_isCoverUpdating.value) return
+        _isCoverUpdating.value = true
+        viewModelScope.launch {
+            try {
+                val result = playlistRepository.setPlaylistCustomCover(playlistId, contentUri)
+                result.onSuccess {
+                    _feedbackMessage.value = "Cover image updated"
+                }.onFailure { e ->
+                    _feedbackMessage.value = e.message ?: "Failed to update cover image"
+                }
+            } finally {
+                _isCoverUpdating.value = false
+            }
+        }
+    }
+
+    fun removeCustomCover(playlistId: String) {
+        if (_isCoverUpdating.value) return
+        _isCoverUpdating.value = true
+        viewModelScope.launch {
+            try {
+                val result = playlistRepository.removePlaylistCustomCover(playlistId)
+                result.onSuccess {
+                    _feedbackMessage.value = "Custom cover removed"
+                }.onFailure { e ->
+                    _feedbackMessage.value = e.message ?: "Failed to remove custom cover"
+                }
+            } finally {
+                _isCoverUpdating.value = false
+            }
+        }
     }
 }

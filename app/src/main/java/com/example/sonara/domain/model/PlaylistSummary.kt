@@ -14,6 +14,7 @@ package com.example.sonara.domain.model
  *                       typographic fallback — never a placeholder image).
  * @property size        Declared track count for the definition.
  * @property origin      Source of the playlist ([PlaylistOrigin.USER] or [PlaylistOrigin.SPOTIFY]).
+ * @property hasCustomCover True if the playlist has a persistent user-selected custom cover.
  */
 data class PlaylistSummary(
     val id: String,
@@ -21,5 +22,6 @@ data class PlaylistSummary(
     val description: String = "",
     val coverImage: String? = null,
     val size: Int = 0,
-    val origin: PlaylistOrigin = PlaylistOrigin.USER
+    val origin: PlaylistOrigin = PlaylistOrigin.USER,
+    val hasCustomCover: Boolean = false
 )

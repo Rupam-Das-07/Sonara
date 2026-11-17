@@ -14,11 +14,13 @@ package com.example.sonara.domain.model
  * @property coverImage  Cover artwork URL, or null.
  * @property tracks      Playable tracks, in curated order (may be empty if the
  *                       provider returned nothing).
+ * @property hasCustomCover True if the playlist has a persistent user-selected custom cover.
  */
 data class PlaylistDetail(
     val id: String,
     val name: String,
     val description: String = "",
     val coverImage: String? = null,
-    val tracks: List<Track> = emptyList()
+    val tracks: List<Track> = emptyList(),
+    val hasCustomCover: Boolean = false
 )

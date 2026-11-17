@@ -1,6 +1,9 @@
 package com.example.sonara.feature.playlist
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -19,9 +22,16 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -61,7 +71,12 @@ fun UserPlaylistDetailScreen(
     onRename: (PlaylistSummary) -> Unit,
     onDelete: (PlaylistSummary) -> Unit,
     onRequestRemoveTrack: (Track) -> Unit,
-    modifier: Modifier = Modifier
+    onChangeCover: (String, String) -> Unit = { _, _ -> },
+    onRemoveCover: (String) -> Unit = {},
+    isCoverUpdating: Boolean = false,
+    contentPadding: PaddingValues = PaddingValues(),
+    modifier: Modifier = Modifier,
+    onTrackLongClick: (Track, List<Track>) -> Unit = { _, _ -> }
 ) {
     BackHandler(onBack = {
         if (isReorderMode) onCancelReorder() else onBack()
@@ -71,17 +86,35 @@ fun UserPlaylistDetailScreen(
     val typography = SonaraTheme.typography
     val dimensions = SonaraTheme.dimensions
 
+    var pendingCoverUri by remember { mutableStateOf<String?>(null) }
+    var showPreviewDialog by remember { mutableStateOf(false) }
+    var showOptionsDialog by remember { mutableStateOf(false) }
+    var showRemoveConfirmDialog by remember { mutableStateOf(false) }
+
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) {
+            pendingCoverUri = uri.toString()
+            showPreviewDialog = true
+        }
+    }
+
     val tracksToDisplay = if (isReorderMode) reorderedTracks else playlist.tracks
     val summary = PlaylistSummary(
         id = playlist.id,
         name = playlist.name,
         size = playlist.tracks.size,
-        coverImage = playlist.coverImage
+        coverImage = playlist.coverImage,
+        hasCustomCover = playlist.hasCustomCover
     )
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = dimensions.space2Xl),
+        contentPadding = PaddingValues(
+            top = contentPadding.calculateTopPadding(),
+            bottom = contentPadding.calculateBottomPadding() + dimensions.spaceLg
+        ),
         verticalArrangement = Arrangement.spacedBy(dimensions.spaceMd)
     ) {
         // Top Navigation Bar
@@ -138,6 +171,38 @@ fun UserPlaylistDetailScreen(
                             ) {
                                 Icon(
                                     imageVector = PhosphorIcons.DotsSixVertical,
+                                    contentDescription = null,
+                                    tint = colors.secondaryText,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                        SonaraIconButton(
+                            onClick = {
+                                if (!isCoverUpdating) {
+                                    if (playlist.hasCustomCover) {
+                                        showOptionsDialog = true
+                                    } else {
+                                        photoPickerLauncher.launch(
+                                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                        )
+                                    }
+                                }
+                            },
+                            contentDescription = "Change cover",
+                            variant = SonaraIconButtonVariant.Ghost,
+                            enabled = !isCoverUpdating,
+                            size = dimensions.minTouchTarget
+                        ) {
+                            if (isCoverUpdating) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                    color = colors.secondaryText
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = PhosphorIcons.Image,
                                     contentDescription = null,
                                     tint = colors.secondaryText,
                                     modifier = Modifier.size(20.dp)
@@ -215,6 +280,56 @@ fun UserPlaylistDetailScreen(
                             )
                         )
                 )
+
+                if (!isReorderMode) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(dimensions.spaceMd)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color.Black.copy(alpha = 0.65f))
+                            .clickable(enabled = !isCoverUpdating) {
+                                if (playlist.hasCustomCover) {
+                                    showOptionsDialog = true
+                                } else {
+                                    photoPickerLauncher.launch(
+                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                    )
+                                }
+                            }
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            if (isCoverUpdating) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(14.dp),
+                                    strokeWidth = 2.dp,
+                                    color = Color.White
+                                )
+                                Text(
+                                    text = "Updating...",
+                                    style = typography.caption,
+                                    color = Color.White
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = PhosphorIcons.Image,
+                                    contentDescription = "Change cover",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text(
+                                    text = if (playlist.hasCustomCover) "Edit Cover" else "Add Cover",
+                                    style = typography.caption,
+                                    color = Color.White
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -285,6 +400,7 @@ fun UserPlaylistDetailScreen(
                             track = track,
                             isLiked = isLiked(track.id),
                              onPlay = { onPlayTrackWithContext(track, tracksToDisplay) },
+                            onLongClick = { onTrackLongClick(track, tracksToDisplay) },
                             onToggleLike = { liked -> onToggleLike(track, liked) },
                             trailingContent = {
                                 SonaraIconButton(
@@ -306,6 +422,147 @@ fun UserPlaylistDetailScreen(
                 }
             }
         }
+    }
+
+    if (showOptionsDialog) {
+        AlertDialog(
+            onDismissRequest = { showOptionsDialog = false },
+            title = { Text("Playlist Cover") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "Choose a new cover image from your device gallery, or remove the custom cover to restore track artwork.",
+                        style = typography.secondaryBody,
+                        color = colors.secondaryText
+                    )
+                    TextButton(
+                        onClick = {
+                            showOptionsDialog = false
+                            showRemoveConfirmDialog = true
+                        },
+                        enabled = !isCoverUpdating
+                    ) {
+                        Text(
+                            text = "Remove Custom Cover",
+                            color = if (isCoverUpdating) colors.secondaryText else colors.error,
+                            style = typography.buttonLabel
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showOptionsDialog = false
+                        photoPickerLauncher.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                        )
+                    },
+                    enabled = !isCoverUpdating
+                ) {
+                    Text("Choose New Image")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showOptionsDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    if (showPreviewDialog && pendingCoverUri != null) {
+        AlertDialog(
+            onDismissRequest = {
+                showPreviewDialog = false
+                pendingCoverUri = null
+            },
+            title = { Text("Preview Cover Image") },
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(16f / 9f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(colors.surfaceVariant),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AsyncImage(
+                            model = pendingCoverUri,
+                            contentDescription = "Selected cover preview",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                    Text(
+                        text = "Set this image as the custom cover for \"${playlist.name}\"?",
+                        style = typography.secondaryBody,
+                        color = colors.secondaryText
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val uri = pendingCoverUri
+                        showPreviewDialog = false
+                        pendingCoverUri = null
+                        if (uri != null && !isCoverUpdating) {
+                            onChangeCover(playlist.id, uri)
+                        }
+                    },
+                    enabled = !isCoverUpdating
+                ) {
+                    Text("Set as Cover")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showPreviewDialog = false
+                        pendingCoverUri = null
+                    }
+                ) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    if (showRemoveConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showRemoveConfirmDialog = false },
+            title = { Text("Remove Custom Cover") },
+            text = {
+                Text(
+                    text = "Remove custom cover and restore dynamic track artwork?",
+                    style = typography.secondaryBody,
+                    color = colors.secondaryText
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showRemoveConfirmDialog = false
+                        if (!isCoverUpdating) {
+                            onRemoveCover(playlist.id)
+                        }
+                    },
+                    enabled = !isCoverUpdating
+                ) {
+                    Text("Remove", color = if (isCoverUpdating) colors.secondaryText else colors.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRemoveConfirmDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
 

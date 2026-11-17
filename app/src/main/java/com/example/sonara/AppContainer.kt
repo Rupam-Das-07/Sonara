@@ -110,6 +110,10 @@ class AppContainer(context: Context) {
         )
     }
 
+    val playlistImageStore: com.example.sonara.data.playlist.PlaylistImageStore by lazy {
+        com.example.sonara.data.playlist.AndroidPlaylistImageStore(context)
+    }
+
     val playlistRepository: PlaylistRepository by lazy {
         PlaylistRepositoryImpl(
             playlistDao = database.playlistDao(),

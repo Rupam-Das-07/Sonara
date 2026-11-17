@@ -328,4 +328,26 @@ class SonaraDatabaseMigrationTest {
             )
         }
     }
+
+    // ─── MIGRATION 9 → 10 ──────────────────────────────────────────────────────
+
+    @Test
+    fun migration9To10_hasCorrectVersionNumbers() {
+        assertEquals(9, SonaraDatabase.MIGRATION_9_10.startVersion)
+        assertEquals(10, SonaraDatabase.MIGRATION_9_10.endVersion)
+    }
+
+    @Test
+    fun migration9To10_addsNullableCustomCoverPathColumn() {
+        val allSql = captureSql { SonaraDatabase.MIGRATION_9_10.migrate(it) }
+        assertTrue(allSql.contains("ALTER TABLE `playlists` ADD COLUMN `customCoverPath` TEXT"))
+    }
+
+    @Test
+    fun migration9To10_isPurelyAdditiveAndPreservesAllPlaylists() {
+        val allSql = captureSql { SonaraDatabase.MIGRATION_9_10.migrate(it) }
+        assertFalse(allSql.contains("DROP TABLE", ignoreCase = true))
+        assertFalse(allSql.contains("DELETE FROM", ignoreCase = true))
+        assertFalse(allSql.contains("CREATE TABLE", ignoreCase = true))
+    }
 }

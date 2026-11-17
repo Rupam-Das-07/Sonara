@@ -20,5 +20,6 @@ data class PlaylistUiState(
     val playlistToRename: PlaylistSummary? = null,
     val playlistToDelete: PlaylistSummary? = null,
     val trackToRemove: Pair<String, Track>? = null,
-    val feedbackMessage: String? = null
+    val feedbackMessage: String? = null,
+    val isCoverUpdating: Boolean = false
 )

@@ -107,6 +107,33 @@ class PlaylistViewModelTest {
                 )
             )
         }
+
+        var failCoverUpdate = false
+        var coverUpdateDelayMs = 0L
+        var lastUpdatedCover: Pair<String, String>? = null
+        var lastRemovedCoverId: String? = null
+
+        override suspend fun setPlaylistCustomCover(playlistId: String, contentUri: String): Result<Unit> {
+            if (coverUpdateDelayMs > 0) kotlinx.coroutines.delay(coverUpdateDelayMs)
+            if (failCoverUpdate) return Result.failure(IllegalStateException("Simulated cover failure"))
+            lastUpdatedCover = playlistId to contentUri
+            summaries.value = summaries.value.map {
+                if (it.id == playlistId) it.copy(coverImage = contentUri, hasCustomCover = true) else it
+            }
+            details[playlistId]?.value = details[playlistId]?.value?.copy(coverImage = contentUri, hasCustomCover = true)
+            return Result.success(Unit)
+        }
+
+        override suspend fun removePlaylistCustomCover(playlistId: String): Result<Unit> {
+            if (coverUpdateDelayMs > 0) kotlinx.coroutines.delay(coverUpdateDelayMs)
+            if (failCoverUpdate) return Result.failure(IllegalStateException("Simulated cover failure"))
+            lastRemovedCoverId = playlistId
+            summaries.value = summaries.value.map {
+                if (it.id == playlistId) it.copy(coverImage = null, hasCustomCover = false) else it
+            }
+            details[playlistId]?.value = details[playlistId]?.value?.copy(coverImage = null, hasCustomCover = false)
+            return Result.success(Unit)
+        }
     }
 
     private lateinit var repository: FakePlaylistRepository
@@ -286,6 +313,157 @@ class PlaylistViewModelTest {
         val afterUserDeleted = viewModel.uiState.value.playlists
         assertEquals(0, afterUserDeleted.count { it.origin == PlaylistOrigin.USER })
         assertEquals(1, afterUserDeleted.count { it.origin == PlaylistOrigin.SPOTIFY })
+
+        collectJob.cancel()
+    }
+
+    // ─── Custom Playlist Cover ViewModel Tests ─────────────────────────────────
+
+    @Test
+    fun setCustomCover_success_updatesUiStateAndEmitsFeedbackMessage() = runTest {
+        val collectJob = launch(StandardTestDispatcher(testScheduler)) { viewModel.uiState.collect {} }
+        val id = repository.createPlaylist("Favorites").getOrThrow()
+        advanceUntilIdle()
+
+        viewModel.setCustomCover(id, "content://media/picker/photo_1")
+        advanceUntilIdle()
+
+        assertEquals("Cover image updated", viewModel.uiState.value.feedbackMessage)
+        assertEquals(id to "content://media/picker/photo_1", repository.lastUpdatedCover)
+
+        val updatedPlaylist = viewModel.uiState.value.playlists.find { it.id == id }
+        assertEquals("content://media/picker/photo_1", updatedPlaylist?.coverImage)
+        assertTrue(updatedPlaylist?.hasCustomCover == true)
+
+        collectJob.cancel()
+    }
+
+    @Test
+    fun setCustomCover_failure_surfacesErrorMessage() = runTest {
+        val collectJob = launch(StandardTestDispatcher(testScheduler)) { viewModel.uiState.collect {} }
+        val id = repository.createPlaylist("Favorites").getOrThrow()
+        advanceUntilIdle()
+
+        repository.failCoverUpdate = true
+        viewModel.setCustomCover(id, "content://media/picker/photo_1")
+        advanceUntilIdle()
+
+        assertEquals("Simulated cover failure", viewModel.uiState.value.feedbackMessage)
+        assertFalse(viewModel.uiState.value.isCoverUpdating)
+
+        collectJob.cancel()
+    }
+
+    @Test
+    fun removeCustomCover_success_clearsCoverAndEmitsFeedbackMessage() = runTest {
+        val collectJob = launch(StandardTestDispatcher(testScheduler)) { viewModel.uiState.collect {} }
+        val id = repository.createPlaylist("Favorites").getOrThrow()
+        advanceUntilIdle()
+
+        viewModel.setCustomCover(id, "content://media/picker/photo_1")
+        advanceUntilIdle()
+        assertEquals("content://media/picker/photo_1", viewModel.uiState.value.playlists.find { it.id == id }?.coverImage)
+
+        viewModel.removeCustomCover(id)
+        advanceUntilIdle()
+
+        assertEquals("Custom cover removed", viewModel.uiState.value.feedbackMessage)
+        assertEquals(id, repository.lastRemovedCoverId)
+
+        val updatedPlaylist = viewModel.uiState.value.playlists.find { it.id == id }
+        assertNull(updatedPlaylist?.coverImage)
+        assertFalse(updatedPlaylist?.hasCustomCover == true)
+
+        collectJob.cancel()
+    }
+
+    @Test
+    fun removeCustomCover_failure_surfacesErrorMessage() = runTest {
+        val collectJob = launch(StandardTestDispatcher(testScheduler)) { viewModel.uiState.collect {} }
+        val id = repository.createPlaylist("Favorites").getOrThrow()
+        advanceUntilIdle()
+
+        repository.failCoverUpdate = true
+        viewModel.removeCustomCover(id)
+        advanceUntilIdle()
+
+        assertEquals("Simulated cover failure", viewModel.uiState.value.feedbackMessage)
+        assertFalse(viewModel.uiState.value.isCoverUpdating)
+
+        collectJob.cancel()
+    }
+
+    @Test
+    fun setCustomCover_whenAlreadyUpdating_ignoresDuplicateSubmission() = runTest {
+        val collectJob = launch(StandardTestDispatcher(testScheduler)) { viewModel.uiState.collect {} }
+        val id = repository.createPlaylist("Rock").getOrThrow()
+        advanceUntilIdle()
+
+        repository.coverUpdateDelayMs = 1000L
+        viewModel.setCustomCover(id, "content://media/picker/first")
+        testScheduler.runCurrent()
+        assertTrue(viewModel.uiState.value.isCoverUpdating)
+
+        // Attempt second concurrent submission
+        viewModel.setCustomCover(id, "content://media/picker/second")
+        testScheduler.runCurrent()
+
+        // Advance clock to finish first operation
+        advanceUntilIdle()
+
+        assertEquals("Cover image updated", viewModel.uiState.value.feedbackMessage)
+        assertFalse(viewModel.uiState.value.isCoverUpdating)
+        assertEquals("content://media/picker/first", repository.lastUpdatedCover?.second)
+
+        collectJob.cancel()
+    }
+
+    @Test
+    fun removeCustomCover_whenAlreadyUpdating_ignoresConflictingRemoval() = runTest {
+        val collectJob = launch(StandardTestDispatcher(testScheduler)) { viewModel.uiState.collect {} }
+        val id = repository.createPlaylist("Rock").getOrThrow()
+        advanceUntilIdle()
+
+        repository.coverUpdateDelayMs = 1000L
+        viewModel.setCustomCover(id, "content://media/picker/first")
+        testScheduler.runCurrent()
+        assertTrue(viewModel.uiState.value.isCoverUpdating)
+
+        // Attempt conflicting remove while set is in-flight
+        viewModel.removeCustomCover(id)
+        testScheduler.runCurrent()
+
+        advanceUntilIdle()
+
+        // Conflicting remove was ignored
+        assertNull(repository.lastRemovedCoverId)
+        assertEquals("content://media/picker/first", repository.lastUpdatedCover?.second)
+        assertFalse(viewModel.uiState.value.isCoverUpdating)
+
+        collectJob.cancel()
+    }
+
+    @Test
+    fun setCustomCover_whenRemovalInProgress_ignoresConflictingSet() = runTest {
+        val collectJob = launch(StandardTestDispatcher(testScheduler)) { viewModel.uiState.collect {} }
+        val id = repository.createPlaylist("Rock").getOrThrow()
+        advanceUntilIdle()
+
+        repository.coverUpdateDelayMs = 1000L
+        viewModel.removeCustomCover(id)
+        testScheduler.runCurrent()
+        assertTrue(viewModel.uiState.value.isCoverUpdating)
+
+        // Attempt conflicting set while remove is in-flight
+        viewModel.setCustomCover(id, "content://media/picker/conflicting")
+        testScheduler.runCurrent()
+
+        advanceUntilIdle()
+
+        // Conflicting set was ignored
+        assertNull(repository.lastUpdatedCover)
+        assertEquals(id, repository.lastRemovedCoverId)
+        assertFalse(viewModel.uiState.value.isCoverUpdating)
 
         collectJob.cancel()
     }

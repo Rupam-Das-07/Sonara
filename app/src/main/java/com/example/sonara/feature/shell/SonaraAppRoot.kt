@@ -1326,7 +1326,10 @@ private fun AppScaffoldContent(
                                         onDelete = { playlistViewModel.requestDelete(it) },
                                         onRequestRemoveTrack = { track ->
                                             playlistViewModel.requestRemoveTrack(selected.id, track)
-                                        }
+                                        },
+                                        onChangeCover = { id, uri -> playlistViewModel.setCustomCover(id, uri) },
+                                        onRemoveCover = { id -> playlistViewModel.removeCustomCover(id) },
+                                        isCoverUpdating = playlistState.isCoverUpdating
                                     )
                                 } else {
                                     PlaylistsScreen(

@@ -784,6 +784,40 @@ object PhosphorIcons {
         }
     }.build()
 
+    /** Image (Gallery / Artwork / Picture) */
+    val Image: ImageVector = ImageVector.Builder(
+        name = "PhosphorImage",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).apply {
+        path(
+            stroke = SolidColor(Color.White),
+            strokeLineWidth = 2.0f,
+            strokeLineCap = StrokeCap.Round,
+            strokeLineJoin = StrokeJoin.Round
+        ) {
+            moveTo(6f, 4f)
+            lineTo(18f, 4f)
+            arcTo(2f, 2f, 0f, false, true, 20f, 6f)
+            lineTo(20f, 18f)
+            arcTo(2f, 2f, 0f, false, true, 18f, 20f)
+            lineTo(6f, 20f)
+            arcTo(2f, 2f, 0f, false, true, 4f, 18f)
+            lineTo(4f, 6f)
+            arcTo(2f, 2f, 0f, false, true, 6f, 4f)
+            close()
+            moveTo(8.5f, 9f)
+            arcTo(1.5f, 1.5f, 0f, true, true, 8.5f, 9.01f)
+            moveTo(4f, 16f)
+            lineTo(9.5f, 11.5f)
+            lineTo(15f, 17f)
+            lineTo(17f, 15f)
+            lineTo(20f, 17.5f)
+        }
+    }.build()
+
     /** DotsThreeVertical (Overflow Menu) */
     val DotsThreeVertical: ImageVector = ImageVector.Builder(
         name = "PhosphorDotsThreeVertical",

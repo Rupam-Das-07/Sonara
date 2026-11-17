@@ -189,6 +189,47 @@ class SonaraPlaybackService : MediaSessionService() {
             }
         }
 
+        internal fun resolveActiveFavoriteTrack(
+            isVideoActive: Boolean,
+            currentVideoTrack: Track?,
+            currentMediaItem: androidx.media3.common.MediaItem?,
+            audioCurrentTrack: Track?
+        ): Track? {
+            return if (isVideoActive) {
+                if (currentVideoTrack != null && (currentMediaItem == null || currentVideoTrack.id == currentMediaItem.mediaId)) {
+                    currentVideoTrack
+                } else if (currentMediaItem != null && currentMediaItem.mediaId.isNotBlank()) {
+                    currentVideoTrack ?: Track(
+                        id = currentMediaItem.mediaId,
+                        title = currentMediaItem.mediaMetadata.title?.toString() ?: "",
+                        artist = currentMediaItem.mediaMetadata.artist?.toString() ?: "",
+                        album = currentMediaItem.mediaMetadata.albumTitle?.toString() ?: "",
+                        artworkUrl = currentMediaItem.mediaMetadata.artworkUri?.toString()
+                    )
+                } else {
+                    null
+                }
+            } else {
+                audioCurrentTrack
+            }
+        }
+
+        internal fun resolveTransitionTrack(
+            isExtracted: Boolean,
+            mediaItem: androidx.media3.common.MediaItem,
+            currentVideoTrack: Track?
+        ): Track? {
+            if (!isExtracted) return null
+            return currentVideoTrack?.takeIf { it.id == mediaItem.mediaId }
+                ?: Track(
+                    id = mediaItem.mediaId,
+                    title = mediaItem.mediaMetadata.title?.toString() ?: "",
+                    artist = mediaItem.mediaMetadata.artist?.toString() ?: "",
+                    album = mediaItem.mediaMetadata.albumTitle?.toString() ?: "",
+                    artworkUrl = mediaItem.mediaMetadata.artworkUri?.toString()
+                )
+        }
+
         @Volatile
         var instancePrefetcher: NextTrackPrefetcher? = null
             private set
@@ -304,7 +345,8 @@ class SonaraPlaybackService : MediaSessionService() {
             queueEngineProvider = { (application as? SonaraApp)?.container?.playbackQueueEngine },
             isIFrameVideoActive = { routeCoordinator?.isIFrameVideoActive == true },
             onSeekToNext = { advanceToNext() },
-            onSeekToPrevious = { advanceToPrevious() }
+            onSeekToPrevious = { advanceToPrevious() },
+            routeCoordinator = routeCoordinator
         )
         this.forwardingPlayer = forwardingPlayer
 
@@ -353,6 +395,15 @@ class SonaraPlaybackService : MediaSessionService() {
                     if (isExtracted) {
                         preloadJob?.cancel()
                         nextTrackPrefetcher?.cancelActivePrefetch("extracted_video_transition")
+                        val container = (application as? SonaraApp)?.container
+                        val videoTrack = resolveTransitionTrack(
+                            isExtracted = true,
+                            mediaItem = mediaItem,
+                            currentVideoTrack = container?.playbackRouteCoordinator?.currentVideoTrack()
+                        )
+                        if (videoTrack != null) {
+                            observeLikedState(videoTrack)
+                        }
                     } else {
                         handleTrackTransition(mediaItem.mediaId, reason)
                     }
@@ -506,13 +557,23 @@ class SonaraPlaybackService : MediaSessionService() {
                         )
                     }
                     val container = (application as? SonaraApp)?.container
-                    val currentTrack = container?.playbackQueueEngine?.currentTrack
-                    if (currentTrack != null) {
+                    val routeCoordinator = container?.playbackRouteCoordinator
+                    val isVideoActive = isExtractedVideoMediaItem(exoPlayerHolder?.player?.currentMediaItem) ||
+                        (routeCoordinator?.isVideoActive == true && routeCoordinator.isIFrameVideoActive != true)
+
+                    val targetTrack: Track? = resolveActiveFavoriteTrack(
+                        isVideoActive = isVideoActive,
+                        currentVideoTrack = routeCoordinator?.currentVideoTrack(),
+                        currentMediaItem = exoPlayerHolder?.player?.currentMediaItem,
+                        audioCurrentTrack = container?.playbackQueueEngine?.currentTrack
+                    )
+
+                    if (targetTrack != null && targetTrack.id.isNotBlank() && container != null) {
                         serviceScope.launch(Dispatchers.IO) {
                             try {
-                                val currentlyLiked = container.libraryRepository.isLiked(currentTrack.id).firstOrNull() ?: false
-                                container.libraryRepository.setLiked(currentTrack, !currentlyLiked)
-                                Log.i(TAG, "Toggled favorite for ${currentTrack.title}: was $currentlyLiked -> now ${!currentlyLiked}")
+                                val currentlyLiked = container.libraryRepository.isLiked(targetTrack.id).firstOrNull() ?: false
+                                container.libraryRepository.setLiked(targetTrack, !currentlyLiked)
+                                Log.i(TAG, "Toggled favorite for [${if (isVideoActive) "video" else "audio"}] ${targetTrack.title}: was $currentlyLiked -> now ${!currentlyLiked}")
                             } catch (e: Exception) {
                                 Log.w(TAG, "Failed to toggle favorite: ${e.message}")
                             }

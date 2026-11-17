@@ -29,7 +29,8 @@ class SonaraForwardingPlayer(
     private val queueEngineProvider: () -> PlaybackQueueEngine?,
     private val isIFrameVideoActive: () -> Boolean = { false },
     private val onSeekToNext: () -> Unit,
-    private val onSeekToPrevious: () -> Unit
+    private val onSeekToPrevious: () -> Unit,
+    private val routeCoordinator: com.example.sonara.playback.controller.PlaybackRouteCoordinator? = null
 ) : ForwardingPlayer(player) {
 
     private val listeners = CopyOnWriteArraySet<Player.Listener>()
@@ -88,30 +89,36 @@ class SonaraForwardingPlayer(
         super.setPlayWhenReady(playWhenReady)
     }
 
-    override fun getAvailableCommands(): Player.Commands {
-        val builder = super.getAvailableCommands().buildUpon()
+    private fun canAdvance(): Boolean {
+        val isVideo = routeCoordinator?.isVideoActive == true
+        return if (isVideo) {
+            routeCoordinator.canVideoAdvance()
+        } else {
+            queueEngineProvider()?.canAdvance() ?: true
+        }
+    }
 
-        // PREVIOUS is always available (either seeks to start or navigates backstack)
+    override fun getAvailableCommands(): Player.Commands {
+        val superCmds = super.getAvailableCommands()
+        val builder = superCmds.buildUpon()
         builder.add(Player.COMMAND_SEEK_TO_PREVIOUS)
         builder.add(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
-
-        val canAdvance = queueEngineProvider()?.canAdvance() ?: true
-        if (canAdvance) {
+        val adv = canAdvance()
+        if (adv) {
             builder.add(Player.COMMAND_SEEK_TO_NEXT)
             builder.add(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
         } else {
             builder.remove(Player.COMMAND_SEEK_TO_NEXT)
             builder.remove(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
         }
-
-        if (isIFrameVideoActive()) {
+        val iframe = isIFrameVideoActive()
+        if (iframe) {
             builder.remove(Player.COMMAND_PLAY_PAUSE)
             builder.remove(Player.COMMAND_SEEK_TO_NEXT)
             builder.remove(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
             builder.remove(Player.COMMAND_SEEK_TO_PREVIOUS)
             builder.remove(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
         }
-
         return builder.build()
     }
 
@@ -129,13 +136,17 @@ class SonaraForwardingPlayer(
             Player.COMMAND_SEEK_TO_PREVIOUS,
             Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM -> true
             Player.COMMAND_SEEK_TO_NEXT,
-            Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM -> queueEngineProvider()?.canAdvance() ?: true
+            Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM -> canAdvance()
             else -> super.isCommandAvailable(command)
         }
     }
 
     override fun seekToNext() {
         if (isIFrameVideoActive()) return
+        if (routeCoordinator?.isVideoActive == true) {
+            routeCoordinator.onVideoSeekToNext()
+            return
+        }
         if (super.hasNextMediaItem()) {
             super.seekToNext()
         } else {
@@ -145,6 +156,10 @@ class SonaraForwardingPlayer(
 
     override fun seekToNextMediaItem() {
         if (isIFrameVideoActive()) return
+        if (routeCoordinator?.isVideoActive == true) {
+            routeCoordinator.onVideoSeekToNext()
+            return
+        }
         if (super.hasNextMediaItem()) {
             super.seekToNextMediaItem()
         } else {
@@ -154,11 +169,19 @@ class SonaraForwardingPlayer(
 
     override fun seekToPrevious() {
         if (isIFrameVideoActive()) return
+        if (routeCoordinator?.isVideoActive == true) {
+            routeCoordinator.onVideoSeekToPrevious()
+            return
+        }
         onSeekToPrevious()
     }
 
     override fun seekToPreviousMediaItem() {
         if (isIFrameVideoActive()) return
+        if (routeCoordinator?.isVideoActive == true) {
+            routeCoordinator.onVideoSeekToPrevious()
+            return
+        }
         onSeekToPrevious()
     }
 

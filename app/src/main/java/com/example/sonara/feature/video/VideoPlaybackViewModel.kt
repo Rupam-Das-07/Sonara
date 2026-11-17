@@ -117,6 +117,12 @@ class VideoPlaybackViewModel(
     val videoMuted: StateFlow<Boolean> = _videoMuted.asStateFlow()
     private val _playback = MutableStateFlow(VideoPlaybackIntegrationState())
     val playback: StateFlow<VideoPlaybackIntegrationState> = _playback.asStateFlow()
+    private val _feedbackMessage = MutableStateFlow<String?>(null)
+    val feedbackMessage: StateFlow<String?> = _feedbackMessage.asStateFlow()
+
+    fun clearFeedbackMessage() {
+        _feedbackMessage.value = null
+    }
 
     private val _isVideoDownloadSheetOpen = MutableStateFlow(false)
     val isVideoDownloadSheetOpen: StateFlow<Boolean> = _isVideoDownloadSheetOpen.asStateFlow()
@@ -209,13 +215,50 @@ class VideoPlaybackViewModel(
     val currentMedia3PlayerFlow: StateFlow<Player?> = mediaControllerClient?.currentPlayerState
         ?: MutableStateFlow<Player?>(null).asStateFlow()
 
+    private val videoBridge = object : com.example.sonara.playback.controller.PlaybackRouteCoordinator.VideoPlaybackDelegate {
+        override val isVideoActive: Boolean
+            get() = queueEngine.snapshot().current != null &&
+                _playback.value.route != VideoPlaybackRoute.IDLE
+
+        override fun canAdvance(): Boolean {
+            val snap = queueEngine.snapshot()
+            if (snap.current == null) return false
+            if (snap.upcoming.isNotEmpty()) return true
+            if (snap.repeatMode != VideoRepeatMode.OFF) return true
+            return !snap.noCandidatesAvailable
+        }
+
+        override fun onSeekToNext() {
+            viewModelScope.launch(Dispatchers.Main.immediate) {
+                next(trackReadyCallback ?: {})
+            }
+        }
+
+        override fun onSeekToPrevious() {
+            viewModelScope.launch(Dispatchers.Main.immediate) {
+                val currentPos = mediaControllerClient?.currentPlayer()?.currentPosition?.coerceAtLeast(0L)
+                    ?: media3State.value.currentPositionMs.coerceAtLeast(0L)
+                val callback = trackReadyCallback
+                previous(
+                    currentPositionMs = currentPos,
+                    onRestartCurrent = { seekMedia3(0L) },
+                    onTrackReady = callback ?: {}
+                )
+            }
+        }
+
+        override fun currentTrack(): Track? = queueEngine.snapshot().current
+    }
+
     private fun updatePlaybackState(newState: VideoPlaybackIntegrationState) {
         _playback.value = newState
         val isIFrameActive = newState.route == VideoPlaybackRoute.IFRAME && !newState.trackId.isNullOrBlank()
         playbackRouteCoordinator?.setIFrameVideoActive(isIFrameActive)
+        playbackRouteCoordinator?.notifyRouteOrCommandsChanged()
     }
 
     init {
+        playbackRouteCoordinator?.registerVideoDelegate(videoBridge)
         val initialIFrameActive = _playback.value.route == VideoPlaybackRoute.IFRAME && !_playback.value.trackId.isNullOrBlank()
         playbackRouteCoordinator?.setIFrameVideoActive(initialIFrameActive)
         settingsRepository?.let { repository ->
@@ -425,6 +468,7 @@ class VideoPlaybackViewModel(
         replenishmentRequest = null
         endedForTrackKey = null
         queueEngine.clear()
+        _feedbackMessage.value = null
         publish()
         _activeViewCount.value = null
         _activeIsLive.value = false
@@ -510,7 +554,7 @@ class VideoPlaybackViewModel(
         var decision = queueEngine.next()
         if (decision is VideoNextDecision.NeedRecommendations) {
             val generation = queueEngine.snapshot().generation
-            val result = requestReplenishment(decision.seed, generation, force = true).await()
+            val result = requestReplenishment(decision.seed, generation, force = false).await()
             if (result.stale || !queueEngine.isCurrentGeneration(generation)) {
                 publish()
                 return
@@ -541,7 +585,11 @@ class VideoPlaybackViewModel(
             }
             is VideoNextDecision.NeedRecommendations,
             VideoNextDecision.Stop -> {
-                publish(noCandidatesAvailable = queueEngine.upcomingCount() == 0)
+                val noCandidates = queueEngine.upcomingCount() == 0
+                publish(noCandidatesAvailable = noCandidates)
+                if (noCandidates) {
+                    _feedbackMessage.value = "No next video recommendations available"
+                }
             }
         }
     }
@@ -561,7 +609,8 @@ class VideoPlaybackViewModel(
     ): Deferred<VideoDiscoveryResult> {
         val existing = replenishmentRequest
         if (existing != null && existing.generation == generation) {
-            if (existing.deferred.isActive || !force) return existing.deferred
+            if (existing.deferred.isActive && !force) return existing.deferred
+            if (!existing.deferred.isActive && !force && queueEngine.upcomingCount() > 0) return existing.deferred
         }
 
         existing?.deferred?.cancel()
@@ -977,9 +1026,11 @@ class VideoPlaybackViewModel(
         noCandidatesAvailable: Boolean = _state.value.noCandidatesAvailable
     ) {
         _state.value = queueEngine.snapshot(isReplenishing, noCandidatesAvailable)
+        playbackRouteCoordinator?.notifyRouteOrCommandsChanged()
     }
 
     override fun onCleared() {
+        playbackRouteCoordinator?.unregisterVideoDelegate(videoBridge)
         media3PlaybackJob?.cancel()
         highResDiscoveryJob?.cancel()
         highResDiscoveryJob = null

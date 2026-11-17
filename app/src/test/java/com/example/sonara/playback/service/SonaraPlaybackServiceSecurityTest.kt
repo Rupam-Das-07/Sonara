@@ -7,9 +7,12 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaSession
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionError
+import com.example.sonara.domain.model.Track
 import com.example.sonara.playback.client.MediaControllerClient
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -392,5 +395,108 @@ class SonaraPlaybackServiceSecurityTest {
                 playWhenReady = true
             )
         )
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // 5. Favorites & Video Route Target Resolution Tests
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    private val audioTrack = Track(id = "audio_1", title = "Audio Song", artist = "Audio Artist")
+    private val videoTrack = Track(id = "video_1", title = "Video Title", artist = "Video Artist")
+
+    @Test
+    fun `resolveActiveFavoriteTrack returns audio track when video is inactive`() {
+        val resolved = SonaraPlaybackService.resolveActiveFavoriteTrack(
+            isVideoActive = false,
+            currentVideoTrack = videoTrack,
+            currentMediaItem = null,
+            audioCurrentTrack = audioTrack
+        )
+        assertNotNull(resolved)
+        assertEquals("audio_1", resolved?.id)
+        assertEquals("Audio Song", resolved?.title)
+    }
+
+    @Test
+    fun `resolveActiveFavoriteTrack returns video track when video is active`() {
+        val resolved = SonaraPlaybackService.resolveActiveFavoriteTrack(
+            isVideoActive = true,
+            currentVideoTrack = videoTrack,
+            currentMediaItem = null,
+            audioCurrentTrack = audioTrack
+        )
+        assertNotNull(resolved)
+        assertEquals("video_1", resolved?.id)
+        assertEquals("Video Title", resolved?.title)
+    }
+
+    @Test
+    fun `resolveActiveFavoriteTrack fails closed and never touches stale audio track when video active without video track`() {
+        val resolved = SonaraPlaybackService.resolveActiveFavoriteTrack(
+            isVideoActive = true,
+            currentVideoTrack = null,
+            currentMediaItem = null,
+            audioCurrentTrack = audioTrack
+        )
+        // Must fail closed (null), never modifying the unrelated audio track
+        assertNull(resolved)
+    }
+
+    @Test
+    fun `resolveActiveFavoriteTrack constructs fallback video track from mediaItem when coordinator track missing`() {
+        val item = MediaItem.Builder()
+            .setMediaId("video_fallback_id")
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle("Fallback Video Title")
+                    .setArtist("Fallback Video Artist")
+                    .build()
+            )
+            .build()
+
+        val resolved = SonaraPlaybackService.resolveActiveFavoriteTrack(
+            isVideoActive = true,
+            currentVideoTrack = null,
+            currentMediaItem = item,
+            audioCurrentTrack = audioTrack
+        )
+        assertNotNull(resolved)
+        assertEquals("video_fallback_id", resolved?.id)
+        assertEquals("Fallback Video Title", resolved?.title)
+    }
+
+    @Test
+    fun `resolveTransitionTrack returns video track on extracted video transition`() {
+        val item = MediaItem.Builder()
+            .setMediaId("video_1")
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle("Video Title")
+                    .setArtist("Video Artist")
+                    .build()
+            )
+            .build()
+
+        val resolved = SonaraPlaybackService.resolveTransitionTrack(
+            isExtracted = true,
+            mediaItem = item,
+            currentVideoTrack = videoTrack
+        )
+        assertNotNull(resolved)
+        assertEquals("video_1", resolved?.id)
+    }
+
+    @Test
+    fun `resolveTransitionTrack returns null when transition is not extracted video`() {
+        val item = MediaItem.Builder()
+            .setMediaId("audio_1")
+            .build()
+
+        val resolved = SonaraPlaybackService.resolveTransitionTrack(
+            isExtracted = false,
+            mediaItem = item,
+            currentVideoTrack = videoTrack
+        )
+        assertNull(resolved)
     }
 }
